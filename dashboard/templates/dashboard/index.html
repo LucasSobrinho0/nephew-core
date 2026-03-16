@@ -98,7 +98,24 @@
         </div>
       </div>
       <div class="col-xl-7">
-        <div class="glass-card content-card h-100">
+        <div class="glass-card content-card mb-4">
+          <div class="content-card-header">
+            <div>
+              <span class="section-kicker">Aplicativos</span>
+              <h2>Instalacoes da organizacao</h2>
+            </div>
+          </div>
+          <p class="text-body-secondary">
+            Acesse o catalogo para instalar novos aplicativos na organizacao ativa e configure as credenciais necessarias.
+          </p>
+          <div class="d-flex flex-column flex-sm-row gap-3">
+            <a href="{% url 'integrations:apps' %}" class="btn btn-brand">Ver catalogo de apps</a>
+            {% if active_membership and active_membership.can_manage_integrations %}
+              <a href="{% url 'integrations:api_keys' %}" class="btn btn-outline-secondary">Gerenciar chaves de API</a>
+            {% endif %}
+          </div>
+        </div>
+        <div class="glass-card content-card">
           <div class="content-card-header">
             <div>
               <span class="section-kicker">Atividade recente</span>

@@ -23,6 +23,16 @@
   </button>
   <div class="collapse {% if request.resolver_match.namespace == 'bot_conversa' or request.resolver_match.namespace == 'integrations' %}show{% endif %}" id="sidebarInstalledApps">
     <div class="sidebar-subnav">
+      <a href="{% url 'integrations:apps' %}" class="nav-link crm-subnav-link {% if request.resolver_match.namespace == 'integrations' and request.resolver_match.url_name == 'apps' %}active{% endif %}">
+        <i class="bi bi-grid"></i>
+        <span>Catalogo de apps</span>
+      </a>
+      {% if active_membership and active_membership.can_manage_integrations %}
+        <a href="{% url 'integrations:api_keys' %}" class="nav-link crm-subnav-link {% if request.resolver_match.namespace == 'integrations' and request.resolver_match.url_name == 'api_keys' %}active{% endif %}">
+          <i class="bi bi-key-fill"></i>
+          <span>Chaves de API</span>
+        </a>
+      {% endif %}
       {% if sidebar_installed_apps %}
         {% for app_item in sidebar_installed_apps %}
           {% if app_item.is_available %}
