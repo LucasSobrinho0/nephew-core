@@ -1,0 +1,10 @@
+<div class="bot-conversa-subnav glass-card mb-4">
+  {% for tab in bot_conversa_tabs %}
+    <a
+      href="{% url tab.url %}"
+      class="bot-conversa-tab {% if bot_conversa_active_tab == tab.key %}active{% endif %}"
+    >
+      {{ tab.label }}
+    </a>
+  {% endfor %}
+</div>

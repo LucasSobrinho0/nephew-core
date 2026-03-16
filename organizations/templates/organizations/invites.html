@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+
+{% block title %}Convites{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 align-items-lg-center">
+      <div>
+        <span class="section-kicker">Convites</span>
+        <h1>Codigos de convite de {{ active_organization.name }}</h1>
+        <p class="text-body-secondary mb-0">Somente proprietarios e administradores da organizacao ativa podem gerar e gerenciar codigos de convite.</p>
+      </div>
+      <button type="button" class="btn btn-brand" data-bs-toggle="modal" data-bs-target="#inviteGenerateModal">
+        <i class="bi bi-plus-circle-fill"></i>
+        <span>Gerar codigo</span>
+      </button>
+    </div>
+  </section>
+
+  <section class="row g-4 mb-4">
+    <div class="col-sm-6 col-xl-4">
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><i class="bi bi-hourglass-split"></i></div>
+        <div>
+          <span class="stat-label">Disponiveis</span>
+          <h2>{{ available_count }}</h2>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-4">
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><i class="bi bi-check2-circle"></i></div>
+        <div>
+          <span class="stat-label">Usados</span>
+          <h2>{{ used_count }}</h2>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-4">
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><i class="bi bi-x-circle"></i></div>
+        <div>
+          <span class="stat-label">Expirados</span>
+          <h2>{{ expired_count }}</h2>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="glass-card content-card">
+    <div class="content-card-header">
+      <div>
+        <span class="section-kicker">Codigos gerados</span>
+        <h2>Lista de convites da organizacao</h2>
+      </div>
+    </div>
+
+    {% if invites %}
+      <div class="table-responsive">
+        <table class="table table-clean align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Perfil</th>
+              <th>Situacao</th>
+              <th>Criado em</th>
+              <th>Criado por</th>
+              <th>Usado por</th>
+              <th class="text-end">Acao</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for invite in invites %}
+              <tr>
+                <td><span class="code-pill">{{ invite.code }}</span></td>
+                <td>
+                  <span class="role-badge {% if invite.target_role == 'admin' %}role-badge-primary{% else %}role-badge-secondary{% endif %}">
+                    {{ invite.get_target_role_display }}
+                  </span>
+                </td>
+                <td>
+                  {% if invite.status == 'available' %}
+                    <span class="status-badge status-available">Disponivel</span>
+                  {% elif invite.status == 'used' %}
+                    <span class="status-badge status-used">Usado</span>
+                  {% else %}
+                    <span class="status-badge status-expired">Expirado</span>
+                  {% endif %}
+                </td>
+                <td>{{ invite.created_at|date:'d/m/Y H:i' }}</td>
+                <td>{{ invite.created_by.full_name }}</td>
+                <td>
+                  {% if invite.used_by %}
+                    {{ invite.used_by.full_name }}
+                  {% else %}
+                    <span class="text-body-secondary">-</span>
+                  {% endif %}
+                </td>
+                <td class="text-end">
+                  {% if invite.status == 'available' %}
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-copy-text="{{ invite.code }}">
+                      <i class="bi bi-copy"></i>
+                    </button>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="soft-empty">
+        <p class="mb-0">Nenhum codigo de convite foi gerado para esta organizacao ainda.</p>
+      </div>
+    {% endif %}
+  </section>
+
+  <div class="modal fade" id="inviteGenerateModal" tabindex="-1" aria-labelledby="inviteGenerateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content glass-card modal-surface">
+        <div class="modal-header border-0">
+          <div>
+            <span class="section-kicker">Gerar convite</span>
+            <h2 class="modal-title fs-4 mb-0" id="inviteGenerateModalLabel">Criar um novo codigo de organizacao</h2>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body pt-0">
+          <form method="post" action="{% url 'organizations:generate_invite' %}" class="vstack gap-4">
+            {% csrf_token %}
+            <div>
+              <label for="{{ generate_form.target_role.id_for_label }}" class="form-label">Tipo de convite</label>
+              {{ generate_form.target_role }}
+              {% for error in generate_form.target_role.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+            <div class="form-note glass-card">
+              <p class="mb-1"><strong>Prefixos dos codigos</strong></p>
+              <p class="mb-0">Codigos de administrador usam <strong>ADM</strong>. Codigos de usuario usam <strong>USR</strong>.</p>
+            </div>
+            <button type="submit" class="btn btn-brand">Gerar codigo</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+
+{% block title %}Chaves de API{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Chaves de API</span>
+    <h1>Gerenciamento de chaves de API</h1>
+    <p class="text-body-secondary mb-0">A entrada na navbar existe como solicitado, mas seu comportamento completo foi deixado para depois.</p>
+  </section>
+
+  <section class="glass-card content-card">
+    <div class="alert alert-warning mb-4">
+      O armazenamento de chaves de API, a criptografia e as validacoes especificas por provedor serao implementados em uma etapa futura.
+    </div>
+    <div class="row g-4">
+      <div class="col-md-6">
+        <div class="placeholder-input-card">
+          <label class="form-label">Chave do Apollo</label>
+          <input type="password" class="form-control" value="********************" disabled>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="placeholder-input-card">
+          <label class="form-label">Chave do Bot Conversa</label>
+          <input type="password" class="form-control" value="********************" disabled>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="placeholder-input-card">
+          <label class="form-label">Chave do HubSpot</label>
+          <input type="password" class="form-control" value="" placeholder="Em breve" disabled>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="placeholder-input-card">
+          <label class="form-label">Chave do Gmail</label>
+          <input type="password" class="form-control" value="" placeholder="Em breve" disabled>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}

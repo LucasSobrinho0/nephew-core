@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+
+{% block title %}Organizacoes{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Organizacoes</span>
+    <h1>Acesso a organizacoes e membros</h1>
+    <p class="text-body-secondary mb-0">Revise as organizacoes vinculadas ao seu usuario, troque a organizacao ativa e consulte membros com seguranca.</p>
+  </section>
+
+  {% if memberships %}
+    <section class="row g-4 mb-4">
+      {% for membership in memberships %}
+        <div class="col-lg-6 col-xl-4">
+          <div class="glass-card org-card {% if active_organization and membership.organization_id == active_organization.id %}org-card-active{% endif %}">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+              <div>
+                <span class="section-kicker">Organizacao</span>
+                <h2>{{ membership.organization.name }}</h2>
+              </div>
+              <span class="role-badge {% if membership.role == 'owner' or membership.role == 'admin' %}role-badge-primary{% else %}role-badge-secondary{% endif %}">
+                {{ membership.get_role_display }}
+              </span>
+            </div>
+            <p class="text-body-secondary mb-4">{{ membership.organization.get_segment_display }} &middot; {{ membership.organization.get_team_size_display }}</p>
+
+            <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap">
+              {% if active_organization and membership.organization_id == active_organization.id %}
+                <span class="status-badge status-available">Ativa agora</span>
+              {% else %}
+                <form method="post" action="{% url 'organizations:switch' %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="organization_public_id" value="{{ membership.organization.public_id }}">
+                  <input type="hidden" name="next" value="{% url 'organizations:index' %}">
+                  <button type="submit" class="btn btn-outline-secondary">Usar esta organizacao</button>
+                </form>
+              {% endif %}
+              <span class="text-body-secondary small">{{ membership.organization.slug }}</span>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </section>
+  {% else %}
+    <section class="empty-state glass-card mb-4">
+      <h2>Nenhuma organizacao vinculada ainda</h2>
+      <p>Voce esta autenticado, mas seu usuario nao esta vinculado a nenhuma organizacao. Crie uma ou entre com um codigo de convite.</p>
+      <div class="d-flex flex-column flex-sm-row gap-3 justify-content-center">
+        <a href="{% url 'organizations:onboarding' %}?step=create" class="btn btn-brand">Criar organizacao</a>
+        <a href="{% url 'organizations:onboarding' %}?step=join" class="btn btn-outline-secondary">Entrar com convite</a>
+      </div>
+    </section>
+  {% endif %}
+
+  {% if active_organization %}
+    <section class="row g-4">
+      <div class="col-xl-4">
+        <div class="glass-card content-card h-100">
+          <div class="content-card-header">
+            <div>
+              <span class="section-kicker">Organizacao selecionada</span>
+              <h2>{{ active_organization.name }}</h2>
+            </div>
+            {% if active_membership %}
+              <span class="role-badge role-badge-primary">{{ active_membership.get_role_display }}</span>
+            {% endif %}
+          </div>
+          <dl class="details-grid">
+            <div>
+              <dt>Segmento</dt>
+              <dd>{{ active_organization.get_segment_display }}</dd>
+            </div>
+            <div>
+              <dt>Tamanho da equipe</dt>
+              <dd>{{ active_organization.get_team_size_display }}</dd>
+            </div>
+            <div>
+              <dt>Criada em</dt>
+              <dd>{{ active_organization.created_at|date:'d/m/Y H:i' }}</dd>
+            </div>
+            <div>
+              <dt>Identificador</dt>
+              <dd>{{ active_organization.slug }}</dd>
+            </div>
+          </dl>
+          <div class="d-flex flex-wrap gap-3 mt-4">
+            {% if can_manage_invites %}
+              <a href="{% url 'organizations:invites' %}" class="btn btn-brand">Gerenciar convites</a>
+            {% endif %}
+            <a href="{% url 'organizations:onboarding' %}?step=create" class="btn btn-outline-secondary">Criar outra organizacao</a>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-8">
+        <div class="glass-card content-card h-100">
+          <div class="content-card-header">
+            <div>
+              <span class="section-kicker">Membros</span>
+              <h2>Pessoas vinculadas a esta organizacao</h2>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-clean align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Membro</th>
+                  <th>Perfil</th>
+                  <th>Situacao</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for member in members %}
+                  <tr>
+                    <td>
+                      <div class="member-cell">
+                        <span class="avatar-circle avatar-circle-sm">{{ member.user.initials }}</span>
+                        <div>
+                          <strong>{{ member.user.full_name }}</strong>
+                          <p class="mb-0 text-body-secondary">{{ member.user.email }}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="role-badge {% if member.role == 'owner' or member.role == 'admin' %}role-badge-primary{% else %}role-badge-secondary{% endif %}">
+                        {{ member.get_role_display }}
+                      </span>
+                    </td>
+                    <td><span class="status-badge status-available">Ativo</span></td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="3">
+                      <div class="soft-empty">
+                        <p class="mb-0">Nenhum membro foi encontrado para a organizacao ativa.</p>
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}

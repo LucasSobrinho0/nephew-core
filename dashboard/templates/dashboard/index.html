@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+
+{% block title %}Painel{% endblock %}
+
+{% block content %}
+  {% if not active_organization %}
+    <section class="empty-state glass-card">
+      <span class="section-kicker">Sem acesso a organizacao</span>
+      <h1>Voce ainda nao tem uma organizacao ativa.</h1>
+      <p>Crie uma nova organizacao ou entre em uma existente com um codigo de convite antes de usar o painel do CRM.</p>
+      <div class="d-flex flex-column flex-sm-row gap-3 justify-content-center">
+        <a href="{% url 'organizations:onboarding' %}?step=create" class="btn btn-brand">Criar organizacao</a>
+        <a href="{% url 'organizations:onboarding' %}?step=join" class="btn btn-outline-secondary">Entrar com convite</a>
+      </div>
+    </section>
+  {% else %}
+    <section class="page-header mb-4">
+      <span class="section-kicker">Painel</span>
+      <h1>{{ active_organization.name }}</h1>
+      <p class="text-body-secondary mb-0">Uma visao geral segura da organizacao atualmente ativa.</p>
+    </section>
+
+    <section class="row g-4 mb-4">
+      <div class="col-sm-6 col-xl-3">
+        <div class="stat-card glass-card">
+          <div class="stat-icon"><i class="bi bi-people-fill"></i></div>
+          <div>
+            <span class="stat-label">Membros</span>
+            <h2>{{ dashboard_summary.member_count }}</h2>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-xl-3">
+        <div class="stat-card glass-card">
+          <div class="stat-icon"><i class="bi bi-shield-lock-fill"></i></div>
+          <div>
+            <span class="stat-label">Gestores</span>
+            <h2>{{ dashboard_summary.manager_count }}</h2>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-xl-3">
+        <div class="stat-card glass-card">
+          <div class="stat-icon"><i class="bi bi-person-plus-fill"></i></div>
+          <div>
+            <span class="stat-label">Convites abertos</span>
+            <h2>{{ dashboard_summary.available_invite_count }}</h2>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-xl-3">
+        <div class="stat-card glass-card">
+          <div class="stat-icon"><i class="bi bi-check2-circle"></i></div>
+          <div>
+            <span class="stat-label">Convites usados</span>
+            <h2>{{ dashboard_summary.used_invite_count }}</h2>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="row g-4">
+      <div class="col-xl-5">
+        <div class="glass-card content-card h-100">
+          <div class="content-card-header">
+            <div>
+              <span class="section-kicker">Resumo da organizacao</span>
+              <h2>{{ active_organization.name }}</h2>
+            </div>
+            {% if active_membership %}
+              <span class="role-badge role-badge-primary">{{ active_membership.get_role_display }}</span>
+            {% endif %}
+          </div>
+          <dl class="details-grid">
+            <div>
+              <dt>Segmento</dt>
+              <dd>{{ active_organization.get_segment_display }}</dd>
+            </div>
+            <div>
+              <dt>Tamanho da equipe</dt>
+              <dd>{{ active_organization.get_team_size_display }}</dd>
+            </div>
+            <div>
+              <dt>Identificador</dt>
+              <dd>{{ active_organization.slug }}</dd>
+            </div>
+            <div>
+              <dt>Criada em</dt>
+              <dd>{{ active_organization.created_at|date:'d/m/Y H:i' }}</dd>
+            </div>
+          </dl>
+          <div class="d-flex flex-wrap gap-3 mt-4">
+            <a href="{% url 'organizations:index' %}" class="btn btn-outline-secondary">Gerenciar organizacoes</a>
+            {% if active_membership and active_membership.can_manage_invites %}
+              <a href="{% url 'organizations:invites' %}" class="btn btn-brand">Gerenciar convites</a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-7">
+        <div class="glass-card content-card h-100">
+          <div class="content-card-header">
+            <div>
+              <span class="section-kicker">Atividade recente</span>
+              <h2>Ultima atividade de convites</h2>
+            </div>
+          </div>
+          {% if dashboard_summary.recent_invites %}
+            <div class="table-responsive">
+              <table class="table table-clean align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Codigo</th>
+                    <th>Perfil</th>
+                    <th>Situacao</th>
+                    <th>Criado por</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for invite in dashboard_summary.recent_invites %}
+                    <tr>
+                      <td><span class="code-pill">{{ invite.code }}</span></td>
+                      <td>{{ invite.get_target_role_display }}</td>
+                      <td>
+                        {% if invite.status == 'available' %}
+                          <span class="status-badge status-available">Disponivel</span>
+                        {% elif invite.status == 'used' %}
+                          <span class="status-badge status-used">Usado</span>
+                        {% else %}
+                          <span class="status-badge status-expired">Expirado</span>
+                        {% endif %}
+                      </td>
+                      <td>{{ invite.created_by.full_name }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="soft-empty">
+              <p class="mb-0">Ainda nao existe atividade de convites para esta organizacao.</p>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}

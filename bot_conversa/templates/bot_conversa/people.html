@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+
+{% block title %}Pessoas do Bot Conversa{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Bot Conversa</span>
+    <h1>Pessoas internas e sincronizacao de contatos</h1>
+    <p class="text-body-secondary mb-0">Crie pessoas do CRM dentro da organizacao ativa e sincronize com o Bot Conversa apenas quando necessario.</p>
+  </section>
+
+  {% include 'bot_conversa/_subnav.html' %}
+
+  <section class="row g-4">
+    <div class="col-xl-8">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Pessoas</span>
+            <h2>Base de contatos do CRM</h2>
+          </div>
+        </div>
+        {% if person_rows %}
+          <div class="table-responsive">
+            <table class="table table-clean align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Pessoa</th>
+                  <th>Telefone</th>
+                  <th>Status</th>
+                  <th>Subscriber</th>
+                  {% if can_manage_bot_conversa %}<th></th>{% endif %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in person_rows %}
+                  <tr>
+                    <td>
+                      <strong>{{ row.person.full_name }}</strong>
+                      <div class="text-body-secondary small">{{ row.person.created_at|date:'Y-m-d H:i' }}</div>
+                    </td>
+                    <td>{{ row.person.phone }}</td>
+                    <td>
+                      {% if row.contact_link %}
+                        <span class="status-badge {% if row.contact_link.sync_status == 'synced' %}status-available{% elif row.contact_link.sync_status == 'error' %}status-expired{% else %}status-pending{% endif %}">
+                          {{ row.contact_link.get_sync_status_display }}
+                        </span>
+                      {% else %}
+                        <span class="status-badge status-pending">Nao sincronizado</span>
+                      {% endif %}
+                    </td>
+                    <td class="small text-body-secondary">
+                      {% if row.person.bot_conversa_id %}
+                        {{ row.person.bot_conversa_id }}
+                      {% elif row.contact_link %}
+                        {{ row.contact_link.external_subscriber_id }}
+                      {% else %}
+                        Aguardando a primeira sincronizacao
+                      {% endif %}
+                    </td>
+                    {% if can_manage_bot_conversa %}
+                      <td class="text-end">
+                        <form method="post" action="{% url 'bot_conversa:sync_person' %}">
+                          {% csrf_token %}
+                          <input type="hidden" name="person_public_id" value="{{ row.person.public_id }}">
+                          <input type="hidden" name="next" value="{% url 'bot_conversa:people' %}">
+                          <button type="submit" class="btn btn-outline-secondary btn-sm">
+                            {% if row.contact_link %}Sincronizar novamente{% else %}Sincronizar{% endif %}
+                          </button>
+                        </form>
+                      </td>
+                    {% endif %}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="soft-empty">
+            <p class="mb-0">Nenhuma pessoa foi criada ainda para esta organizacao.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-xl-4">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Nova pessoa</span>
+            <h2>Criar pessoa no CRM</h2>
+          </div>
+        </div>
+        {% if can_manage_bot_conversa %}
+          <form method="post" action="{% url 'bot_conversa:create_person' %}" class="row g-3">
+            {% csrf_token %}
+            <div class="col-12">
+              <label for="{{ create_form.first_name.id_for_label }}" class="form-label">Nome</label>
+              {{ create_form.first_name }}
+              {% for error in create_form.first_name.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12">
+              <label for="{{ create_form.last_name.id_for_label }}" class="form-label">Sobrenome</label>
+              {{ create_form.last_name }}
+              {% for error in create_form.last_name.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12">
+              <label for="{{ create_form.phone.id_for_label }}" class="form-label">Telefone</label>
+              {{ create_form.phone }}
+              {% for error in create_form.phone.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12">
+              <button type="submit" class="btn btn-brand w-100">Criar pessoa</button>
+            </div>
+          </form>
+        {% else %}
+          <div class="soft-empty text-start p-0">
+            <p class="mb-0">Somente proprietarios e administradores podem criar ou sincronizar pessoas com o Bot Conversa.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endblock %}

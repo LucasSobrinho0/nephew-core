@@ -1,0 +1,138 @@
+{% extends 'centered_base.html' %}
+
+{% block title %}Configuracao Inicial{% endblock %}
+
+{% block content %}
+  <div class="mx-auto onboarding-shell">
+    <div class="text-center mb-5">
+      <span class="section-kicker">Configuracao inicial</span>
+      <h1 class="display-6 fw-semibold mb-3">Configure seu acesso a organizacoes</h1>
+      <p class="lead text-body-secondary mb-0">Crie uma nova organizacao ou entre em uma existente com um codigo de convite.</p>
+    </div>
+
+    {% if step == 'choice' %}
+      <div class="row g-4">
+        <div class="col-md-6">
+          <a href="{% url 'organizations:onboarding' %}?step=create" class="choice-card glass-card">
+            <span class="choice-icon"><i class="bi bi-buildings-fill"></i></span>
+            <div>
+              <h2>Criar organizacao</h2>
+              <p>Comece com seu proprio ambiente e torne-se o proprietario.</p>
+            </div>
+            <i class="bi bi-arrow-right-short choice-arrow"></i>
+          </a>
+        </div>
+        <div class="col-md-6">
+          <a href="{% url 'organizations:onboarding' %}?step=join" class="choice-card glass-card">
+            <span class="choice-icon"><i class="bi bi-person-plus-fill"></i></span>
+            <div>
+              <h2>Entrar em organizacao</h2>
+              <p>Cole um codigo de convite gerado por um proprietario ou administrador.</p>
+            </div>
+            <i class="bi bi-arrow-right-short choice-arrow"></i>
+          </a>
+        </div>
+      </div>
+    {% elif step == 'create' %}
+      <div class="glass-card onboarding-card">
+        <a href="{% url 'organizations:onboarding' %}" class="back-link">
+          <i class="bi bi-arrow-left"></i>
+          <span>Voltar para as opcoes</span>
+        </a>
+        <div class="mb-4">
+          <span class="section-kicker">Nova organizacao</span>
+          <h2 class="mb-2">Crie sua organizacao</h2>
+          <p class="text-body-secondary mb-0">Precisamos apenas do essencial para criar a organizacao e definir voce como proprietario.</p>
+        </div>
+        <form method="post" action="{% url 'organizations:onboarding_create' %}" novalidate class="row g-4">
+          {% csrf_token %}
+          <div class="col-12">
+            <label for="{{ create_form.name.id_for_label }}" class="form-label">Nome</label>
+            {{ create_form.name }}
+            {% for error in create_form.name.errors %}
+              <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+          </div>
+          <div class="col-md-6">
+            <label for="{{ create_form.segment.id_for_label }}" class="form-label">Segmento</label>
+            {{ create_form.segment }}
+            {% for error in create_form.segment.errors %}
+              <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+          </div>
+          <div class="col-md-6">
+            <label for="{{ create_form.team_size.id_for_label }}" class="form-label">Tamanho da equipe</label>
+            {{ create_form.team_size }}
+            {% for error in create_form.team_size.errors %}
+              <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+          </div>
+          <div class="col-12">
+            <button type="submit" class="btn btn-brand btn-lg">Criar organizacao</button>
+          </div>
+        </form>
+      </div>
+    {% elif step == 'join' %}
+      <div class="glass-card onboarding-card">
+        <a href="{% url 'organizations:onboarding' %}" class="back-link">
+          <i class="bi bi-arrow-left"></i>
+          <span>Voltar para as opcoes</span>
+        </a>
+        <div class="mb-4">
+          <span class="section-kicker">Acesso por convite</span>
+          <h2 class="mb-2">Entrar em uma organizacao existente</h2>
+          <p class="text-body-secondary mb-0">Os codigos de convite aceitam os padroes <strong>ADM XXXXXXXX</strong> e <strong>USR XXXXXXXX</strong>.</p>
+        </div>
+        <form method="post" action="{% url 'organizations:onboarding_join' %}" novalidate class="row g-4">
+          {% csrf_token %}
+          <div class="col-12">
+            <label for="{{ join_form.code.id_for_label }}" class="form-label">Codigo de convite</label>
+            {{ join_form.code }}
+            {% for error in join_form.code.errors %}
+              <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+          </div>
+          <div class="col-12">
+            <div class="form-note glass-card">
+              <p class="mb-1"><strong>Prefixos de perfil</strong></p>
+              <p class="mb-0">Use <strong>ADM</strong> para acesso de administrador e <strong>USR</strong> para acesso de usuario padrao.</p>
+            </div>
+          </div>
+          <div class="col-12">
+            <button type="submit" class="btn btn-brand btn-lg">Entrar na organizacao</button>
+          </div>
+        </form>
+      </div>
+    {% endif %}
+
+    {% if memberships %}
+      <div class="glass-card mt-4 p-4">
+        <div class="d-flex flex-column flex-md-row justify-content-between gap-3 align-items-md-center">
+          <div>
+            <span class="section-kicker">Acessos atuais</span>
+            <h3 class="mb-1">Organizacoes ja vinculadas ao seu usuario</h3>
+            <p class="text-body-secondary mb-0">Voce pode pular a configuracao inicial e continuar com seus acessos existentes.</p>
+          </div>
+          <a href="{% url 'organizations:index' %}" class="btn btn-outline-secondary">Ver organizacoes</a>
+        </div>
+        <div class="row g-3 mt-1">
+          {% for membership in memberships %}
+            <div class="col-md-6">
+              <div class="org-summary-card">
+                <div>
+                  <h4 class="mb-1">{{ membership.organization.name }}</h4>
+                  <p class="mb-0 text-body-secondary">{{ membership.organization.get_segment_display }} &middot; {{ membership.organization.get_team_size_display }}</p>
+                </div>
+                <span class="role-badge role-badge-secondary">{{ membership.get_role_display }}</span>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="text-center mt-4">
+      <a href="{% url 'dashboard:home' %}" class="btn btn-link link-secondary text-decoration-none">Pular por agora</a>
+    </div>
+  </div>
+{% endblock %}

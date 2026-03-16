@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+
+{% block title %}Bot Conversa{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <div class="d-flex align-items-center gap-3">
+      <span class="placeholder-icon"><i class="bi bi-chat-dots-fill"></i></span>
+      <div>
+        <span class="section-kicker">Bot Conversa</span>
+        <h1>Ambiente de automacao de mensagens</h1>
+        <p class="text-body-secondary mb-0">Gerencie contatos, fluxos e disparos da organizacao ativa sem sair do contexto da organizacao no CRM.</p>
+      </div>
+    </div>
+  </section>
+
+  {% include 'bot_conversa/_subnav.html' %}
+
+  <section class="row g-4 mb-4">
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><i class="bi bi-people-fill"></i></div>
+        <div>
+          <span class="stat-label">Pessoas internas</span>
+          <h2>{{ summary.person_count }}</h2>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><i class="bi bi-person-check-fill"></i></div>
+        <div>
+          <span class="stat-label">Contatos sincronizados</span>
+          <h2>{{ summary.synced_contact_count }}</h2>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><i class="bi bi-diagram-3-fill"></i></div>
+        <div>
+          <span class="stat-label">Fluxos em cache</span>
+          <h2>{{ summary.flow_count }}</h2>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><i class="bi bi-hdd-network-fill"></i></div>
+        <div>
+          <span class="stat-label">Instalacao do app</span>
+          <h2>Ativa</h2>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="row g-4">
+    <div class="col-xl-6">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Disparos</span>
+            <h2>Atividade recente de fluxos</h2>
+          </div>
+          <a href="{% url 'bot_conversa:dispatches' %}" class="btn btn-outline-secondary btn-sm">Abrir disparos</a>
+        </div>
+        {% if summary.recent_dispatches %}
+          <div class="table-responsive">
+            <table class="table table-clean align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Fluxo</th>
+                  <th>Status</th>
+                  <th>Progresso</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for dispatch in summary.recent_dispatches %}
+                  <tr>
+                    <td>
+                      <strong>{{ dispatch.flow_name }}</strong>
+                      <div class="text-body-secondary small">{{ dispatch.total_items }} contatos</div>
+                    </td>
+                    <td><span class="status-badge status-used">{{ dispatch.get_status_display }}</span></td>
+                    <td>
+                      <div class="bot-progress-shell">
+                        <div class="progress">
+                          <div class="progress-bar" style="width: {{ dispatch.progress_percent }}%"></div>
+                        </div>
+                        <span>{{ dispatch.progress_percent }}%</span>
+                      </div>
+                    </td>
+                    <td class="text-end">
+                      <a href="{% url 'bot_conversa:dispatch_detail' dispatch.public_id %}" class="btn btn-outline-secondary btn-sm">Ver</a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="soft-empty">
+            <p class="mb-0">Nenhum disparo do Bot Conversa foi criado ainda.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-xl-6">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Log de sincronizacao</span>
+            <h2>Ultimas verificacoes de contato</h2>
+          </div>
+          <a href="{% url 'bot_conversa:people' %}" class="btn btn-outline-secondary btn-sm">Gerenciar pessoas</a>
+        </div>
+        {% if summary.recent_sync_logs %}
+          <div class="vstack gap-3">
+            {% for sync_log in summary.recent_sync_logs %}
+              <article class="bot-activity-card">
+                <div>
+                  <strong>{{ sync_log.person.full_name|default:'Pessoa desconhecida' }}</strong>
+                  <div class="text-body-secondary small">{{ sync_log.get_action_display }} - {{ sync_log.message|default:'Sem detalhes' }}</div>
+                </div>
+                <span class="status-badge {% if sync_log.outcome == 'success' %}status-available{% elif sync_log.outcome == 'not_found' %}status-pending{% else %}status-expired{% endif %}">
+                  {{ sync_log.get_outcome_display }}
+                </span>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="soft-empty">
+            <p class="mb-0">Nenhuma tentativa de sincronizacao foi registrada ainda.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endblock %}

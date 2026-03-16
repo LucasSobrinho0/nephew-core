@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+
+{% block title %}Status do disparo do Bot Conversa{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Bot Conversa</span>
+    <h1>{{ dispatch.flow_name }}</h1>
+    <p class="text-body-secondary mb-0">O progresso e atualizado por polling no backend para que cada contato seja verificado e processado dentro do contexto da organizacao ativa.</p>
+  </section>
+
+  {% include 'bot_conversa/_subnav.html' %}
+
+  <section class="row g-4 mb-4">
+    <div class="col-xl-4">
+      <div class="glass-card content-card h-100">
+        <span class="section-kicker">Resumo</span>
+        <h2 class="h4">{{ dispatch.flow_name }}</h2>
+        <dl class="details-grid mt-4">
+          <div>
+            <dt>Status</dt>
+            <dd id="dispatchStatusLabel">{{ dispatch.get_status_display }}</dd>
+          </div>
+          <div>
+            <dt>Processado</dt>
+            <dd><span id="dispatchProcessedCount">{{ dispatch.processed_items }}</span> / <span id="dispatchTotalCount">{{ dispatch.total_items }}</span></dd>
+          </div>
+          <div>
+            <dt>Sucesso</dt>
+            <dd id="dispatchSuccessCount">{{ dispatch.success_items }}</dd>
+          </div>
+          <div>
+            <dt>Falhas</dt>
+            <dd id="dispatchFailedCount">{{ dispatch.failed_items }}</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+    <div class="col-xl-8">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Progresso</span>
+            <h2>Execucao do disparo</h2>
+          </div>
+          <span class="status-badge status-used" id="dispatchStatusBadge">{{ dispatch.get_status_display }}</span>
+        </div>
+        <div class="bot-progress-shell bot-progress-shell-lg">
+          <div class="progress">
+            <div class="progress-bar" id="dispatchProgressBar" style="width: {{ status_payload.progress_percent }}%"></div>
+          </div>
+          <span id="dispatchProgressValue">{{ status_payload.progress_percent }}%</span>
+        </div>
+        <p class="text-body-secondary mb-0 mt-3" id="dispatchStatusCopy">
+          {% if can_manage_bot_conversa %}
+            A interface continuara consultando enquanto existirem contatos pendentes.
+          {% else %}
+            Voce esta visualizando o progresso mais recente armazenado para este disparo.
+          {% endif %}
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="glass-card content-card">
+    <div class="content-card-header">
+      <div>
+        <span class="section-kicker">Itens</span>
+        <h2>Log de execucao por contato</h2>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-clean align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Contato</th>
+            <th>Telefone</th>
+            <th>Status</th>
+            <th>Erro</th>
+          </tr>
+        </thead>
+        <tbody id="dispatchItemsTableBody">
+          {% for item in items %}
+            <tr>
+              <td>{{ item.target_name }}</td>
+              <td>{{ item.target_phone }}</td>
+              <td><span class="status-badge status-used">{{ item.get_status_display }}</span></td>
+              <td class="small text-body-secondary">{{ item.error_message|default:'-' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {% if can_manage_bot_conversa %}
+    <form id="botConversaDispatchPoller" class="d-none">
+      {% csrf_token %}
+      <input type="hidden" name="poll_url" value="{% url 'bot_conversa:dispatch_process' dispatch.public_id %}">
+      <input type="hidden" name="is_finished" value="{% if status_payload.is_finished %}true{% else %}false{% endif %}">
+    </form>
+  {% endif %}
+{% endblock %}

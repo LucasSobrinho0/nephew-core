@@ -1,0 +1,78 @@
+{% extends 'auth_base.html' %}
+
+{% block title %}Cadastro{% endblock %}
+
+{% block hero_title %}Comece uma base de CRM estruturada desde o primeiro usuario.{% endblock %}
+{% block hero_text %}Crie sua conta, conclua a configuracao inicial no seu ritmo e prepare a plataforma para uma implantacao segura em varias organizacoes.{% endblock %}
+{% block hero_features %}
+  <span class="feature-pill">Configuracao inicial rapida</span>
+  <span class="feature-pill">Criacao de organizacao</span>
+  <span class="feature-pill">Entrada por convite</span>
+  <span class="feature-pill">Arquitetura segura para organizacoes</span>
+{% endblock %}
+
+{% block content %}
+  <div class="auth-panel glass-card">
+    <div class="mb-4">
+      <span class="section-kicker">Criar conta</span>
+      <h1 class="auth-heading">Comece a construir seu CRM</h1>
+      <p class="auth-subheading">Depois do cadastro voce sera redirecionado para o login e, em seguida, para a configuracao inicial.</p>
+    </div>
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <form method="post" novalidate class="vstack gap-4">
+      {% csrf_token %}
+      <div>
+        <label for="{{ form.full_name.id_for_label }}" class="form-label">Nome completo</label>
+        {{ form.full_name }}
+        {% for error in form.full_name.errors %}
+          <div class="invalid-feedback d-block">{{ error }}</div>
+        {% endfor %}
+      </div>
+
+      <div>
+        <label for="{{ form.email.id_for_label }}" class="form-label">Email</label>
+        {{ form.email }}
+        {% for error in form.email.errors %}
+          <div class="invalid-feedback d-block">{{ error }}</div>
+        {% endfor %}
+      </div>
+
+      <div>
+        <label for="{{ form.password1.id_for_label }}" class="form-label">Senha</label>
+        <div class="input-group">
+          {{ form.password1 }}
+          <button class="btn btn-outline-secondary" type="button" data-password-toggle="#{{ form.password1.id_for_label }}">
+            <i class="bi bi-eye"></i>
+          </button>
+        </div>
+        {% for error in form.password1.errors %}
+          <div class="invalid-feedback d-block">{{ error }}</div>
+        {% endfor %}
+      </div>
+
+      <div>
+        <label for="{{ form.password2.id_for_label }}" class="form-label">Confirmar senha</label>
+        <div class="input-group">
+          {{ form.password2 }}
+          <button class="btn btn-outline-secondary" type="button" data-password-toggle="#{{ form.password2.id_for_label }}">
+            <i class="bi bi-eye"></i>
+          </button>
+        </div>
+        {% for error in form.password2.errors %}
+          <div class="invalid-feedback d-block">{{ error }}</div>
+        {% endfor %}
+      </div>
+
+      <button type="submit" class="btn btn-brand btn-lg w-100">Criar conta</button>
+    </form>
+
+    <p class="auth-link mt-4 mb-0">
+      Ja tem uma conta?
+      <a href="{% url 'accounts:login' %}">Entrar</a>
+    </p>
+  </div>
+{% endblock %}

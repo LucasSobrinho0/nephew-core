@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block title %}Aplicativos{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Aplicativos</span>
+    <h1>Central de integracoes</h1>
+    <p class="text-body-secondary mb-0">Esta secao foi deixada propositalmente para o proximo ciclo de implementacao.</p>
+  </section>
+
+  {% if not active_organization %}
+    <section class="empty-state glass-card">
+      <h2>Escolha uma organizacao primeiro</h2>
+      <p>O catalogo de aplicativos ficara disponivel depois que uma organizacao estiver ativa na sua sessao atual.</p>
+      <a href="{% url 'organizations:index' %}" class="btn btn-outline-secondary">Ir para organizacoes</a>
+    </section>
+  {% else %}
+    <section class="row g-4">
+      <div class="col-md-6 col-xl-3">
+        <div class="glass-card placeholder-card">
+          <span class="placeholder-icon"><i class="bi bi-rocket-takeoff-fill"></i></span>
+          <h2>Apollo</h2>
+          <p>Enriquecimento de leads e fluxos outbound chegarao em uma etapa futura.</p>
+          <span class="status-badge status-pending">Planejado</span>
+        </div>
+      </div>
+      <div class="col-md-6 col-xl-3">
+        <div class="glass-card placeholder-card">
+          <span class="placeholder-icon"><i class="bi bi-chat-dots-fill"></i></span>
+          <h2>Bot Conversa</h2>
+          <p>Automacao de mensagens e fluxos de conversa estao reservados para a fase de integracoes.</p>
+          <span class="status-badge status-pending">Planejado</span>
+        </div>
+      </div>
+      <div class="col-md-6 col-xl-3">
+        <div class="glass-card placeholder-card">
+          <span class="placeholder-icon"><i class="bi bi-envelope-fill"></i></span>
+          <h2>Gmail</h2>
+          <p>O gerenciamento de campanhas sera adicionado quando os modulos base do CRM estiverem prontos.</p>
+          <span class="status-badge status-pending">Planejado</span>
+        </div>
+      </div>
+      <div class="col-md-6 col-xl-3">
+        <div class="glass-card placeholder-card">
+          <span class="placeholder-icon"><i class="bi bi-box-seam-fill"></i></span>
+          <h2>HubSpot</h2>
+          <p>A sincronizacao com CRM externo sera introduzida depois que a fundacao para varias organizacoes estiver concluida.</p>
+          <span class="status-badge status-pending">Planejado</span>
+        </div>
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,1 @@
+ACTIVE_ORGANIZATION_SESSION_KEY = 'active_organization_id'

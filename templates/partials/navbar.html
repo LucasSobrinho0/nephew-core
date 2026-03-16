@@ -1,0 +1,58 @@
+<header class="topbar-shell">
+  <div class="container-fluid px-3 px-lg-4">
+    <div class="d-flex align-items-center justify-content-between gap-3">
+      <div class="d-flex align-items-center gap-2 gap-lg-3">
+        <button class="icon-button d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSidebar" aria-controls="mobileSidebar">
+          <i class="bi bi-list"></i>
+        </button>
+        <a href="{% url 'integrations:api_keys' %}" class="btn btn-outline-secondary api-button">
+          <i class="bi bi-key-fill"></i>
+          <span>Chaves de API</span>
+        </a>
+      </div>
+
+      <div class="d-flex align-items-center gap-2 gap-lg-3">
+        <button type="button" class="icon-button" data-theme-toggle aria-label="Alternar tema de cores">
+          <i class="bi bi-moon-stars-fill"></i>
+        </button>
+
+        <div class="dropdown">
+          <button class="btn profile-chip dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <div class="text-end d-none d-md-block">
+              <span class="profile-name">{{ request.user.full_name }}</span>
+              {% if active_membership %}
+                <small class="profile-meta">{{ active_membership.get_role_display }}</small>
+              {% endif %}
+            </div>
+            <span class="avatar-circle">{{ request.user.initials }}</span>
+          </button>
+          <div class="dropdown-menu dropdown-menu-end profile-menu">
+            <div class="profile-menu-header">
+              <strong>{{ request.user.full_name }}</strong>
+              <span>{{ request.user.email }}</span>
+              {% if active_organization %}
+                <small>{{ active_organization.name }}</small>
+              {% endif %}
+            </div>
+            <a class="dropdown-item" href="{% url 'organizations:index' %}">
+              <i class="bi bi-buildings"></i>
+              <span>Organizacoes</span>
+            </a>
+            <a class="dropdown-item" href="{% url 'integrations:api_keys' %}">
+              <i class="bi bi-key"></i>
+              <span>Chaves de API</span>
+            </a>
+            <div class="dropdown-divider"></div>
+            <form method="post" action="{% url 'accounts:logout' %}">
+              {% csrf_token %}
+              <button type="submit" class="dropdown-item text-danger">
+                <i class="bi bi-box-arrow-right"></i>
+                <span>Sair</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>

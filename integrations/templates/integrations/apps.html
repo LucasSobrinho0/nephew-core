@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+
+{% block title %}Aplicativos{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Aplicativos</span>
+    <h1>Catalogo de aplicativos da organizacao</h1>
+    <p class="text-body-secondary mb-0">Navegue pelas integracoes disponiveis para a organizacao ativa e acompanhe o status de instalacao com seguranca.</p>
+  </section>
+
+  <section class="row g-4">
+    {% for card in app_cards %}
+      <div class="col-lg-6">
+        <div class="glass-card integration-card h-100">
+          <div class="integration-card-header">
+            <div class="integration-card-title">
+              <span class="placeholder-icon"><i class="{{ card.app.icon_class }}"></i></span>
+              <div>
+                <span class="section-kicker">{{ card.app.code }}</span>
+                <h2>{{ card.app.name }}</h2>
+              </div>
+            </div>
+            {% if card.is_installed %}
+              <span class="status-badge status-available">Instalado</span>
+            {% else %}
+              <span class="status-badge status-pending">Nao instalado</span>
+            {% endif %}
+          </div>
+
+          <p class="text-body-secondary mb-4">{{ card.app.description }}</p>
+
+          {% if card.is_installed %}
+            <div class="integration-status-row">
+              <div>
+                <strong>Status da instalacao</strong>
+                <p class="mb-0 text-body-secondary">Este aplicativo esta vinculado a organizacao ativa.</p>
+              </div>
+              {% if can_manage_integrations %}
+                <a href="{% url 'integrations:api_keys' %}" class="btn btn-outline-secondary">Gerenciar chave de API</a>
+              {% endif %}
+            </div>
+          {% elif can_manage_integrations %}
+            <form method="post" action="{% url 'integrations:install_app' %}">
+              {% csrf_token %}
+              <input type="hidden" name="app_public_id" value="{{ card.app.public_id }}">
+              <input type="hidden" name="next" value="{% url 'integrations:apps' %}">
+              <button type="submit" class="btn btn-brand">Instalar aplicativo</button>
+            </form>
+          {% else %}
+            <div class="soft-empty text-start px-0 pb-0">
+              <p class="mb-0">Somente proprietarios e administradores podem instalar aplicativos.</p>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </section>
+{% endblock %}

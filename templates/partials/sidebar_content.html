@@ -1,0 +1,67 @@
+<div class="crm-sidebar-header">
+  <a href="{% url 'dashboard:home' %}" class="sidebar-brand">Nephew CRM</a>
+</div>
+
+<nav class="crm-nav nav flex-column gap-2">
+  <a href="{% url 'dashboard:home' %}" class="nav-link crm-nav-link {% if request.resolver_match.namespace == 'dashboard' and request.resolver_match.url_name == 'home' %}active{% endif %}">
+    <i class="bi bi-grid-1x2-fill"></i>
+    <span>Painel</span>
+  </a>
+  <button
+    class="nav-link crm-nav-link crm-nav-dropdown-button {% if request.resolver_match.namespace == 'bot_conversa' or request.resolver_match.namespace == 'integrations' %}active{% endif %}"
+    type="button"
+    data-bs-toggle="collapse"
+    data-bs-target="#sidebarInstalledApps"
+    aria-expanded="{% if request.resolver_match.namespace == 'bot_conversa' or request.resolver_match.namespace == 'integrations' %}true{% else %}false{% endif %}"
+    aria-controls="sidebarInstalledApps"
+  >
+    <span class="d-flex align-items-center gap-3">
+      <i class="bi bi-app-indicator"></i>
+      <span>Aplicativos</span>
+    </span>
+    <i class="bi bi-chevron-down small"></i>
+  </button>
+  <div class="collapse {% if request.resolver_match.namespace == 'bot_conversa' or request.resolver_match.namespace == 'integrations' %}show{% endif %}" id="sidebarInstalledApps">
+    <div class="sidebar-subnav">
+      {% if sidebar_installed_apps %}
+        {% for app_item in sidebar_installed_apps %}
+          {% if app_item.is_available %}
+            <a href="{{ app_item.url }}" class="nav-link crm-subnav-link {% if request.path == app_item.url %}active{% endif %}">
+              <i class="{{ app_item.icon_class }}"></i>
+              <span>{{ app_item.label }}</span>
+            </a>
+          {% else %}
+            <div class="crm-subnav-link crm-subnav-link-muted">
+              <i class="{{ app_item.icon_class }}"></i>
+              <span>{{ app_item.label }}</span>
+            </div>
+          {% endif %}
+        {% endfor %}
+      {% else %}
+        <div class="crm-subnav-empty">Nenhum aplicativo instalado ainda</div>
+      {% endif %}
+    </div>
+  </div>
+  <a href="{% url 'organizations:invites' %}" class="nav-link crm-nav-link {% if request.resolver_match.namespace == 'organizations' and request.resolver_match.url_name == 'invites' %}active{% endif %}">
+    <i class="bi bi-person-plus-fill"></i>
+    <span>Convites</span>
+  </a>
+  <a href="{% url 'organizations:index' %}" class="nav-link crm-nav-link {% if request.resolver_match.namespace == 'organizations' and request.resolver_match.url_name == 'index' %}active{% endif %}">
+    <i class="bi bi-buildings-fill"></i>
+    <span>Organizacoes</span>
+  </a>
+</nav>
+
+<div class="sidebar-context glass-card mt-auto">
+  {% if active_organization %}
+    <p class="sidebar-context-label">Organizacao ativa</p>
+    <h2 class="sidebar-context-title">{{ active_organization.name }}</h2>
+    {% if active_membership %}
+      <span class="role-badge role-badge-primary">{{ active_membership.get_role_display }}</span>
+    {% endif %}
+  {% else %}
+    <p class="sidebar-context-label">Status da organizacao</p>
+    <h2 class="sidebar-context-title">Nenhuma organizacao ativa</h2>
+    <p class="sidebar-context-copy">Crie ou entre em uma organizacao para liberar o ambiente do CRM.</p>
+  {% endif %}
+</div>

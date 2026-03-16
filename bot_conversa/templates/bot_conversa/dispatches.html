@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block title %}Disparos do Bot Conversa{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Bot Conversa</span>
+    <h1>Disparos de fluxos</h1>
+    <p class="text-body-secondary mb-0">Selecione um fluxo em cache, escolha pessoas internas do CRM e deixe o backend verificar ou criar subscribers antes de cada envio.</p>
+  </section>
+
+  {% include 'bot_conversa/_subnav.html' %}
+
+  <section class="row g-4">
+    <div class="col-xl-5">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Novo disparo</span>
+            <h2>Preparar publico</h2>
+          </div>
+        </div>
+        {% if can_manage_bot_conversa %}
+          <form method="post" action="{% url 'bot_conversa:create_dispatch' %}" class="row g-3">
+            {% csrf_token %}
+            <div class="col-12">
+              <label for="{{ dispatch_form.flow_public_id.id_for_label }}" class="form-label">Fluxo</label>
+              {{ dispatch_form.flow_public_id }}
+              {% for error in dispatch_form.flow_public_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12">
+              <label class="form-label">Selecionar pessoas</label>
+              <div class="bot-checkbox-shell">
+                {% if dispatch_form.person_public_ids %}
+                  <div class="bot-selection-list">
+                    {% for option in dispatch_form.person_public_ids %}
+                      <label class="bot-selection-card">
+                        {{ option.tag }}
+                        <span class="bot-selection-text">{{ option.choice_label }}</span>
+                      </label>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <div class="soft-empty text-start p-0">
+                    <p class="mb-0">Nenhuma pessoa cadastrada no CRM esta disponivel para este disparo.</p>
+                  </div>
+                {% endif %}
+              </div>
+              <div class="form-text">Marque as pessoas que devem receber o fluxo.</div>
+              {% for error in dispatch_form.person_public_ids.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12">
+              <button type="submit" class="btn btn-brand w-100">Criar disparo</button>
+            </div>
+          </form>
+        {% else %}
+          <div class="soft-empty text-start p-0">
+            <p class="mb-0">Somente proprietarios e administradores podem criar disparos do Bot Conversa.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-xl-7">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Historico</span>
+            <h2>Disparos recentes</h2>
+          </div>
+        </div>
+        {% if recent_dispatches %}
+          <div class="table-responsive">
+            <table class="table table-clean align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Fluxo</th>
+                  <th>Status</th>
+                  <th>Processado</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for dispatch in recent_dispatches %}
+                  <tr>
+                    <td>
+                      <strong>{{ dispatch.flow_name }}</strong>
+                      <div class="text-body-secondary small">{{ dispatch.created_at|date:'Y-m-d H:i' }}</div>
+                    </td>
+                    <td><span class="status-badge status-used">{{ dispatch.get_status_display }}</span></td>
+                    <td>{{ dispatch.processed_items }}/{{ dispatch.total_items }}</td>
+                    <td class="text-end">
+                      <a href="{% url 'bot_conversa:dispatch_detail' dispatch.public_id %}" class="btn btn-outline-secondary btn-sm">Abrir</a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="soft-empty">
+            <p class="mb-0">Nenhum disparo foi criado ainda. Atualize os fluxos e crie seu primeiro envio para um publico.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endblock %}

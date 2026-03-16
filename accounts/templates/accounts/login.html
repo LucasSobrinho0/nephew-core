@@ -1,0 +1,62 @@
+{% extends 'auth_base.html' %}
+
+{% block title %}Entrar{% endblock %}
+
+{% block hero_title %}Gerencie relacionamentos com uma interface feita para crescer.{% endblock %}
+{% block hero_text %}Acesse seu ambiente de CRM, troque de organizacao com seguranca e mantenha seu time alinhado em um unico sistema.{% endblock %}
+{% block hero_features %}
+  <span class="feature-pill">Autenticacao nativa segura do Django</span>
+  <span class="feature-pill">Contexto de organizacao ativa</span>
+  <span class="feature-pill">Interface com Bootstrap</span>
+  <span class="feature-pill">Acesso por convite</span>
+{% endblock %}
+
+{% block content %}
+  <div class="auth-panel glass-card">
+    <div class="mb-4">
+      <span class="section-kicker">Bem-vindo de volta</span>
+      <h1 class="auth-heading">Entre no seu ambiente</h1>
+      <p class="auth-subheading">Use seu e-mail e senha para continuar para a configuracao inicial.</p>
+    </div>
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <form method="post" novalidate class="vstack gap-4">
+      {% csrf_token %}
+      <div>
+        <label for="{{ form.email.id_for_label }}" class="form-label">Email</label>
+        {{ form.email }}
+        {% for error in form.email.errors %}
+          <div class="invalid-feedback d-block">{{ error }}</div>
+        {% endfor %}
+      </div>
+
+      <div>
+        <label for="{{ form.password.id_for_label }}" class="form-label">Senha</label>
+        <div class="input-group">
+          {{ form.password }}
+          <button class="btn btn-outline-secondary" type="button" data-password-toggle="#{{ form.password.id_for_label }}">
+            <i class="bi bi-eye"></i>
+          </button>
+        </div>
+        {% for error in form.password.errors %}
+          <div class="invalid-feedback d-block">{{ error }}</div>
+        {% endfor %}
+      </div>
+
+      <div class="form-check">
+        {{ form.remember_me }}
+        <label class="form-check-label" for="{{ form.remember_me.id_for_label }}">Manter conectado neste dispositivo</label>
+      </div>
+
+      <button type="submit" class="btn btn-brand btn-lg w-100">Entrar</button>
+    </form>
+
+    <p class="auth-link mt-4 mb-0">
+      Novo por aqui?
+      <a href="{% url 'accounts:register' %}">Criar conta</a>
+    </p>
+  </div>
+{% endblock %}
