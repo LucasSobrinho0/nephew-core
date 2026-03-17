@@ -76,6 +76,24 @@ class PersonRepository:
         )
 
     @staticmethod
+    def list_for_organization_and_bot_conversa_ids(organization, bot_conversa_ids):
+        return (
+            Person.objects.active()
+            .for_organization(organization)
+            .with_related_objects()
+            .filter(bot_conversa_id__in=bot_conversa_ids)
+        )
+
+    @staticmethod
+    def list_for_organization_and_hubspot_contact_ids(organization, hubspot_contact_ids):
+        return (
+            Person.objects.active()
+            .for_organization(organization)
+            .with_related_objects()
+            .filter(hubspot_contact_id__in=hubspot_contact_ids)
+        )
+
+    @staticmethod
     def update(person, **kwargs):
         for field_name, field_value in kwargs.items():
             setattr(person, field_name, field_value)
@@ -85,3 +103,13 @@ class PersonRepository:
     @staticmethod
     def create(**kwargs):
         return Person.objects.create(**kwargs)
+
+    @staticmethod
+    def bulk_create(persons, **kwargs):
+        return Person.objects.bulk_create(persons, **kwargs)
+
+    @staticmethod
+    def bulk_update(persons, fields, **kwargs):
+        if not persons:
+            return 0
+        return Person.objects.bulk_update(persons, fields, **kwargs)

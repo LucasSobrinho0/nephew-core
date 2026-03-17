@@ -41,6 +41,10 @@ class BotConversaRemoteContactSearchForm(BootstrapFormMixin, forms.Form):
     )
 
 
+class BotConversaListForm(BootstrapFormMixin, forms.Form):
+    load = forms.CharField(required=False, widget=forms.HiddenInput(), initial='1')
+
+
 class BotConversaRemoteContactSaveForm(BootstrapFormMixin, forms.Form):
     external_subscriber_id = forms.CharField(widget=forms.HiddenInput())
     first_name = forms.CharField(required=False, widget=forms.HiddenInput())
@@ -48,3 +52,33 @@ class BotConversaRemoteContactSaveForm(BootstrapFormMixin, forms.Form):
     external_name = forms.CharField(required=False, widget=forms.HiddenInput())
     phone = forms.CharField(widget=forms.HiddenInput())
     next = forms.CharField(required=False, widget=forms.HiddenInput())
+
+
+class BotConversaBulkPersonSyncForm(BootstrapFormMixin, forms.Form):
+    person_public_ids = forms.MultipleChoiceField(required=False, widget=forms.MultipleHiddenInput())
+    next = forms.CharField(required=False, widget=forms.HiddenInput())
+
+    def __init__(self, *args, person_choices=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['person_public_ids'].choices = person_choices
+
+    def clean_person_public_ids(self):
+        person_public_ids = self.cleaned_data.get('person_public_ids') or []
+        if not person_public_ids:
+            raise forms.ValidationError('Selecione pelo menos uma pessoa para sincronizar.')
+        return person_public_ids
+
+
+class BotConversaBulkRemoteContactSaveForm(BootstrapFormMixin, forms.Form):
+    external_subscriber_ids = forms.MultipleChoiceField(required=False, widget=forms.MultipleHiddenInput())
+    next = forms.CharField(required=False, widget=forms.HiddenInput())
+
+    def __init__(self, *args, subscriber_choices=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['external_subscriber_ids'].choices = subscriber_choices
+
+    def clean_external_subscriber_ids(self):
+        external_subscriber_ids = self.cleaned_data.get('external_subscriber_ids') or []
+        if not external_subscriber_ids:
+            raise forms.ValidationError('Selecione pelo menos um contato remoto para salvar.')
+        return external_subscriber_ids

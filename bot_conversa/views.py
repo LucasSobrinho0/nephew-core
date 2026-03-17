@@ -10,8 +10,11 @@ from django.views.generic import TemplateView
 
 from bot_conversa.exceptions import BotConversaApiError, BotConversaConfigurationError
 from bot_conversa.forms import (
+    BotConversaBulkPersonSyncForm,
+    BotConversaBulkRemoteContactSaveForm,
     BotConversaDispatchCreateForm,
     BotConversaFlowRefreshForm,
+    BotConversaListForm,
     BotConversaPersonSyncForm,
     BotConversaRemoteContactSearchForm,
     BotConversaRemoteContactSaveForm,
@@ -136,14 +139,23 @@ class BotConversaPeopleView(BotConversaAccessMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        list_form = BotConversaListForm(self.request.GET or None)
+        has_loaded_people = False
+        person_rows = []
+
+        if self.request.GET.get('load') == '1' and list_form.is_valid():
+            has_loaded_people = True
+            person_rows = BotConversaPeopleService.build_person_rows(
+                organization=self.active_organization,
+            )
+
         context.update(self.build_base_context(active_tab='people'))
         context.update(
             {
-                'person_rows': BotConversaPeopleService.build_person_rows(
-                    organization=self.active_organization,
-                ),
+                'person_rows': person_rows,
+                'has_loaded_people': has_loaded_people,
+                'list_form': list_form,
                 'create_form': kwargs.get('create_form') or PersonCreateForm(),
-                'sync_form': BotConversaPersonSyncForm(),
             }
         )
         return context
@@ -212,6 +224,35 @@ class BotConversaPersonSyncView(BotConversaOperatorRequiredMixin, View):
         return redirect(next_url)
 
 
+class BotConversaBulkPersonSyncView(BotConversaOperatorRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        form = BotConversaBulkPersonSyncForm(request.POST, person_choices=self.build_person_choices())
+        next_url = request.POST.get('next') or 'bot_conversa:people'
+
+        if not form.is_valid():
+            messages.error(request, form.errors.get('person_public_ids', ['Selecione pessoas válidas.'])[0])
+            return redirect(next_url)
+
+        persons = list(
+            PersonRepository.list_for_organization_and_public_ids(
+                self.active_organization,
+                form.cleaned_data['person_public_ids'],
+            )
+        )
+        try:
+            BotConversaContactSyncService.sync_people(
+                user=request.user,
+                organization=self.active_organization,
+                persons=persons,
+            )
+        except (BotConversaApiError, BotConversaConfigurationError, PermissionDenied, ValidationError) as exc:
+            messages.error(request, str(exc))
+            return redirect(next_url)
+
+        messages.success(request, f'{len(persons)} pessoas foram sincronizadas com o Bot Conversa.')
+        return redirect(next_url)
+
+
 class BotConversaContactsView(BotConversaAccessMixin, TemplateView):
     template_name = 'bot_conversa/contacts.html'
 
@@ -273,6 +314,45 @@ class BotConversaRemoteContactSaveView(BotConversaOperatorRequiredMixin, View):
         else:
             messages.info(request, f'{person.full_name} ja estava salvo no CRM.')
 
+        return redirect(next_url)
+
+
+class BotConversaBulkRemoteContactSaveView(BotConversaOperatorRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        search_form = BotConversaRemoteContactSearchForm(request.GET or None)
+        current_search = request.POST.get('current_search', '')
+        remote_contacts = BotConversaRemoteContactService.list_contacts(
+            organization=self.active_organization,
+            search=current_search,
+        )
+        choices = [
+            (contact['external_subscriber_id'], contact['name'] or contact['external_subscriber_id'])
+            for contact in remote_contacts
+        ]
+        form = BotConversaBulkRemoteContactSaveForm(request.POST, subscriber_choices=choices)
+        next_url = request.POST.get('next') or 'bot_conversa:contacts'
+
+        if not form.is_valid():
+            messages.error(request, form.errors.get('external_subscriber_ids', ['Selecione contatos remotos válidos.'])[0])
+            return redirect(next_url)
+
+        selected_ids = set(form.cleaned_data['external_subscriber_ids'])
+        selected_contacts = [
+            contact
+            for contact in remote_contacts
+            if contact['external_subscriber_id'] in selected_ids
+        ]
+        try:
+            saved_persons = BotConversaRemoteContactService.save_contacts_to_crm(
+                user=request.user,
+                organization=self.active_organization,
+                remote_contacts=selected_contacts,
+            )
+        except (BotConversaApiError, BotConversaConfigurationError, PermissionDenied, ValidationError) as exc:
+            messages.error(request, str(exc))
+            return redirect(next_url)
+
+        messages.success(request, f'{len(saved_persons)} contatos remotos foram salvos no CRM.')
         return redirect(next_url)
 
 

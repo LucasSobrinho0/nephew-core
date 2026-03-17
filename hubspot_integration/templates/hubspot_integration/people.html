@@ -6,78 +6,128 @@
   <section class="page-header mb-4">
     <span class="section-kicker">HubSpot</span>
     <h1>Pessoas</h1>
-    <p class="text-body-secondary mb-0">Sincronize pessoas do Nephew CRM com contatos do HubSpot e preserve o vínculo com a empresa quando existir.</p>
+    <p class="text-body-secondary mb-0">Sincronize pessoas do Nephew CRM com contatos do HubSpot e aproveite a comparação por ID, e-mail, telefone e nome para evitar duplicidade.</p>
   </section>
   {% include 'hubspot_integration/_subnav.html' %}
+
   <section class="row g-4">
     <div class="col-xl-7">
-      <div class="glass-card content-card h-100">
-        <div class="content-card-header"><div><span class="section-kicker">CRM local</span><h2>Pessoas cadastradas</h2></div></div>
-        {% if person_rows %}
-          <div class="table-responsive">
-            <table class="table table-clean align-middle mb-0">
-              <thead><tr><th>Pessoa</th><th>Empresa</th><th>Status</th><th class="text-end">Ação</th></tr></thead>
-              <tbody>
-                {% for row in person_rows %}
-                  <tr>
-                    <td>{{ row.person.full_name }}<div class="text-body-secondary small">{{ row.person.email|default:row.person.phone }}</div></td>
-                    <td>{{ row.person.company.name|default:'Sem empresa' }}</td>
-                    <td>{% if row.is_synced %}Sincronizada{% else %}Pendente{% endif %}</td>
-                    <td class="text-end">
-                      {% if can_manage_hubspot %}
-                        <form method="post" action="{% url 'hubspot_integration:sync_person' %}">
-                          {% csrf_token %}
-                          <input type="hidden" name="person_public_id" value="{{ row.person.public_id }}">
-                          <button type="submit" class="btn btn-outline-secondary btn-sm">Sincronizar</button>
-                        </form>
-                      {% endif %}
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+      <div class="glass-card content-card h-100 scroll-card" id="hubspotLocalPeopleCard">
+        <div class="content-card-header">
+          <div><span class="section-kicker">CRM local</span><h2>Pessoas cadastradas</h2></div>
+          {% if has_loaded_local_people and can_manage_hubspot and person_rows %}
+            <button type="submit" form="hubspotBulkPersonSyncForm" class="btn btn-brand">Sincronizar selecionadas</button>
+          {% elif not has_loaded_local_people %}
+            <form method="get" action="{% url 'hubspot_integration:people' %}" data-async-list-form data-async-target="#hubspotLocalPeopleCard" data-loading-text="Listando pessoas...">
+              <input type="hidden" name="load_local" value="1">
+              <button type="submit" class="btn btn-outline-secondary">Listar pessoas</button>
+            </form>
+          {% endif %}
+        </div>
+        {% if has_loaded_local_people and person_rows %}
+          <div class="mb-3">
+            <label for="hubspotLocalPeopleFilter" class="form-label">Filtrar pessoas locais</label>
+            <input id="hubspotLocalPeopleFilter" type="search" class="form-control" placeholder="Buscar por nome, e-mail, telefone ou empresa" data-filter-target="#hubspotLocalPeopleTableBody" data-filter-item="tr">
           </div>
-        {% else %}
+          <form method="post" action="{% url 'hubspot_integration:sync_people_bulk' %}" id="hubspotBulkPersonSyncForm">
+            {% csrf_token %}
+            <div class="scroll-area scroll-area-table">
+              <table class="table table-clean align-middle mb-0">
+                <thead>
+                  <tr>
+                    {% if can_manage_hubspot %}<th style="width: 44px;"><input type="checkbox" data-select-all="hubspot-person-sync"></th>{% endif %}
+                    <th>Pessoa</th>
+                    <th>Empresa</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="hubspotLocalPeopleTableBody">
+                  {% for row in person_rows %}
+                    <tr data-filter-item data-filter-text="{{ row.person.full_name }} {{ row.person.email|default:'' }} {{ row.person.phone }} {{ row.person.company.name|default:'Sem empresa' }} {% if row.is_synced %}Sincronizada{% else %}Pendente{% endif %}">
+                      {% if can_manage_hubspot %}
+                        <td><input type="checkbox" name="person_public_ids" value="{{ row.person.public_id }}" data-checkbox-group="hubspot-person-sync"></td>
+                      {% endif %}
+                      <td>{{ row.person.full_name }}<div class="text-body-secondary small">{{ row.person.email|default:row.person.phone }}</div></td>
+                      <td>{{ row.person.company.name|default:'Sem empresa' }}</td>
+                      <td>{% if row.is_synced %}Sincronizada{% else %}Pendente{% endif %}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </form>
+        {% elif has_loaded_local_people %}
           <div class="soft-empty"><p class="mb-0">Nenhuma pessoa cadastrada ainda.</p></div>
+        {% else %}
+          <div class="soft-empty"><p class="mb-0">Clique em listar para carregar as pessoas cadastradas no sistema.</p></div>
         {% endif %}
       </div>
     </div>
+
     <div class="col-xl-5">
-      <div class="glass-card content-card h-100">
-        <div class="content-card-header"><div><span class="section-kicker">HubSpot remoto</span><h2>Contatos remotos</h2></div></div>
+      <div class="glass-card content-card h-100 scroll-card" id="hubspotRemotePeopleCard">
+        <div class="content-card-header">
+          <div><span class="section-kicker">HubSpot remoto</span><h2>Contatos remotos</h2></div>
+        </div>
+        <div class="d-grid gap-2 d-md-flex justify-content-md-end mb-4">
+          <form method="get" action="{% url 'hubspot_integration:people' %}" class="w-100 w-md-auto" data-async-list-form data-async-target="#hubspotRemotePeopleCard" data-loading-text="Listando contatos...">
+            {{ remote_list_form.load }}
+            <button type="submit" class="btn btn-outline-secondary w-100">Listar contatos</button>
+          </form>
+          {% if can_manage_hubspot and remote_contacts %}
+            <form method="post" action="{% url 'hubspot_integration:sync_contact_companies' %}" class="w-100 w-md-auto">
+              {% csrf_token %}
+              {{ company_sync_form.load }}
+              <button type="submit" class="btn btn-outline-secondary w-100">Sincronizar empresas</button>
+            </form>
+          {% endif %}
+          {% if can_manage_hubspot and remote_contacts %}
+            <button type="submit" form="hubspotBulkPersonImportForm" class="btn btn-brand w-100 w-md-auto">Salvar selecionados</button>
+          {% endif %}
+        </div>
         {% if remote_contacts %}
-          <div class="table-responsive">
-            <table class="table table-clean align-middle mb-0">
-              <thead><tr><th>Contato</th><th>Vínculo</th><th class="text-end">Ação</th></tr></thead>
-              <tbody>
-                {% for contact in remote_contacts %}
-                  <tr>
-                    <td>{{ contact.first_name }} {{ contact.last_name }}<div class="text-body-secondary small">{{ contact.email|default:'-' }}</div></td>
-                    <td>{% if contact.linked_person %}Já salvo{% else %}Não salvo{% endif %}</td>
-                    <td class="text-end">
-                      {% if can_manage_hubspot and not contact.linked_person %}
-                        <form method="post" action="{% url 'hubspot_integration:import_person' %}">
-                          {% csrf_token %}
-                          <input type="hidden" name="hubspot_contact_id" value="{{ contact.hubspot_contact_id }}">
-                          <input type="hidden" name="first_name" value="{{ contact.first_name }}">
-                          <input type="hidden" name="last_name" value="{{ contact.last_name }}">
-                          <input type="hidden" name="email" value="{{ contact.email }}">
-                          <input type="hidden" name="phone" value="{{ contact.phone }}">
-                          <input type="hidden" name="company_name" value="{{ contact.company_name }}">
-                          <input type="hidden" name="company_hubspot_id" value="{{ contact.company_hubspot_id }}">
-                          <button type="submit" class="btn btn-outline-secondary btn-sm">Salvar no CRM</button>
-                        </form>
-                      {% endif %}
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+          <div class="mb-3">
+            <label for="hubspotRemotePeopleFilter" class="form-label">Filtrar contatos remotos</label>
+            <input id="hubspotRemotePeopleFilter" type="search" class="form-control" placeholder="Buscar por nome, e-mail, telefone ou empresa" data-filter-target="#hubspotRemotePeopleTableBody" data-filter-item="tr">
           </div>
-    {% else %}
-      <div class="soft-empty"><p class="mb-0">Nenhum contato remoto encontrado.</p></div>
-    {% endif %}
-  </div>
+          <form method="post" action="{% url 'hubspot_integration:import_people_bulk' %}" id="hubspotBulkPersonImportForm">
+            {% csrf_token %}
+            <div class="scroll-area scroll-area-table">
+              <table class="table table-clean align-middle mb-0">
+                <thead>
+                  <tr>
+                    {% if can_manage_hubspot %}<th style="width: 44px;"><input type="checkbox" data-select-all="hubspot-person-import"></th>{% endif %}
+                    <th>Contato</th>
+                    <th>Empresa no HubSpot</th>
+                    <th>Vínculo</th>
+                  </tr>
+                </thead>
+                <tbody id="hubspotRemotePeopleTableBody">
+                  {% for contact in remote_contacts %}
+                    <tr data-filter-item data-filter-text="{{ contact.first_name }} {{ contact.last_name }} {{ contact.email|default:'' }} {{ contact.phone|default:'' }} {{ contact.company_name|default:'Sem empresa' }} {% if contact.linked_person %}{{ contact.linked_person.full_name }}{% endif %}">
+                      {% if can_manage_hubspot %}
+                        <td>
+                          {% if not contact.linked_person %}
+                            <input type="checkbox" name="hubspot_contact_ids" value="{{ contact.hubspot_contact_id }}" data-checkbox-group="hubspot-person-import">
+                          {% endif %}
+                        </td>
+                      {% endif %}
+                      <td>{{ contact.first_name }} {{ contact.last_name }}<div class="text-body-secondary small">{{ contact.email|default:contact.phone|default:'-' }}</div></td>
+                      <td>{{ contact.company_name|default:'Sem empresa' }}</td>
+                      <td>{% if contact.linked_person %}{{ contact.linked_person.full_name }}{% else %}Não salvo{% endif %}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </form>
+        {% elif has_loaded_remote_contacts %}
+          <div class="soft-empty"><p class="mb-0">Nenhum contato remoto encontrado.</p></div>
+        {% else %}
+          <div class="soft-empty"><p class="mb-0">Clique em listar para carregar os contatos remotos do HubSpot.</p></div>
+        {% endif %}
+      </div>
     </div>
   </section>
+
 {% endblock %}

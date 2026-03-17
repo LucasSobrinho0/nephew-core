@@ -42,6 +42,15 @@ class CompanyRepository:
         )
 
     @staticmethod
+    def list_for_organization_and_hubspot_company_ids(organization, hubspot_company_ids):
+        return (
+            Company.objects.active()
+            .for_organization(organization)
+            .with_related_objects()
+            .filter(hubspot_company_id__in=hubspot_company_ids)
+        )
+
+    @staticmethod
     def create(**kwargs):
         return Company.objects.create(**kwargs)
 
@@ -51,3 +60,13 @@ class CompanyRepository:
             setattr(company, field_name, field_value)
         company.save()
         return company
+
+    @staticmethod
+    def bulk_create(companies, **kwargs):
+        return Company.objects.bulk_create(companies, **kwargs)
+
+    @staticmethod
+    def bulk_update(companies, fields, **kwargs):
+        if not companies:
+            return 0
+        return Company.objects.bulk_update(companies, fields, **kwargs)

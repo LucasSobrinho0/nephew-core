@@ -674,12 +674,14 @@ a {
   gap: 1rem;
 }
 
+.scroll-card,
 .bot-scroll-card {
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
 
+.scroll-area,
 .bot-scroll-area {
   max-height: min(65vh, 42rem);
   min-height: 0;
@@ -689,15 +691,18 @@ a {
   -webkit-overflow-scrolling: touch;
 }
 
+.scroll-area-table,
 .bot-scroll-area-table {
   border-radius: 1rem;
   overflow-x: auto;
 }
 
+.scroll-area-table table,
 .bot-scroll-area-table table {
   min-width: 46rem;
 }
 
+.scroll-area-table thead th,
 .bot-scroll-area-table thead th {
   position: sticky;
   top: 0;

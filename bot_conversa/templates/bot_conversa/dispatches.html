@@ -30,11 +30,12 @@
             </div>
             <div class="col-12">
               <label class="form-label">Selecionar pessoas</label>
+              <input type="search" class="form-control mb-3" placeholder="Buscar pessoa por nome ou telefone" data-filter-target="#botDispatchSelectionList" data-filter-item="label">
               <div class="bot-checkbox-shell">
                 {% if dispatch_form.person_public_ids %}
-                  <div class="bot-selection-list">
+                  <div class="bot-selection-list" id="botDispatchSelectionList">
                     {% for option in dispatch_form.person_public_ids %}
-                      <label class="bot-selection-card">
+                      <label class="bot-selection-card" data-filter-item data-filter-text="{{ option.choice_label }}">
                         {{ option.tag }}
                         <span class="bot-selection-text">{{ option.choice_label }}</span>
                       </label>

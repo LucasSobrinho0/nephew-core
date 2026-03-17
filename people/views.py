@@ -22,9 +22,15 @@ class PeopleListView(ActiveOrganizationRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        should_load_people = self.request.GET.get('load') == '1'
         context.update(
             {
-                'person_rows': PersonRepository.list_for_organization(self.request.active_organization),
+                'person_rows': (
+                    PersonRepository.list_for_organization(self.request.active_organization)
+                    if should_load_people
+                    else []
+                ),
+                'has_loaded_people': should_load_people,
                 'create_form': kwargs.get('create_form') or PersonCreateForm(company_choices=self.build_company_choices()),
             }
         )

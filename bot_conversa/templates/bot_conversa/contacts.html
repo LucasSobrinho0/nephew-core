@@ -6,13 +6,13 @@
   <section class="page-header mb-4">
     <span class="section-kicker">Bot Conversa</span>
     <h1>Contatos remotos</h1>
-    <p class="text-body-secondary mb-0">Carregue todos os contatos do Bot Conversa e compare com os vínculos do CRM armazenados para a organização ativa.</p>
+    <p class="text-body-secondary mb-0">Carregue os contatos do Bot Conversa sob demanda e salve em massa no CRM com vínculo por subscriber, telefone e nome.</p>
   </section>
 
   {% include 'bot_conversa/_subnav.html' %}
 
   <section class="glass-card content-card mb-4">
-    <form method="get" class="row g-3 align-items-end">
+    <form method="get" class="row g-3 align-items-end" data-async-list-form data-async-target="#botRemoteContactsCard" data-loading-text="Listando contatos...">
       <div class="col-md-8 col-xl-6">
         <label for="{{ search_form.search.id_for_label }}" class="form-label">Filtro local</label>
         {{ search_form.search }}
@@ -25,59 +25,68 @@
 
   <section class="row g-4">
     <div class="col-xl-7">
-      <div class="glass-card content-card h-100 bot-scroll-card">
+      <div class="glass-card content-card h-100 scroll-card" id="botRemoteContactsCard">
         <div class="content-card-header">
           <div>
             <span class="section-kicker">Lista remota</span>
             <h2>Contatos retornados pelo Bot Conversa</h2>
           </div>
+          {% if can_manage_bot_conversa and remote_contacts %}
+            <button type="submit" form="botBulkRemoteSaveForm" class="btn btn-brand">Salvar selecionados</button>
+          {% endif %}
         </div>
         {% if remote_contacts %}
-          <div class="bot-scroll-area bot-scroll-area-table">
-            <table class="table table-clean align-middle mb-0">
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>Telefone</th>
-                  <th>Status</th>
-                  <th>CRM</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for remote_contact in remote_contacts %}
-                  <tr>
-                    <td>
-                      <strong>{{ remote_contact.name|default:'Contato sem nome' }}</strong>
-                      <div class="text-body-secondary small">{{ remote_contact.external_subscriber_id }}</div>
-                    </td>
-                    <td>{{ remote_contact.phone|default:'Telefone indisponível' }}</td>
-                    <td><span class="status-badge status-used">{{ remote_contact.status|capfirst }}</span></td>
-                    <td>
-                      {% if remote_contact.is_saved_in_crm and remote_contact.linked_person %}
-                        <div class="d-flex flex-column align-items-start gap-2">
-                          <span class="status-badge status-available">Salvo no CRM</span>
-                          <span class="small text-body-secondary">{{ remote_contact.linked_person.full_name }}</span>
-                        </div>
-                      {% elif can_manage_bot_conversa %}
-                        <form method="post" action="{% url 'bot_conversa:save_remote_contact' %}" class="d-inline-flex">
-                          {% csrf_token %}
-                          <input type="hidden" name="external_subscriber_id" value="{{ remote_contact.external_subscriber_id }}">
-                          <input type="hidden" name="first_name" value="{{ remote_contact.first_name }}">
-                          <input type="hidden" name="last_name" value="{{ remote_contact.last_name }}">
-                          <input type="hidden" name="external_name" value="{{ remote_contact.name }}">
-                          <input type="hidden" name="phone" value="{{ remote_contact.phone }}">
-                          <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                          <button type="submit" class="btn btn-outline-secondary btn-sm">Salvar no sistema</button>
-                        </form>
-                      {% else %}
-                        <span class="status-badge status-pending">Não salvo no CRM</span>
-                      {% endif %}
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+          <div class="mb-3">
+            <label for="botRemoteContactsFilter" class="form-label">Filtrar contatos remotos</label>
+            <input id="botRemoteContactsFilter" type="search" class="form-control" placeholder="Buscar por nome, telefone ou subscriber" data-filter-target="#botRemoteContactsTableBody" data-filter-item="tr">
           </div>
+          <form method="post" action="{% url 'bot_conversa:save_remote_contacts_bulk' %}" id="botBulkRemoteSaveForm">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <input type="hidden" name="current_search" value="{{ search_form.cleaned_data.search|default:'' }}">
+            <div class="scroll-area scroll-area-table">
+              <table class="table table-clean align-middle mb-0">
+                <thead>
+                  <tr>
+                    {% if can_manage_bot_conversa %}<th style="width: 44px;"><input type="checkbox" data-select-all="bot-contact-import"></th>{% endif %}
+                    <th>Nome</th>
+                    <th>Telefone</th>
+                    <th>Status</th>
+                    <th>CRM</th>
+                  </tr>
+                </thead>
+                <tbody id="botRemoteContactsTableBody">
+                  {% for remote_contact in remote_contacts %}
+                    <tr data-filter-item data-filter-text="{{ remote_contact.name }} {{ remote_contact.phone }} {{ remote_contact.external_subscriber_id }} {% if remote_contact.linked_person %}{{ remote_contact.linked_person.full_name }}{% endif %}">
+                      {% if can_manage_bot_conversa %}
+                        <td>
+                          {% if not remote_contact.is_saved_in_crm %}
+                            <input type="checkbox" name="external_subscriber_ids" value="{{ remote_contact.external_subscriber_id }}" data-checkbox-group="bot-contact-import">
+                          {% endif %}
+                        </td>
+                      {% endif %}
+                      <td>
+                        <strong>{{ remote_contact.name|default:'Contato sem nome' }}</strong>
+                        <div class="text-body-secondary small">{{ remote_contact.external_subscriber_id }}</div>
+                      </td>
+                      <td>{{ remote_contact.phone|default:'Telefone indisponível' }}</td>
+                      <td><span class="status-badge status-used">{{ remote_contact.status|capfirst }}</span></td>
+                      <td>
+                        {% if remote_contact.is_saved_in_crm and remote_contact.linked_person %}
+                          <div class="d-flex flex-column align-items-start gap-2">
+                            <span class="status-badge status-available">Salvo no CRM</span>
+                            <span class="small text-body-secondary">{{ remote_contact.linked_person.full_name }}</span>
+                          </div>
+                        {% else %}
+                          <span class="status-badge status-pending">Não salvo no CRM</span>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </form>
         {% else %}
           <div class="soft-empty">
             <p class="mb-0">Clique em listar para carregar a base remota do Bot Conversa da organização ativa.</p>
@@ -86,7 +95,7 @@
       </div>
     </div>
     <div class="col-xl-5">
-      <div class="glass-card content-card h-100 bot-scroll-card">
+      <div class="glass-card content-card h-100 scroll-card">
         <div class="content-card-header">
           <div>
             <span class="section-kicker">Vínculos locais</span>
@@ -94,10 +103,14 @@
           </div>
         </div>
         {% if local_contacts %}
-          <div class="vstack gap-3 bot-scroll-area">
+          <div class="mb-3">
+            <label for="botLocalContactsFilter" class="form-label">Filtrar vínculos locais</label>
+            <input id="botLocalContactsFilter" type="search" class="form-control" placeholder="Buscar por nome, telefone ou subscriber" data-filter-target="#botLocalContactsList" data-filter-item="article">
+          </div>
+          <div class="vstack gap-3 scroll-area" id="botLocalContactsList">
             {% for row in local_contacts %}
               {% if row.contact_link %}
-                <article class="bot-activity-card">
+                <article class="bot-activity-card" data-filter-item data-filter-text="{{ row.person.full_name }} {{ row.person.phone }} {{ row.person.bot_conversa_id|default:'' }} {{ row.contact_link.external_subscriber_id }}">
                   <div>
                     <strong>{{ row.person.full_name }}</strong>
                     <div class="text-body-secondary small">{{ row.person.phone }} - {{ row.person.bot_conversa_id|default:row.contact_link.external_subscriber_id }}</div>
@@ -115,4 +128,5 @@
       </div>
     </div>
   </section>
+
 {% endblock %}

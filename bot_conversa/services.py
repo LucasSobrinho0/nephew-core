@@ -19,7 +19,8 @@ from bot_conversa.repositories import (
     BotConversaFlowDispatchRepository,
     BotConversaSyncLogRepository,
 )
-from common.phone import normalize_phone
+from common.matching import build_person_indexes, match_person
+from common.phone import format_phone_display, normalize_phone
 from integrations.repositories import AppCatalogRepository, AppCredentialRepository, AppInstallationRepository
 from organizations.repositories import MembershipRepository
 from people.repositories import PersonRepository
@@ -121,6 +122,17 @@ class BotConversaPeopleService:
         return person_rows
 
 
+class BotConversaBulkPreparationService:
+    @staticmethod
+    def prepare_contact_link(contact_link):
+        normalized_phone = normalize_phone(contact_link.phone)
+        contact_link.normalized_phone = normalized_phone
+        contact_link.phone = format_phone_display(normalized_phone)
+        contact_link.external_subscriber_id = (contact_link.external_subscriber_id or '').strip()
+        contact_link.external_name = (contact_link.external_name or '').strip()
+        return contact_link
+
+
 class BotConversaFlowService:
     @staticmethod
     @transaction.atomic
@@ -220,6 +232,121 @@ class BotConversaContactSyncService:
         return contact_link
 
     @staticmethod
+    @transaction.atomic
+    def sync_people(*, user, organization, persons):
+        installation = BotConversaInstallationService.get_installation(organization=organization)
+        BotConversaAuthorizationService.ensure_operator_access(user=user, organization=organization)
+        client = BotConversaInstallationService.build_client(organization=organization)
+        synced_at = timezone.now()
+
+        unique_persons = []
+        seen_person_ids = set()
+        for person in persons:
+            if person.organization_id != organization.id:
+                raise ValidationError('Uma ou mais pessoas selecionadas não pertencem à organização ativa.')
+            if person.id in seen_person_ids:
+                continue
+            unique_persons.append(person)
+            seen_person_ids.add(person.id)
+
+        if not unique_persons:
+            raise ValidationError('Selecione pelo menos uma pessoa para sincronizar.')
+
+        existing_contact_links = {
+            contact_link.person_id: contact_link
+            for contact_link in BotConversaContactRepository.list_for_organization(organization)
+        }
+        persons_to_update = []
+        contact_links_to_create = []
+        contact_links_to_update = []
+        sync_logs = []
+
+        for person in unique_persons:
+            remote_phone = person.normalized_phone
+            remote_contact = client.search_contact_by_phone(phone=remote_phone)
+            action = BotConversaSyncLog.Action.LINK
+            if remote_contact is None:
+                remote_contact = client.create_contact(
+                    first_name=person.first_name,
+                    last_name=person.last_name,
+                    phone=remote_phone,
+                )
+                action = BotConversaSyncLog.Action.CREATE
+
+            person.bot_conversa_id = remote_contact['external_subscriber_id']
+            person.updated_by = user
+            person.updated_at = synced_at
+            persons_to_update.append(person)
+
+            contact_link = existing_contact_links.get(person.id)
+            if contact_link is None:
+                contact_link = BotConversaContact(
+                    organization=organization,
+                    installation=installation,
+                    person=person,
+                    external_subscriber_id=remote_contact['external_subscriber_id'],
+                    external_name=remote_contact['name'] or person.full_name,
+                    phone=remote_contact['phone'] or person.phone,
+                    sync_status=BotConversaContact.SyncStatus.SYNCED,
+                    last_synced_at=synced_at,
+                    remote_payload=remote_contact['raw_payload'],
+                    created_by=user,
+                    updated_by=user,
+                )
+                BotConversaBulkPreparationService.prepare_contact_link(contact_link)
+                contact_links_to_create.append(contact_link)
+                log_contact_link = None
+            else:
+                contact_link.external_subscriber_id = remote_contact['external_subscriber_id']
+                contact_link.external_name = remote_contact['name'] or person.full_name
+                contact_link.phone = remote_contact['phone'] or person.phone
+                contact_link.sync_status = BotConversaContact.SyncStatus.SYNCED
+                contact_link.last_synced_at = synced_at
+                contact_link.last_error_message = ''
+                contact_link.remote_payload = remote_contact['raw_payload']
+                contact_link.updated_by = user
+                contact_link.updated_at = synced_at
+                BotConversaBulkPreparationService.prepare_contact_link(contact_link)
+                contact_links_to_update.append(contact_link)
+                log_contact_link = contact_link
+
+            sync_logs.append(
+                BotConversaSyncLog(
+                    organization=organization,
+                    installation=installation,
+                    person=person,
+                    contact_link=log_contact_link,
+                    actor=user,
+                    action=action,
+                    outcome=BotConversaSyncLog.Outcome.SUCCESS,
+                    message='Contato vinculado com sucesso.',
+                    remote_payload=remote_contact['raw_payload'],
+                )
+            )
+
+        PersonRepository.bulk_update(persons_to_update, ['bot_conversa_id', 'updated_by', 'updated_at'])
+        if contact_links_to_create:
+            BotConversaContactRepository.bulk_create(contact_links_to_create)
+        if contact_links_to_update:
+            BotConversaContactRepository.bulk_update(
+                contact_links_to_update,
+                [
+                    'external_subscriber_id',
+                    'external_name',
+                    'phone',
+                    'normalized_phone',
+                    'sync_status',
+                    'last_synced_at',
+                    'last_error_message',
+                    'remote_payload',
+                    'updated_by',
+                    'updated_at',
+                ],
+            )
+        BotConversaSyncLogRepository.bulk_create(sync_logs)
+        return unique_persons
+
+    @staticmethod
     def ensure_person_access(*, organization, person):
         if person.organization_id != organization.id:
             raise PermissionDenied('A pessoa selecionada não pertence à organização ativa.')
@@ -292,11 +419,7 @@ class BotConversaRemoteContactService:
         client = BotConversaInstallationService.build_client(organization=organization)
         persons = list(PersonRepository.list_for_organization(organization))
         local_contacts = list(BotConversaContactRepository.list_for_organization(organization))
-        persons_by_bot_conversa_id = {
-            person.bot_conversa_id: person
-            for person in persons
-            if person.bot_conversa_id
-        }
+        person_indexes = build_person_indexes(persons=persons)
         local_by_subscriber_id = {
             contact.external_subscriber_id: contact
             for contact in local_contacts
@@ -305,7 +428,11 @@ class BotConversaRemoteContactService:
         remote_contacts = []
         for remote_contact in client.list_contacts(search=search):
             linked_contact = local_by_subscriber_id.get(remote_contact['external_subscriber_id'])
-            linked_person = persons_by_bot_conversa_id.get(remote_contact['external_subscriber_id'])
+            linked_person = match_person(
+                remote_contact=remote_contact,
+                person_indexes=person_indexes,
+                integration_key='bot_conversa',
+            )
             if linked_person is None and linked_contact is not None:
                 linked_person = linked_contact.person
 
@@ -328,84 +455,165 @@ class BotConversaRemoteContactService:
 
     @staticmethod
     @transaction.atomic
-    def save_contact_to_crm(*, user, organization, external_subscriber_id, phone, first_name='', last_name='', external_name=''):
+    def save_contacts_to_crm(*, user, organization, remote_contacts):
         installation = BotConversaInstallationService.get_installation(organization=organization)
         BotConversaAuthorizationService.ensure_operator_access(user=user, organization=organization)
+        persons = list(PersonRepository.list_for_organization(organization))
+        person_indexes = build_person_indexes(persons=persons)
+        existing_contact_links = {
+            contact_link.external_subscriber_id: contact_link
+            for contact_link in BotConversaContactRepository.list_for_organization(organization)
+        }
+        synced_at = timezone.now()
 
-        normalized_bot_conversa_id = (external_subscriber_id or '').strip()
-        if not normalized_bot_conversa_id:
-            raise ValidationError('O contato remoto nao retornou um ID valido do Bot Conversa.')
+        persons_to_create = []
+        persons_to_update = []
+        contact_links_to_create = []
+        contact_links_to_update = []
+        sync_logs = []
+        processed_persons = []
 
-        normalized_phone = normalize_phone(phone)
-        resolved_first_name, resolved_last_name = BotConversaRemoteContactService.resolve_contact_name(
-            first_name=first_name,
-            last_name=last_name,
-            external_name=external_name,
-        )
+        for remote_contact in remote_contacts:
+            normalized_subscriber_id = (remote_contact.get('external_subscriber_id') or '').strip()
+            if not normalized_subscriber_id:
+                continue
 
-        person = PersonRepository.get_for_organization_and_bot_conversa_id(
-            organization,
-            normalized_bot_conversa_id,
-        )
-        created_person = False
-        linked_existing_person = False
-
-        if person is None:
-            person = PersonRepository.get_for_organization_and_normalized_phone(
-                organization,
-                normalized_phone,
+            matched_person = match_person(
+                remote_contact=remote_contact,
+                person_indexes=person_indexes,
+                integration_key='bot_conversa',
             )
-            if person is not None:
-                person = PersonService.assign_bot_conversa_id(
-                    user=user,
-                    organization=organization,
-                    person=person,
-                    bot_conversa_id=normalized_bot_conversa_id,
-                )
-                linked_existing_person = True
-            else:
-                person = PersonService.create_person(
-                    user=user,
+            resolved_first_name, resolved_last_name = BotConversaRemoteContactService.resolve_contact_name(
+                first_name=remote_contact.get('first_name', ''),
+                last_name=remote_contact.get('last_name', ''),
+                external_name=remote_contact.get('name', ''),
+            )
+
+            if matched_person is None:
+                matched_person = Person(
                     organization=organization,
                     first_name=resolved_first_name,
                     last_name=resolved_last_name,
-                    phone=phone,
-                    bot_conversa_id=normalized_bot_conversa_id,
+                    phone=remote_contact['phone'],
+                    bot_conversa_id=normalized_subscriber_id,
+                    created_by=user,
+                    updated_by=user,
                 )
-                created_person = True
+                matched_person.normalized_phone = normalize_phone(matched_person.phone)
+                matched_person.phone = format_phone_display(matched_person.normalized_phone)
+                persons_to_create.append(matched_person)
+                persons.append(matched_person)
+                person_indexes = build_person_indexes(persons=persons)
+            else:
+                if not matched_person.bot_conversa_id:
+                    matched_person.bot_conversa_id = normalized_subscriber_id
+                    matched_person.updated_by = user
+                    matched_person.updated_at = synced_at
+                    persons_to_update.append(matched_person)
 
-        remote_contact = {
-            'external_subscriber_id': normalized_bot_conversa_id,
-            'name': external_name or person.full_name,
-            'phone': phone,
-            'status': 'active',
-            'raw_payload': {},
-        }
-        contact_link = BotConversaContactSyncService.upsert_contact_link(
+            processed_persons.append(matched_person)
+            contact_link = existing_contact_links.get(normalized_subscriber_id)
+            if contact_link is None:
+                contact_link = BotConversaContact(
+                    organization=organization,
+                    installation=installation,
+                    person=matched_person,
+                    external_subscriber_id=normalized_subscriber_id,
+                    external_name=remote_contact.get('name') or matched_person.full_name,
+                    phone=remote_contact['phone'],
+                    sync_status=BotConversaContact.SyncStatus.SYNCED,
+                    last_synced_at=synced_at,
+                    remote_payload=remote_contact.get('raw_payload', {}),
+                    created_by=user,
+                    updated_by=user,
+                )
+                BotConversaBulkPreparationService.prepare_contact_link(contact_link)
+                contact_links_to_create.append(contact_link)
+                existing_contact_links[normalized_subscriber_id] = contact_link
+                log_contact_link = None
+            else:
+                contact_link.person = matched_person
+                contact_link.external_name = remote_contact.get('name') or matched_person.full_name
+                contact_link.phone = remote_contact['phone']
+                contact_link.sync_status = BotConversaContact.SyncStatus.SYNCED
+                contact_link.last_synced_at = synced_at
+                contact_link.last_error_message = ''
+                contact_link.remote_payload = remote_contact.get('raw_payload', {})
+                contact_link.updated_by = user
+                contact_link.updated_at = synced_at
+                BotConversaBulkPreparationService.prepare_contact_link(contact_link)
+                contact_links_to_update.append(contact_link)
+                log_contact_link = contact_link
+
+            sync_logs.append(
+                BotConversaSyncLog(
+                    organization=organization,
+                    installation=installation,
+                    person=matched_person,
+                    contact_link=log_contact_link,
+                    actor=user,
+                    action=BotConversaSyncLog.Action.CREATE if matched_person in persons_to_create else BotConversaSyncLog.Action.LINK,
+                    outcome=BotConversaSyncLog.Outcome.SUCCESS,
+                    message='Contato remoto salvo no CRM.',
+                    remote_payload=remote_contact.get('raw_payload', {}),
+                )
+            )
+
+        if persons_to_create:
+            PersonRepository.bulk_create(persons_to_create)
+            for contact_link in contact_links_to_create:
+                contact_link.person_id = contact_link.person.id
+            for sync_log in sync_logs:
+                if sync_log.person_id is None and sync_log.person is not None:
+                    sync_log.person_id = sync_log.person.id
+        if persons_to_update:
+            PersonRepository.bulk_update(persons_to_update, ['bot_conversa_id', 'updated_by', 'updated_at'])
+        if contact_links_to_create:
+            BotConversaContactRepository.bulk_create(contact_links_to_create)
+        if contact_links_to_update:
+            BotConversaContactRepository.bulk_update(
+                contact_links_to_update,
+                [
+                    'person',
+                    'external_name',
+                    'phone',
+                    'normalized_phone',
+                    'sync_status',
+                    'last_synced_at',
+                    'last_error_message',
+                    'remote_payload',
+                    'updated_by',
+                    'updated_at',
+                ],
+            )
+        BotConversaSyncLogRepository.bulk_create(sync_logs)
+        return processed_persons
+
+    @staticmethod
+    @transaction.atomic
+    def save_contact_to_crm(*, user, organization, external_subscriber_id, phone, first_name='', last_name='', external_name=''):
+        existing_person = PersonRepository.get_for_organization_and_bot_conversa_id(organization, external_subscriber_id)
+        saved_persons = BotConversaRemoteContactService.save_contacts_to_crm(
             user=user,
             organization=organization,
-            installation=installation,
-            person=person,
-            remote_contact=remote_contact,
+            remote_contacts=[
+                {
+                    'external_subscriber_id': external_subscriber_id,
+                    'first_name': first_name,
+                    'last_name': last_name,
+                    'name': external_name,
+                    'phone': phone,
+                    'status': 'active',
+                    'raw_payload': {},
+                }
+            ],
         )
-
-        BotConversaSyncLogRepository.create(
-            organization=organization,
-            installation=installation,
-            person=person,
-            contact_link=contact_link,
-            actor=user,
-            action=BotConversaSyncLog.Action.CREATE if created_person else BotConversaSyncLog.Action.LINK,
-            outcome=BotConversaSyncLog.Outcome.SUCCESS,
-            message='Contato remoto salvo no CRM.',
-            remote_payload=remote_contact['raw_payload'],
-        )
-
+        person = saved_persons[0]
         return {
             'person': person,
-            'contact_link': contact_link,
-            'created_person': created_person,
-            'linked_existing_person': linked_existing_person,
+            'contact_link': BotConversaContactRepository.get_for_organization_and_person(organization, person),
+            'created_person': existing_person is None,
+            'linked_existing_person': existing_person is not None and existing_person.pk == person.pk,
         }
 
     @staticmethod

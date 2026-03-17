@@ -6,18 +6,24 @@
   <section class="page-header mb-4">
     <span class="section-kicker">HubSpot</span>
     <h1>Empresas</h1>
-    <p class="text-body-secondary mb-0">Cadastre empresas no CRM, sincronize com o HubSpot e aproveite os IDs remotos para evitar duplicidade.</p>
+    <p class="text-body-secondary mb-0">Cadastre empresas no CRM, sincronize em massa com o HubSpot e salve empresas remotas sem duplicar registros locais.</p>
   </section>
   {% include 'hubspot_integration/_subnav.html' %}
+
   <section class="row g-4">
-    <div class="col-xl-5">
+    <div class="col-xl-4">
       <div class="glass-card content-card h-100">
-        <div class="content-card-header"><div><span class="section-kicker">Nova empresa</span><h2>Cadastrar no CRM</h2></div></div>
+        <div class="content-card-header">
+          <div><span class="section-kicker">Nova empresa</span><h2>Cadastrar no CRM</h2></div>
+        </div>
         {% if can_manage_hubspot %}
           <form method="post" action="{% url 'hubspot_integration:create_company' %}" class="row g-3">
             {% csrf_token %}
             {% for field in create_form %}
-              <div class="col-12"><label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>{{ field }}</div>
+              <div class="col-12">
+                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                {{ field }}
+              </div>
             {% endfor %}
             <div class="col-12"><button type="submit" class="btn btn-brand">Salvar empresa</button></div>
           </form>
@@ -26,70 +32,117 @@
         {% endif %}
       </div>
     </div>
-    <div class="col-xl-7">
-      <div class="glass-card content-card h-100">
-        <div class="content-card-header"><div><span class="section-kicker">CRM local</span><h2>Empresas cadastradas</h2></div></div>
-        {% if company_rows %}
-          <div class="table-responsive">
-            <table class="table table-clean align-middle mb-0">
-              <thead><tr><th>Empresa</th><th>Website</th><th>Status</th><th class="text-end">Ação</th></tr></thead>
-              <tbody>
-                {% for row in company_rows %}
-                  <tr>
-                    <td>{{ row.company.name }}</td>
-                    <td>{{ row.company.website|default:'-' }}</td>
-                    <td>{% if row.is_synced %}Sincronizada{% else %}Pendente{% endif %}</td>
-                    <td class="text-end">
-                      {% if can_manage_hubspot %}
-                        <form method="post" action="{% url 'hubspot_integration:sync_company' %}">
-                          {% csrf_token %}
-                          <input type="hidden" name="company_public_id" value="{{ row.company.public_id }}">
-                          <button type="submit" class="btn btn-outline-secondary btn-sm">Sincronizar</button>
-                        </form>
-                      {% endif %}
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+
+    <div class="col-xl-8">
+      <div class="glass-card content-card h-100 scroll-card" id="hubspotLocalCompaniesCard">
+        <div class="content-card-header">
+          <div><span class="section-kicker">CRM local</span><h2>Empresas cadastradas</h2></div>
+          {% if has_loaded_local_companies and can_manage_hubspot and company_rows %}
+            <button type="submit" form="hubspotBulkCompanySyncForm" class="btn btn-brand">Sincronizar selecionadas</button>
+          {% elif not has_loaded_local_companies %}
+            <form method="get" action="{% url 'hubspot_integration:companies' %}" data-async-list-form data-async-target="#hubspotLocalCompaniesCard" data-loading-text="Listando empresas...">
+              <input type="hidden" name="load_local" value="1">
+              <button type="submit" class="btn btn-outline-secondary">Listar empresas</button>
+            </form>
+          {% endif %}
+        </div>
+        {% if has_loaded_local_companies and company_rows %}
+          <div class="mb-3">
+            <label for="hubspotLocalCompaniesFilter" class="form-label">Filtrar empresas locais</label>
+            <input id="hubspotLocalCompaniesFilter" type="search" class="form-control" placeholder="Buscar por nome, website ou telefone" data-filter-target="#hubspotLocalCompaniesTableBody" data-filter-item="tr">
           </div>
-        {% else %}
+          <form method="post" action="{% url 'hubspot_integration:sync_companies_bulk' %}" id="hubspotBulkCompanySyncForm">
+            {% csrf_token %}
+            <div class="scroll-area scroll-area-table">
+              <table class="table table-clean align-middle mb-0">
+                <thead>
+                  <tr>
+                    {% if can_manage_hubspot %}<th style="width: 44px;"><input type="checkbox" data-select-all="hubspot-company-sync"></th>{% endif %}
+                    <th>Empresa</th>
+                    <th>Website</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="hubspotLocalCompaniesTableBody">
+                  {% for row in company_rows %}
+                    <tr data-filter-item data-filter-text="{{ row.company.name }} {{ row.company.website|default:'' }} {{ row.company.phone|default:'' }} {% if row.is_synced %}Sincronizada{% else %}Pendente{% endif %}">
+                      {% if can_manage_hubspot %}
+                        <td><input type="checkbox" name="company_public_ids" value="{{ row.company.public_id }}" data-checkbox-group="hubspot-company-sync"></td>
+                      {% endif %}
+                      <td>{{ row.company.name }}</td>
+                      <td>{{ row.company.website|default:'-' }}</td>
+                      <td>{% if row.is_synced %}Sincronizada{% else %}Pendente{% endif %}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </form>
+        {% elif has_loaded_local_companies %}
           <div class="soft-empty"><p class="mb-0">Nenhuma empresa cadastrada ainda.</p></div>
+        {% else %}
+          <div class="soft-empty"><p class="mb-0">Clique em listar para carregar as empresas cadastradas no sistema.</p></div>
         {% endif %}
       </div>
     </div>
   </section>
-  <section class="glass-card content-card mt-4">
-    <div class="content-card-header"><div><span class="section-kicker">HubSpot remoto</span><h2>Empresas remotas</h2></div></div>
+
+  <section class="glass-card content-card mt-4 scroll-card" id="hubspotRemoteCompaniesCard">
+    <div class="content-card-header">
+      <div><span class="section-kicker">HubSpot remoto</span><h2>Empresas remotas</h2></div>
+      <div></div>
+    </div>
+    <div class="d-grid gap-2 d-md-flex justify-content-md-end mb-4">
+      <form method="get" action="{% url 'hubspot_integration:companies' %}" data-async-list-form data-async-target="#hubspotRemoteCompaniesCard" data-loading-text="Listando empresas..." class="w-100 w-md-auto">
+        {{ remote_list_form.load }}
+        <button type="submit" class="btn btn-outline-secondary w-100">Listar empresas</button>
+      </form>
+      {% if can_manage_hubspot and remote_companies %}
+        <button type="submit" form="hubspotBulkCompanyImportForm" class="btn btn-brand w-100 w-md-auto">Salvar selecionadas</button>
+      {% endif %}
+    </div>
+
     {% if remote_companies %}
-      <div class="table-responsive">
-        <table class="table table-clean align-middle mb-0">
-          <thead><tr><th>Empresa</th><th>Website</th><th>Vínculo</th><th class="text-end">Ação</th></tr></thead>
-          <tbody>
-            {% for company in remote_companies %}
-              <tr>
-                <td>{{ company.name }}</td>
-                <td>{{ company.website|default:'-' }}</td>
-                <td>{% if company.linked_company %}Já salva{% else %}Não salva{% endif %}</td>
-                <td class="text-end">
-                  {% if can_manage_hubspot and not company.linked_company %}
-                    <form method="post" action="{% url 'hubspot_integration:import_company' %}">
-                      {% csrf_token %}
-                      <input type="hidden" name="hubspot_company_id" value="{{ company.hubspot_company_id }}">
-                      <input type="hidden" name="name" value="{{ company.name }}">
-                      <input type="hidden" name="website" value="{{ company.website }}">
-                      <input type="hidden" name="phone" value="{{ company.phone }}">
-                      <button type="submit" class="btn btn-outline-secondary btn-sm">Salvar no CRM</button>
-                    </form>
-                  {% endif %}
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <div class="mb-3">
+        <label for="hubspotRemoteCompaniesFilter" class="form-label">Filtrar empresas remotas</label>
+        <input id="hubspotRemoteCompaniesFilter" type="search" class="form-control" placeholder="Buscar por nome ou website" data-filter-target="#hubspotRemoteCompaniesTableBody" data-filter-item="tr">
       </div>
-    {% else %}
+      <form method="post" action="{% url 'hubspot_integration:import_companies_bulk' %}" id="hubspotBulkCompanyImportForm">
+        {% csrf_token %}
+        <div class="scroll-area scroll-area-table">
+          <table class="table table-clean align-middle mb-0">
+            <thead>
+              <tr>
+                {% if can_manage_hubspot %}<th style="width: 44px;"><input type="checkbox" data-select-all="hubspot-company-import"></th>{% endif %}
+                <th>Empresa</th>
+                <th>Website</th>
+                <th>Vínculo</th>
+              </tr>
+            </thead>
+            <tbody id="hubspotRemoteCompaniesTableBody">
+              {% for company in remote_companies %}
+                <tr data-filter-item data-filter-text="{{ company.name }} {{ company.website|default:'' }} {% if company.linked_company %}{{ company.linked_company.name }}{% endif %}">
+                  {% if can_manage_hubspot %}
+                    <td>
+                      {% if not company.linked_company %}
+                        <input type="checkbox" name="hubspot_company_ids" value="{{ company.hubspot_company_id }}" data-checkbox-group="hubspot-company-import">
+                      {% endif %}
+                    </td>
+                  {% endif %}
+                  <td>{{ company.name }}</td>
+                  <td>{{ company.website|default:'-' }}</td>
+                  <td>{% if company.linked_company %}{{ company.linked_company.name }}{% else %}Não salva{% endif %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </form>
+    {% elif has_loaded_remote_companies %}
       <div class="soft-empty"><p class="mb-0">Nenhuma empresa remota encontrada.</p></div>
+    {% else %}
+      <div class="soft-empty"><p class="mb-0">Clique em listar para carregar as empresas remotas do HubSpot.</p></div>
     {% endif %}
   </section>
+
 {% endblock %}

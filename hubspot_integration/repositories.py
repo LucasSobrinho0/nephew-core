@@ -50,6 +50,14 @@ class HubSpotDealRepository:
     def create(**kwargs):
         return HubSpotDeal.objects.create(**kwargs)
 
+    @staticmethod
+    def list_for_organization_and_hubspot_deal_ids(organization, hubspot_deal_ids):
+        return (
+            HubSpotDeal.objects.for_organization(organization)
+            .with_related_objects()
+            .filter(hubspot_deal_id__in=hubspot_deal_ids)
+        )
+
 
 class HubSpotSyncLogRepository:
     @staticmethod
@@ -63,3 +71,7 @@ class HubSpotSyncLogRepository:
     @staticmethod
     def create(**kwargs):
         return HubSpotSyncLog.objects.create(**kwargs)
+
+    @staticmethod
+    def bulk_create(sync_logs, **kwargs):
+        return HubSpotSyncLog.objects.bulk_create(sync_logs, **kwargs)

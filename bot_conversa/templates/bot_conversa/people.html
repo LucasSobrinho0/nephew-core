@@ -6,79 +6,86 @@
   <section class="page-header mb-4">
     <span class="section-kicker">Bot Conversa</span>
     <h1>Pessoas internas e sincronização de contatos</h1>
-    <p class="text-body-secondary mb-0">Crie pessoas do CRM dentro da organização ativa e sincronize com o Bot Conversa apenas quando necessário.</p>
+    <p class="text-body-secondary mb-0">Crie pessoas do CRM dentro da organização ativa e sincronize em massa com o Bot Conversa apenas quando necessário.</p>
   </section>
 
   {% include 'bot_conversa/_subnav.html' %}
 
   <section class="row g-4">
     <div class="col-xl-8">
-      <div class="glass-card content-card h-100">
+      <div class="glass-card content-card h-100 scroll-card" id="botPeopleListCard">
         <div class="content-card-header">
           <div>
             <span class="section-kicker">Pessoas</span>
             <h2>Base de contatos do CRM</h2>
           </div>
+          <form method="get" action="{% url 'bot_conversa:people' %}" data-async-list-form data-async-target="#botPeopleListCard" data-loading-text="Listando pessoas...">
+            {{ list_form.load }}
+            <button type="submit" class="btn btn-outline-secondary">Listar pessoas</button>
+          </form>
         </div>
-        {% if person_rows %}
-          <div class="table-responsive">
-            <table class="table table-clean align-middle mb-0">
-              <thead>
-                <tr>
-                  <th>Pessoa</th>
-                  <th>Telefone</th>
-                  <th>Status</th>
-                  <th>Subscriber</th>
-                  {% if can_manage_bot_conversa %}<th></th>{% endif %}
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in person_rows %}
+        {% if has_loaded_people %}
+          {% if person_rows %}
+            <div class="d-flex flex-column flex-md-row gap-2 align-items-stretch align-items-md-center justify-content-between mb-3">
+              <div class="flex-grow-1">
+                <label for="botPeopleFilter" class="form-label">Filtrar pessoas</label>
+                <input id="botPeopleFilter" type="search" class="form-control" placeholder="Buscar por nome, telefone ou subscriber" data-filter-target="#botPeopleTableBody" data-filter-item="tr">
+              </div>
+              {% if can_manage_bot_conversa %}
+                <button type="submit" form="botBulkPersonSyncForm" class="btn btn-brand mt-md-4">Sincronizar selecionadas</button>
+              {% endif %}
+            </div>
+          <form method="post" action="{% url 'bot_conversa:sync_people_bulk' %}" id="botBulkPersonSyncForm">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% url 'bot_conversa:people' %}">
+            <div class="scroll-area scroll-area-table">
+              <table class="table table-clean align-middle mb-0">
+                <thead>
                   <tr>
-                    <td>
-                      <strong>{{ row.person.full_name }}</strong>
-                      <div class="text-body-secondary small">{{ row.person.created_at|date:'Y-m-d H:i' }}</div>
-                    </td>
-                    <td>{{ row.person.phone }}</td>
-                    <td>
-                      {% if row.contact_link %}
-                        <span class="status-badge {% if row.contact_link.sync_status == 'synced' %}status-available{% elif row.contact_link.sync_status == 'error' %}status-expired{% else %}status-pending{% endif %}">
-                          {{ row.contact_link.get_sync_status_display }}
-                        </span>
-                      {% else %}
-                        <span class="status-badge status-pending">Não sincronizado</span>
-                      {% endif %}
-                    </td>
-                    <td class="small text-body-secondary">
-                      {% if row.person.bot_conversa_id %}
-                        {{ row.person.bot_conversa_id }}
-                      {% elif row.contact_link %}
-                        {{ row.contact_link.external_subscriber_id }}
-                      {% else %}
-                        Aguardando a primeira sincronização
-                      {% endif %}
-                    </td>
-                    {% if can_manage_bot_conversa %}
-                      <td class="text-end">
-                        <form method="post" action="{% url 'bot_conversa:sync_person' %}">
-                          {% csrf_token %}
-                          <input type="hidden" name="person_public_id" value="{{ row.person.public_id }}">
-                          <input type="hidden" name="next" value="{% url 'bot_conversa:people' %}">
-                          <button type="submit" class="btn btn-outline-secondary btn-sm">
-                            {% if row.contact_link %}Sincronizar novamente{% else %}Sincronizar{% endif %}
-                          </button>
-                        </form>
-                      </td>
-                    {% endif %}
+                    {% if can_manage_bot_conversa %}<th style="width: 44px;"><input type="checkbox" data-select-all="bot-person-sync"></th>{% endif %}
+                    <th>Pessoa</th>
+                    <th>Telefone</th>
+                    <th>Status</th>
+                    <th>Subscriber</th>
                   </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody id="botPeopleTableBody">
+                  {% for row in person_rows %}
+                    <tr data-filter-item data-filter-text="{{ row.person.full_name }} {{ row.person.phone }} {{ row.person.bot_conversa_id|default:'' }} {% if row.contact_link %}{{ row.contact_link.external_subscriber_id }} {{ row.contact_link.get_sync_status_display }}{% endif %}">
+                      {% if can_manage_bot_conversa %}
+                        <td><input type="checkbox" name="person_public_ids" value="{{ row.person.public_id }}" data-checkbox-group="bot-person-sync"></td>
+                      {% endif %}
+                      <td><strong>{{ row.person.full_name }}</strong><div class="text-body-secondary small">{{ row.person.created_at|date:'Y-m-d H:i' }}</div></td>
+                      <td>{{ row.person.phone }}</td>
+                      <td>
+                        {% if row.contact_link %}
+                          <span class="status-badge {% if row.contact_link.sync_status == 'synced' %}status-available{% elif row.contact_link.sync_status == 'error' %}status-expired{% else %}status-pending{% endif %}">
+                            {{ row.contact_link.get_sync_status_display }}
+                          </span>
+                        {% else %}
+                          <span class="status-badge status-pending">Não sincronizado</span>
+                        {% endif %}
+                      </td>
+                      <td class="small text-body-secondary">
+                        {% if row.person.bot_conversa_id %}
+                          {{ row.person.bot_conversa_id }}
+                        {% elif row.contact_link %}
+                          {{ row.contact_link.external_subscriber_id }}
+                        {% else %}
+                          Aguardando a primeira sincronização
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </form>
+          {% else %}
+            <div class="soft-empty"><p class="mb-0">Nenhuma pessoa foi criada ainda para esta organização.</p></div>
+          {% endif %}
         {% else %}
-          <div class="soft-empty">
-            <p class="mb-0">Nenhuma pessoa foi criada ainda para esta organização.</p>
-          </div>
+          <div class="soft-empty"><p class="mb-0">Clique em listar para carregar as pessoas da organização ativa.</p></div>
         {% endif %}
       </div>
     </div>
@@ -96,26 +103,20 @@
             <div class="col-12">
               <label for="{{ create_form.first_name.id_for_label }}" class="form-label">Nome</label>
               {{ create_form.first_name }}
-              {% for error in create_form.first_name.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
             </div>
             <div class="col-12">
               <label for="{{ create_form.last_name.id_for_label }}" class="form-label">Sobrenome</label>
               {{ create_form.last_name }}
-              {% for error in create_form.last_name.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
             </div>
             <div class="col-12">
               <label for="{{ create_form.email.id_for_label }}" class="form-label">E-mail</label>
               {{ create_form.email }}
-              {% for error in create_form.email.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
             </div>
             <div class="col-12">
               <label for="{{ create_form.phone.id_for_label }}" class="form-label">Telefone</label>
               {{ create_form.phone }}
-              {% for error in create_form.phone.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
             </div>
-            <div class="col-12">
-              <button type="submit" class="btn btn-brand w-100">Criar pessoa</button>
-            </div>
+            <div class="col-12"><button type="submit" class="btn btn-brand w-100">Criar pessoa</button></div>
           </form>
         {% else %}
           <div class="soft-empty text-start p-0">
@@ -125,4 +126,5 @@
       </div>
     </div>
   </section>
+
 {% endblock %}

@@ -32,7 +32,15 @@ class HubSpotClient:
         ]
 
     def list_contacts(self, *, limit=100):
-        payload = self._request('GET', HUBSPOT_CONTACTS_OBJECT_PATH, query={'limit': limit, 'properties': 'firstname,lastname,email,phone,mobilephone,company,website'})
+        payload = self._request(
+            'GET',
+            HUBSPOT_CONTACTS_OBJECT_PATH,
+            query={
+                'limit': limit,
+                'properties': 'firstname,lastname,email,phone,mobilephone,company,website',
+                'associations': 'companies',
+            },
+        )
         return [
             self._normalize_contact_payload(item)
             for item in (payload.get('results') or [])
@@ -50,6 +58,18 @@ class HubSpotClient:
             }
             for item in (payload.get('results') or [])
             if isinstance(item, dict) and item.get('id')
+        ]
+
+    def list_deals(self, *, limit=100):
+        payload = self._request(
+            'GET',
+            HUBSPOT_DEALS_OBJECT_PATH,
+            query={'limit': limit, 'properties': 'dealname,amount,pipeline,dealstage,createdate,hs_lastmodifieddate'},
+        )
+        return [
+            self._normalize_deal_payload(item)
+            for item in (payload.get('results') or [])
+            if isinstance(item, dict)
         ]
 
     def create_or_get_company(self, *, name, website='', phone=''):
@@ -224,12 +244,19 @@ class HubSpotClient:
             'name': properties.get('name') or 'Empresa sem nome',
             'website': properties.get('website') or '',
             'phone': properties.get('phone') or '',
+            'domain': properties.get('domain') or '',
             'raw_payload': payload,
         }
 
     @staticmethod
     def _normalize_contact_payload(payload):
         properties = payload.get('properties') or {}
+        company_associations = (
+            (payload.get('associations') or {}).get('companies') or {}
+        ).get('results') or []
+        company_hubspot_id = ''
+        if company_associations:
+            company_hubspot_id = str(company_associations[0].get('id') or '')
         return {
             'hubspot_contact_id': str(payload.get('id') or ''),
             'first_name': properties.get('firstname') or '',
@@ -237,6 +264,20 @@ class HubSpotClient:
             'email': properties.get('email') or '',
             'phone': properties.get('phone') or properties.get('mobilephone') or '',
             'company_name': properties.get('company') or '',
-            'company_hubspot_id': '',
+            'company_hubspot_id': company_hubspot_id,
+            'raw_payload': payload,
+        }
+
+    @staticmethod
+    def _normalize_deal_payload(payload):
+        properties = payload.get('properties') or {}
+        return {
+            'hubspot_deal_id': str(payload.get('id') or ''),
+            'name': properties.get('dealname') or 'Deal sem nome',
+            'amount': properties.get('amount') or '',
+            'pipeline_id': properties.get('pipeline') or '',
+            'stage_id': properties.get('dealstage') or '',
+            'created_at': properties.get('createdate') or '',
+            'updated_at': properties.get('hs_lastmodifieddate') or '',
             'raw_payload': payload,
         }

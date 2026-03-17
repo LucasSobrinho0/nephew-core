@@ -46,4 +46,29 @@
       </div>
     </div>
   </section>
+
+  <section class="glass-card content-card mt-4 scroll-card">
+    <div class="content-card-header">
+      <div><span class="section-kicker">HubSpot remoto</span><h2>Todos os deals</h2></div>
+    </div>
+    {% if remote_deals %}
+      <div class="scroll-area scroll-area-table">
+        <table class="table table-clean align-middle mb-0">
+          <thead><tr><th>Deal</th><th>Valor</th><th>Pipeline</th><th>Vínculo local</th></tr></thead>
+          <tbody>
+            {% for deal in remote_deals %}
+              <tr>
+                <td>{{ deal.name }}</td>
+                <td>{{ deal.amount|default:'-' }}</td>
+                <td>{{ deal.pipeline_id|default:'-' }}</td>
+                <td>{% if deal.linked_deal %}{{ deal.linked_deal.name }}{% else %}Não salvo{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="soft-empty"><p class="mb-0">Nenhum deal remoto encontrado.</p></div>
+    {% endif %}
+  </section>
 {% endblock %}

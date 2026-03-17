@@ -36,17 +36,27 @@
       </div>
     </div>
     <div class="col-xl-8">
-      <div class="glass-card content-card h-100">
+      <div class="glass-card content-card h-100" id="peopleLocalListCard">
         <div class="content-card-header">
           <div>
             <span class="section-kicker">Base ativa</span>
             <h2>Pessoas cadastradas</h2>
             <p class="text-body-secondary mb-0">Todas as pessoas abaixo pertencem somente à organização ativa.</p>
           </div>
-          <span class="status-badge status-available">{{ person_rows|length }} registro{{ person_rows|length|pluralize }}</span>
+          {% if has_loaded_people %}
+            <span class="status-badge status-available">{{ person_rows|length }} registro{{ person_rows|length|pluralize }}</span>
+          {% else %}
+            <form method="get" action="{% url 'people:index' %}" data-async-list-form data-async-target="#peopleLocalListCard" data-loading-text="Listando pessoas...">
+              <input type="hidden" name="load" value="1">
+              <button type="submit" class="btn btn-outline-secondary">Listar pessoas</button>
+            </form>
+          {% endif %}
         </div>
-
-        {% if person_rows %}
+        {% if has_loaded_people and person_rows %}
+          <div class="mb-3">
+            <label for="peopleListFilter" class="form-label">Filtrar pessoas</label>
+            <input id="peopleListFilter" type="search" class="form-control" placeholder="Buscar por nome, e-mail, telefone ou empresa" data-filter-target="#peopleListTableBody" data-filter-item="tr">
+          </div>
           <div class="table-responsive">
             <table class="table table-clean align-middle mb-0">
               <thead>
@@ -58,9 +68,9 @@
                   <th class="text-end">Ação</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="peopleListTableBody">
                 {% for person in person_rows %}
-                  <tr>
+                  <tr data-filter-item data-filter-text="{{ person.full_name }} {{ person.company.name|default:'Sem empresa' }} {{ person.email|default:'' }} {{ person.phone }}">
                     <td>{{ person.full_name }}</td>
                     <td>{{ person.company.name|default:'Sem empresa' }}</td>
                     <td>{{ person.email|default:'Não informado' }}</td>
@@ -73,9 +83,13 @@
               </tbody>
             </table>
           </div>
-        {% else %}
+        {% elif has_loaded_people %}
           <div class="soft-empty text-start px-0 pb-0">
             <p class="mb-0">Nenhuma pessoa cadastrada ainda para a organização ativa.</p>
+          </div>
+        {% else %}
+          <div class="soft-empty text-start px-0 pb-0">
+            <p class="mb-0">Clique em listar para carregar as pessoas cadastradas no sistema.</p>
           </div>
         {% endif %}
       </div>

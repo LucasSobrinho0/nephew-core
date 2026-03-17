@@ -48,8 +48,27 @@ class BotConversaContactRepository:
         )
 
     @staticmethod
+    def list_for_organization_and_subscriber_ids(organization, external_subscriber_ids):
+        return (
+            BotConversaContact.objects.active()
+            .for_organization(organization)
+            .with_related_objects()
+            .filter(external_subscriber_id__in=external_subscriber_ids)
+        )
+
+    @staticmethod
     def create(**kwargs):
         return BotConversaContact.objects.create(**kwargs)
+
+    @staticmethod
+    def bulk_create(contact_links, **kwargs):
+        return BotConversaContact.objects.bulk_create(contact_links, **kwargs)
+
+    @staticmethod
+    def bulk_update(contact_links, fields, **kwargs):
+        if not contact_links:
+            return 0
+        return BotConversaContact.objects.bulk_update(contact_links, fields, **kwargs)
 
 
 class BotConversaFlowCacheRepository:
@@ -105,6 +124,10 @@ class BotConversaSyncLogRepository:
     @staticmethod
     def create(**kwargs):
         return BotConversaSyncLog.objects.create(**kwargs)
+
+    @staticmethod
+    def bulk_create(sync_logs, **kwargs):
+        return BotConversaSyncLog.objects.bulk_create(sync_logs, **kwargs)
 
 
 class BotConversaFlowDispatchRepository:
