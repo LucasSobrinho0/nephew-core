@@ -56,6 +56,16 @@ class PersonRepository:
         )
 
     @staticmethod
+    def get_for_organization_and_hubspot_contact_id(organization, hubspot_contact_id):
+        return (
+            Person.objects.active()
+            .for_organization(organization)
+            .with_related_objects()
+            .filter(hubspot_contact_id=hubspot_contact_id)
+            .first()
+        )
+
+    @staticmethod
     def list_for_organization_and_public_ids(organization, public_ids):
         return (
             Person.objects.active()

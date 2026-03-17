@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 
+from companies.models import Company
 from common.encryption import build_email_lookup, normalize_email_address
 from common.fields import EncryptedTextField
 from common.models import PublicIdentifierMixin, TimeStampedModel
@@ -26,6 +27,14 @@ class Person(PublicIdentifierMixin, TimeStampedModel):
         on_delete=models.CASCADE,
     )
     bot_conversa_id = models.CharField(max_length=128, null=True, blank=True, db_index=True)
+    hubspot_contact_id = models.CharField(max_length=128, blank=True, default='', db_index=True)
+    company = models.ForeignKey(
+        Company,
+        related_name='persons',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
     phone = models.CharField(max_length=32)
     normalized_phone = models.CharField(max_length=16, editable=False, db_index=True)
     email = EncryptedTextField(blank=True, default='')
@@ -67,10 +76,16 @@ class Person(PublicIdentifierMixin, TimeStampedModel):
                 condition=models.Q(bot_conversa_id__isnull=False),
                 name='unique_person_bot_conversa_id_per_organization',
             ),
+            models.UniqueConstraint(
+                fields=('organization', 'hubspot_contact_id'),
+                condition=~models.Q(hubspot_contact_id=''),
+                name='unique_person_hubspot_contact_id_per_organization',
+            ),
         ]
 
     def save(self, *args, **kwargs):
         self.bot_conversa_id = (self.bot_conversa_id or '').strip() or None
+        self.hubspot_contact_id = (self.hubspot_contact_id or '').strip()
         self.normalized_phone = normalize_phone(self.phone)
         self.phone = format_phone_display(self.normalized_phone)
         normalized_email = normalize_email_address(self.email) if self.email else ''

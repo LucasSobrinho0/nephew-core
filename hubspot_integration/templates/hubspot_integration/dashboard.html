@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+
+{% block title %}HubSpot{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">HubSpot</span>
+    <h1>Integração com empresas, pessoas, pipelines e deals</h1>
+    <p class="text-body-secondary mb-0">Sincronize os dados do CRM interno com o HubSpot e use os pipelines remotos para criar deals vinculados a empresas e contatos.</p>
+  </section>
+
+  {% include 'hubspot_integration/_subnav.html' %}
+
+  <section class="row g-4 mb-4">
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><i class="bi bi-buildings-fill"></i></div>
+        <div><span class="stat-label">Empresas</span><h2>{{ summary.company_count }}</h2></div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><i class="bi bi-cloud-check-fill"></i></div>
+        <div><span class="stat-label">Empresas sincronizadas</span><h2>{{ summary.synced_company_count }}</h2></div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><i class="bi bi-people-fill"></i></div>
+        <div><span class="stat-label">Pessoas sincronizadas</span><h2>{{ summary.synced_person_count }}</h2></div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><i class="bi bi-kanban-fill"></i></div>
+        <div><span class="stat-label">Pipelines</span><h2>{{ summary.pipeline_count }}</h2></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="row g-4">
+    <div class="col-xl-6">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Deals</span>
+            <h2>Deals recentes</h2>
+          </div>
+        </div>
+        {% if summary.recent_deals %}
+          <div class="table-responsive">
+            <table class="table table-clean align-middle mb-0">
+              <thead><tr><th>Deal</th><th>Empresa</th><th>Status</th></tr></thead>
+              <tbody>
+                {% for deal in summary.recent_deals %}
+                  <tr><td>{{ deal.name }}</td><td>{{ deal.company.name }}</td><td>{{ deal.get_sync_status_display }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="soft-empty"><p class="mb-0">Nenhum deal foi criado ainda.</p></div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-xl-6">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Histórico</span>
+            <h2>Últimas sincronizações</h2>
+          </div>
+        </div>
+        {% if summary.recent_sync_logs %}
+          <div class="table-responsive">
+            <table class="table table-clean align-middle mb-0">
+              <thead><tr><th>Entidade</th><th>Resultado</th><th>Mensagem</th></tr></thead>
+              <tbody>
+                {% for log in summary.recent_sync_logs %}
+                  <tr><td>{{ log.get_entity_type_display }}</td><td>{{ log.get_outcome_display }}</td><td>{{ log.message }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="soft-empty"><p class="mb-0">Nenhuma sincronização registrada ainda.</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endblock %}

@@ -1,0 +1,53 @@
+from companies.models import Company
+
+
+class CompanyRepository:
+    @staticmethod
+    def list_for_organization(organization):
+        return (
+            Company.objects.active()
+            .for_organization(organization)
+            .with_related_objects()
+            .order_by('name', 'website')
+        )
+
+    @staticmethod
+    def get_for_organization_and_public_id(organization, public_id):
+        return (
+            Company.objects.active()
+            .for_organization(organization)
+            .with_related_objects()
+            .filter(public_id=public_id)
+            .first()
+        )
+
+    @staticmethod
+    def get_for_organization_and_hubspot_company_id(organization, hubspot_company_id):
+        return (
+            Company.objects.active()
+            .for_organization(organization)
+            .with_related_objects()
+            .filter(hubspot_company_id=hubspot_company_id)
+            .first()
+        )
+
+    @staticmethod
+    def list_for_organization_and_public_ids(organization, public_ids):
+        return (
+            Company.objects.active()
+            .for_organization(organization)
+            .with_related_objects()
+            .filter(public_id__in=public_ids)
+            .order_by('name')
+        )
+
+    @staticmethod
+    def create(**kwargs):
+        return Company.objects.create(**kwargs)
+
+    @staticmethod
+    def update(company, **kwargs):
+        for field_name, field_value in kwargs.items():
+            setattr(company, field_name, field_value)
+        company.save()
+        return company

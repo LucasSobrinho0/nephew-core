@@ -16,7 +16,7 @@ APP_NAVIGATION_ITEMS = {
     'hubspot': {
         'label': 'HubSpot',
         'icon_class': 'bi bi-diagram-3-fill',
-        'route_name': '',
+        'route_name': 'hubspot_integration:dashboard',
     },
     'gmail': {
         'label': 'Gmail',

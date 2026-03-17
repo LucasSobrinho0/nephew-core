@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+
+{% block title %}Empresas do HubSpot{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">HubSpot</span>
+    <h1>Empresas</h1>
+    <p class="text-body-secondary mb-0">Cadastre empresas no CRM, sincronize com o HubSpot e aproveite os IDs remotos para evitar duplicidade.</p>
+  </section>
+  {% include 'hubspot_integration/_subnav.html' %}
+  <section class="row g-4">
+    <div class="col-xl-5">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header"><div><span class="section-kicker">Nova empresa</span><h2>Cadastrar no CRM</h2></div></div>
+        {% if can_manage_hubspot %}
+          <form method="post" action="{% url 'hubspot_integration:create_company' %}" class="row g-3">
+            {% csrf_token %}
+            {% for field in create_form %}
+              <div class="col-12"><label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>{{ field }}</div>
+            {% endfor %}
+            <div class="col-12"><button type="submit" class="btn btn-brand">Salvar empresa</button></div>
+          </form>
+        {% else %}
+          <div class="soft-empty"><p class="mb-0">Somente proprietários e administradores podem cadastrar ou sincronizar empresas.</p></div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-xl-7">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header"><div><span class="section-kicker">CRM local</span><h2>Empresas cadastradas</h2></div></div>
+        {% if company_rows %}
+          <div class="table-responsive">
+            <table class="table table-clean align-middle mb-0">
+              <thead><tr><th>Empresa</th><th>Website</th><th>Status</th><th class="text-end">Ação</th></tr></thead>
+              <tbody>
+                {% for row in company_rows %}
+                  <tr>
+                    <td>{{ row.company.name }}</td>
+                    <td>{{ row.company.website|default:'-' }}</td>
+                    <td>{% if row.is_synced %}Sincronizada{% else %}Pendente{% endif %}</td>
+                    <td class="text-end">
+                      {% if can_manage_hubspot %}
+                        <form method="post" action="{% url 'hubspot_integration:sync_company' %}">
+                          {% csrf_token %}
+                          <input type="hidden" name="company_public_id" value="{{ row.company.public_id }}">
+                          <button type="submit" class="btn btn-outline-secondary btn-sm">Sincronizar</button>
+                        </form>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="soft-empty"><p class="mb-0">Nenhuma empresa cadastrada ainda.</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  <section class="glass-card content-card mt-4">
+    <div class="content-card-header"><div><span class="section-kicker">HubSpot remoto</span><h2>Empresas remotas</h2></div></div>
+    {% if remote_companies %}
+      <div class="table-responsive">
+        <table class="table table-clean align-middle mb-0">
+          <thead><tr><th>Empresa</th><th>Website</th><th>Vínculo</th><th class="text-end">Ação</th></tr></thead>
+          <tbody>
+            {% for company in remote_companies %}
+              <tr>
+                <td>{{ company.name }}</td>
+                <td>{{ company.website|default:'-' }}</td>
+                <td>{% if company.linked_company %}Já salva{% else %}Não salva{% endif %}</td>
+                <td class="text-end">
+                  {% if can_manage_hubspot and not company.linked_company %}
+                    <form method="post" action="{% url 'hubspot_integration:import_company' %}">
+                      {% csrf_token %}
+                      <input type="hidden" name="hubspot_company_id" value="{{ company.hubspot_company_id }}">
+                      <input type="hidden" name="name" value="{{ company.name }}">
+                      <input type="hidden" name="website" value="{{ company.website }}">
+                      <input type="hidden" name="phone" value="{{ company.phone }}">
+                      <button type="submit" class="btn btn-outline-secondary btn-sm">Salvar no CRM</button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="soft-empty"><p class="mb-0">Nenhuma empresa remota encontrada.</p></div>
+    {% endif %}
+  </section>
+{% endblock %}

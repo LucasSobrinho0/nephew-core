@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block title %}Pipelines do HubSpot{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">HubSpot</span>
+    <h1>Pipelines</h1>
+    <p class="text-body-secondary mb-0">Atualize os pipelines de deals do HubSpot para alimentar a criação local de deals.</p>
+  </section>
+  {% include 'hubspot_integration/_subnav.html' %}
+  <section class="glass-card content-card">
+    <div class="content-card-header">
+      <div><span class="section-kicker">Cache local</span><h2>Pipelines sincronizados</h2></div>
+      {% if can_manage_hubspot %}
+        <form method="post" action="{% url 'hubspot_integration:refresh_pipelines' %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-brand">Atualizar pipelines</button>
+        </form>
+      {% endif %}
+    </div>
+    {% if pipelines %}
+      <div class="table-responsive">
+        <table class="table table-clean align-middle mb-0">
+          <thead><tr><th>Pipeline</th><th>ID do HubSpot</th><th>Sincronizado em</th></tr></thead>
+          <tbody>
+            {% for pipeline in pipelines %}
+              <tr><td>{{ pipeline.name }}</td><td>{{ pipeline.hubspot_pipeline_id }}</td><td>{{ pipeline.last_synced_at|date:'d/m/Y H:i' }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="soft-empty"><p class="mb-0">Nenhum pipeline sincronizado ainda.</p></div>
+    {% endif %}
+  </section>
+{% endblock %}

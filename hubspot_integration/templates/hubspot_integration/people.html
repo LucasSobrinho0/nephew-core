@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+
+{% block title %}Pessoas do HubSpot{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">HubSpot</span>
+    <h1>Pessoas</h1>
+    <p class="text-body-secondary mb-0">Sincronize pessoas do Nephew CRM com contatos do HubSpot e preserve o vínculo com a empresa quando existir.</p>
+  </section>
+  {% include 'hubspot_integration/_subnav.html' %}
+  <section class="row g-4">
+    <div class="col-xl-7">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header"><div><span class="section-kicker">CRM local</span><h2>Pessoas cadastradas</h2></div></div>
+        {% if person_rows %}
+          <div class="table-responsive">
+            <table class="table table-clean align-middle mb-0">
+              <thead><tr><th>Pessoa</th><th>Empresa</th><th>Status</th><th class="text-end">Ação</th></tr></thead>
+              <tbody>
+                {% for row in person_rows %}
+                  <tr>
+                    <td>{{ row.person.full_name }}<div class="text-body-secondary small">{{ row.person.email|default:row.person.phone }}</div></td>
+                    <td>{{ row.person.company.name|default:'Sem empresa' }}</td>
+                    <td>{% if row.is_synced %}Sincronizada{% else %}Pendente{% endif %}</td>
+                    <td class="text-end">
+                      {% if can_manage_hubspot %}
+                        <form method="post" action="{% url 'hubspot_integration:sync_person' %}">
+                          {% csrf_token %}
+                          <input type="hidden" name="person_public_id" value="{{ row.person.public_id }}">
+                          <button type="submit" class="btn btn-outline-secondary btn-sm">Sincronizar</button>
+                        </form>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="soft-empty"><p class="mb-0">Nenhuma pessoa cadastrada ainda.</p></div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-xl-5">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header"><div><span class="section-kicker">HubSpot remoto</span><h2>Contatos remotos</h2></div></div>
+        {% if remote_contacts %}
+          <div class="table-responsive">
+            <table class="table table-clean align-middle mb-0">
+              <thead><tr><th>Contato</th><th>Vínculo</th><th class="text-end">Ação</th></tr></thead>
+              <tbody>
+                {% for contact in remote_contacts %}
+                  <tr>
+                    <td>{{ contact.first_name }} {{ contact.last_name }}<div class="text-body-secondary small">{{ contact.email|default:'-' }}</div></td>
+                    <td>{% if contact.linked_person %}Já salvo{% else %}Não salvo{% endif %}</td>
+                    <td class="text-end">
+                      {% if can_manage_hubspot and not contact.linked_person %}
+                        <form method="post" action="{% url 'hubspot_integration:import_person' %}">
+                          {% csrf_token %}
+                          <input type="hidden" name="hubspot_contact_id" value="{{ contact.hubspot_contact_id }}">
+                          <input type="hidden" name="first_name" value="{{ contact.first_name }}">
+                          <input type="hidden" name="last_name" value="{{ contact.last_name }}">
+                          <input type="hidden" name="email" value="{{ contact.email }}">
+                          <input type="hidden" name="phone" value="{{ contact.phone }}">
+                          <input type="hidden" name="company_name" value="{{ contact.company_name }}">
+                          <input type="hidden" name="company_hubspot_id" value="{{ contact.company_hubspot_id }}">
+                          <button type="submit" class="btn btn-outline-secondary btn-sm">Salvar no CRM</button>
+                        </form>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+    {% else %}
+      <div class="soft-empty"><p class="mb-0">Nenhum contato remoto encontrado.</p></div>
+    {% endif %}
+  </div>
+    </div>
+  </section>
+{% endblock %}

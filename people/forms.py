@@ -25,6 +25,16 @@ class PersonForm(BootstrapFormMixin, forms.Form):
         max_length=32,
         widget=forms.TextInput(attrs={'placeholder': '+55 11 91234-5678'}),
     )
+    company_public_id = forms.ChoiceField(
+        label='Empresa',
+        required=False,
+        choices=(),
+        widget=forms.Select(),
+    )
+
+    def __init__(self, *args, company_choices=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['company_public_id'].choices = [('', 'Sem empresa')] + list(company_choices)
 
     def clean_first_name(self):
         return self.cleaned_data['first_name'].strip()

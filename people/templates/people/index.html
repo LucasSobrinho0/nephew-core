@@ -52,6 +52,7 @@
               <thead>
                 <tr>
                   <th>Nome</th>
+                  <th>Empresa</th>
                   <th>E-mail</th>
                   <th>Telefone</th>
                   <th class="text-end">Ação</th>
@@ -61,6 +62,7 @@
                 {% for person in person_rows %}
                   <tr>
                     <td>{{ person.full_name }}</td>
+                    <td>{{ person.company.name|default:'Sem empresa' }}</td>
                     <td>{{ person.email|default:'Não informado' }}</td>
                     <td>{{ person.phone }}</td>
                     <td class="text-end">

@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+
+{% block title %}Deals do HubSpot{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">HubSpot</span>
+    <h1>Deals</h1>
+    <p class="text-body-secondary mb-0">Crie deals usando empresa sincronizada, pipeline remoto em cache e contatos já vinculados à empresa.</p>
+  </section>
+  {% include 'hubspot_integration/_subnav.html' %}
+  <section class="row g-4">
+    <div class="col-xl-5">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header"><div><span class="section-kicker">Novo deal</span><h2>Criar deal</h2></div></div>
+        {% if can_manage_hubspot %}
+          <form method="post" action="{% url 'hubspot_integration:create_deal' %}" class="row g-3">
+            {% csrf_token %}
+            {% for field in deal_form %}
+              <div class="col-12"><label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>{{ field }}</div>
+            {% endfor %}
+            <div class="col-12"><button type="submit" class="btn btn-brand">Criar deal</button></div>
+          </form>
+        {% else %}
+          <div class="soft-empty"><p class="mb-0">Somente proprietários e administradores podem criar deals no HubSpot.</p></div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-xl-7">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header"><div><span class="section-kicker">Histórico</span><h2>Deals criados</h2></div></div>
+        {% if deals %}
+          <div class="table-responsive">
+            <table class="table table-clean align-middle mb-0">
+              <thead><tr><th>Deal</th><th>Empresa</th><th>Pipeline</th><th>ID HubSpot</th></tr></thead>
+              <tbody>
+                {% for deal in deals %}
+                  <tr><td>{{ deal.name }}</td><td>{{ deal.company.name }}</td><td>{{ deal.pipeline.name }}</td><td>{{ deal.hubspot_deal_id|default:'-' }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="soft-empty"><p class="mb-0">Nenhum deal criado ainda.</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endblock %}

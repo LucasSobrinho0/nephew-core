@@ -65,9 +65,11 @@ INSTALLED_APPS = [
     'organizations',
     'dashboard',
     'integrations',
+    'companies',
     'people',
     'bot_conversa',
     'gmail_integration',
+    'hubspot_integration',
 ]
 
 MIDDLEWARE = [
