@@ -2,13 +2,13 @@
 
 {% block title %}Cadastro{% endblock %}
 
-{% block hero_title %}Comece uma base de CRM estruturada desde o primeiro usuario.{% endblock %}
-{% block hero_text %}Crie sua conta, conclua a configuracao inicial no seu ritmo e prepare a plataforma para uma implantacao segura em varias organizacoes.{% endblock %}
+{% block hero_title %}Comece uma base de CRM estruturada desde o primeiro usuário.{% endblock %}
+{% block hero_text %}Crie sua conta, conclua a configuração inicial no seu ritmo e prepare a plataforma para uma implantação segura em várias organizações.{% endblock %}
 {% block hero_features %}
-  <span class="feature-pill">Configuracao inicial rapida</span>
-  <span class="feature-pill">Criacao de organizacao</span>
+  <span class="feature-pill">Configuração inicial rápida</span>
+  <span class="feature-pill">Criação de organização</span>
   <span class="feature-pill">Entrada por convite</span>
-  <span class="feature-pill">Arquitetura segura para organizacoes</span>
+  <span class="feature-pill">Arquitetura segura para organizações</span>
 {% endblock %}
 
 {% block content %}
@@ -16,7 +16,7 @@
     <div class="mb-4">
       <span class="section-kicker">Criar conta</span>
       <h1 class="auth-heading">Comece a construir seu CRM</h1>
-      <p class="auth-subheading">Depois do cadastro voce sera redirecionado para o login e, em seguida, para a configuracao inicial.</p>
+      <p class="auth-subheading">Depois do cadastro você será redirecionado para o login e, em seguida, para a configuração inicial.</p>
     </div>
 
     {% if form.non_field_errors %}
@@ -34,7 +34,7 @@
       </div>
 
       <div>
-        <label for="{{ form.email.id_for_label }}" class="form-label">Email</label>
+        <label for="{{ form.email.id_for_label }}" class="form-label">E-mail</label>
         {{ form.email }}
         {% for error in form.email.errors %}
           <div class="invalid-feedback d-block">{{ error }}</div>
@@ -70,8 +70,8 @@
       <button type="submit" class="btn btn-brand btn-lg w-100">Criar conta</button>
     </form>
 
-    <p class="auth-link mt-4 mb-0">
-      Ja tem uma conta?
+      <p class="auth-link mt-4 mb-0">
+      Já tem uma conta?
       <a href="{% url 'accounts:login' %}">Entrar</a>
     </p>
   </div>

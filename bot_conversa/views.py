@@ -32,7 +32,7 @@ from people.repositories import PersonRepository
 
 
 class BotConversaAccessMixin(LoginRequiredMixin):
-    missing_organization_message = 'Escolha ou crie uma organizacao antes de acessar o Bot Conversa.'
+    missing_organization_message = 'Escolha ou crie uma organização antes de acessar o Bot Conversa.'
     missing_organization_redirect_url = 'dashboard:home'
     missing_installation_redirect_url = 'integrations:apps'
 
@@ -45,7 +45,7 @@ class BotConversaAccessMixin(LoginRequiredMixin):
             return redirect(self.missing_organization_redirect_url)
 
         if active_membership is None:
-            messages.error(request, 'Voce nao tem mais acesso a organizacao ativa.')
+            messages.error(request, 'Você não tem mais acesso à organização ativa.')
             return redirect(self.missing_organization_redirect_url)
 
         try:
@@ -171,6 +171,7 @@ class BotConversaPersonCreateView(BotConversaOperatorRequiredMixin, View):
                 first_name=form.cleaned_data['first_name'],
                 last_name=form.cleaned_data['last_name'],
                 phone=form.cleaned_data['phone'],
+                email=form.cleaned_data['email'],
             )
         except (PermissionDenied, ValidationError) as exc:
             messages.error(request, str(exc))
@@ -398,7 +399,7 @@ class BotConversaDispatchProcessView(LoginRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         active_organization = getattr(request, 'active_organization', None)
         if active_organization is None:
-            return self.build_json_response({'detail': 'Nenhuma organizacao ativa foi encontrada.'}, status=400)
+            return self.build_json_response({'detail': 'Nenhuma organização ativa foi encontrada.'}, status=400)
 
         try:
             BotConversaAuthorizationService.ensure_operator_access(

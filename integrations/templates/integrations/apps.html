@@ -36,8 +36,10 @@
                 <strong>Status da instalacao</strong>
                 <p class="mb-0 text-body-secondary">Este aplicativo esta vinculado a organizacao ativa.</p>
               </div>
-              {% if can_manage_integrations %}
+              {% if card.app.supports_api_key and can_manage_integrations %}
                 <a href="{% url 'integrations:api_keys' %}" class="btn btn-outline-secondary">Gerenciar chave de API</a>
+              {% elif card.has_navigation %}
+                <a href="{{ card.navigation_url }}" class="btn btn-outline-secondary">Abrir aplicativo</a>
               {% endif %}
             </div>
           {% elif can_manage_integrations %}

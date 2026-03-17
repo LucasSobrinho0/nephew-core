@@ -21,6 +21,6 @@ APP_NAVIGATION_ITEMS = {
     'gmail': {
         'label': 'Gmail',
         'icon_class': 'bi bi-envelope-paper-fill',
-        'route_name': '',
+        'route_name': 'gmail_integration:dashboard',
     },
 }

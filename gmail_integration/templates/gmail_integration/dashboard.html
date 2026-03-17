@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+
+{% block title %}Gmail{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Gmail</span>
+    <h1>Disparos de e-mail pela organização</h1>
+    <p class="text-body-secondary mb-0">Configure as credenciais do Gmail, crie templates com variáveis e acompanhe o histórico dos disparos da organização ativa.</p>
+  </section>
+
+  {% include 'gmail_integration/_subnav.html' %}
+
+  <section class="row g-4">
+    <div class="col-lg-4">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Conta</span>
+            <h2>Configuração atual</h2>
+          </div>
+        </div>
+        {% if summary.credential %}
+          <p class="mb-1"><strong>Remetente:</strong> {{ summary.credential.sender_email }}</p>
+          <p class="mb-0 text-body-secondary long-value">Escopos: {{ summary.credential.scopes|join:', ' }}</p>
+        {% else %}
+          <p class="mb-0 text-body-secondary">Nenhuma credencial cadastrada ainda para esta organização.</p>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Templates</span>
+            <h2>Templates salvos</h2>
+          </div>
+        </div>
+        <p class="display-6 mb-1">{{ summary.template_count }}</p>
+        <p class="mb-0 text-body-secondary">Templates salvos para reaproveitar em disparos do Gmail.</p>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Disparos</span>
+            <h2>Histórico total</h2>
+          </div>
+        </div>
+        <p class="display-6 mb-1">{{ summary.dispatch_count }}</p>
+        <p class="mb-0 text-body-secondary">Histórico total de campanhas de e-mail registradas para esta organização.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="glass-card content-card mt-4">
+    <div class="content-card-header">
+      <div>
+        <span class="section-kicker">Histórico recente</span>
+        <h2>Últimos disparos</h2>
+      </div>
+      <a href="{% url 'gmail_integration:dispatches' %}" class="btn btn-outline-secondary btn-sm">Abrir disparos</a>
+    </div>
+    {% if summary.recent_dispatches %}
+      <div class="table-responsive">
+        <table class="table table-clean align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Assunto</th>
+              <th>Status</th>
+              <th>Sucesso</th>
+              <th>Falhas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for dispatch in summary.recent_dispatches %}
+              <tr>
+                <td><a href="{% url 'gmail_integration:dispatch_detail' dispatch.public_id %}">{{ dispatch.subject_snapshot }}</a></td>
+                <td>{{ dispatch.get_status_display }}</td>
+                <td>{{ dispatch.success_recipients }}</td>
+                <td>{{ dispatch.failed_recipients }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="soft-empty text-start px-0 pb-0">
+        <p class="mb-0">Nenhum disparo do Gmail foi executado ainda.</p>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

@@ -5,11 +5,11 @@
 {% block content %}
   {% if not active_organization %}
     <section class="empty-state glass-card">
-      <span class="section-kicker">Sem acesso a organizacao</span>
-      <h1>Voce ainda nao tem uma organizacao ativa.</h1>
-      <p>Crie uma nova organizacao ou entre em uma existente com um codigo de convite antes de usar o painel do CRM.</p>
+      <span class="section-kicker">Sem acesso à organização</span>
+      <h1>Você ainda não tem uma organização ativa.</h1>
+      <p>Crie uma nova organização ou entre em uma existente com um código de convite antes de usar o painel do CRM.</p>
       <div class="d-flex flex-column flex-sm-row gap-3 justify-content-center">
-        <a href="{% url 'organizations:onboarding' %}?step=create" class="btn btn-brand">Criar organizacao</a>
+        <a href="{% url 'organizations:onboarding' %}?step=create" class="btn btn-brand">Criar organização</a>
         <a href="{% url 'organizations:onboarding' %}?step=join" class="btn btn-outline-secondary">Entrar com convite</a>
       </div>
     </section>
@@ -17,7 +17,7 @@
     <section class="page-header mb-4">
       <span class="section-kicker">Painel</span>
       <h1>{{ active_organization.name }}</h1>
-      <p class="text-body-secondary mb-0">Uma visao geral segura da organizacao atualmente ativa.</p>
+      <p class="text-body-secondary mb-0">Uma visão geral segura da organização atualmente ativa.</p>
     </section>
 
     <section class="row g-4 mb-4">
@@ -64,7 +64,7 @@
         <div class="glass-card content-card h-100">
           <div class="content-card-header">
             <div>
-              <span class="section-kicker">Resumo da organizacao</span>
+              <span class="section-kicker">Resumo da organização</span>
               <h2>{{ active_organization.name }}</h2>
             </div>
             {% if active_membership %}
@@ -90,7 +90,7 @@
             </div>
           </dl>
           <div class="d-flex flex-wrap gap-3 mt-4">
-            <a href="{% url 'organizations:index' %}" class="btn btn-outline-secondary">Gerenciar organizacoes</a>
+            <a href="{% url 'organizations:index' %}" class="btn btn-outline-secondary">Gerenciar organizações</a>
             {% if active_membership and active_membership.can_manage_invites %}
               <a href="{% url 'organizations:invites' %}" class="btn btn-brand">Gerenciar convites</a>
             {% endif %}
@@ -102,14 +102,14 @@
           <div class="content-card-header">
             <div>
               <span class="section-kicker">Aplicativos</span>
-              <h2>Instalacoes da organizacao</h2>
+              <h2>Instalações da organização</h2>
             </div>
           </div>
           <p class="text-body-secondary">
-            Acesse o catalogo para instalar novos aplicativos na organizacao ativa e configure as credenciais necessarias.
+            Acesse o catálogo para instalar novos aplicativos na organização ativa e configure as credenciais necessárias.
           </p>
           <div class="d-flex flex-column flex-sm-row gap-3">
-            <a href="{% url 'integrations:apps' %}" class="btn btn-brand">Ver catalogo de apps</a>
+            <a href="{% url 'integrations:apps' %}" class="btn btn-brand">Ver catálogo de apps</a>
             {% if active_membership and active_membership.can_manage_integrations %}
               <a href="{% url 'integrations:api_keys' %}" class="btn btn-outline-secondary">Gerenciar chaves de API</a>
             {% endif %}
@@ -119,7 +119,7 @@
           <div class="content-card-header">
             <div>
               <span class="section-kicker">Atividade recente</span>
-              <h2>Ultima atividade de convites</h2>
+              <h2>Última atividade de convites</h2>
             </div>
           </div>
           {% if dashboard_summary.recent_invites %}
@@ -127,9 +127,9 @@
               <table class="table table-clean align-middle mb-0">
                 <thead>
                   <tr>
-                    <th>Codigo</th>
+                    <th>Código</th>
                     <th>Perfil</th>
-                    <th>Situacao</th>
+                    <th>Situação</th>
                     <th>Criado por</th>
                   </tr>
                 </thead>
@@ -140,7 +140,7 @@
                       <td>{{ invite.get_target_role_display }}</td>
                       <td>
                         {% if invite.status == 'available' %}
-                          <span class="status-badge status-available">Disponivel</span>
+                          <span class="status-badge status-available">Disponível</span>
                         {% elif invite.status == 'used' %}
                           <span class="status-badge status-used">Usado</span>
                         {% else %}
@@ -155,7 +155,7 @@
             </div>
           {% else %}
             <div class="soft-empty">
-              <p class="mb-0">Ainda nao existe atividade de convites para esta organizacao.</p>
+            <p class="mb-0">Ainda não existe atividade de convites para esta organização.</p>
             </div>
           {% endif %}
         </div>

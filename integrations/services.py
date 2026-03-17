@@ -51,6 +51,16 @@ class AppMaskingService:
 
 class IntegrationCatalogService:
     @staticmethod
+    def resolve_navigation_url(app_code):
+        navigation_config = APP_NAVIGATION_ITEMS.get(app_code, {})
+        route_name = navigation_config.get('route_name', '')
+
+        try:
+            return reverse(route_name) if route_name else ''
+        except NoReverseMatch:
+            return ''
+
+    @staticmethod
     def build_catalog_state(*, organization):
         app_catalog = list(AppCatalogRepository.list_active())
         installations = list(AppInstallationRepository.list_for_organization(organization))
@@ -65,6 +75,7 @@ class IntegrationCatalogService:
         for app in app_catalog:
             installation = installation_map.get(app.id)
             current_credential = installation.current_api_key_credential if installation else None
+            navigation_url = IntegrationCatalogService.resolve_navigation_url(app.code)
             app_cards.append(
                 {
                     'app': app,
@@ -72,6 +83,8 @@ class IntegrationCatalogService:
                     'current_api_key_credential': current_credential,
                     'is_installed': bool(installation and installation.status == OrganizationAppInstallation.Status.ACTIVE),
                     'has_api_key': bool(current_credential),
+                    'navigation_url': navigation_url,
+                    'has_navigation': bool(navigation_url),
                 }
             )
 
@@ -116,12 +129,7 @@ class InstalledAppNavigationService:
 
         for installation in installations:
             navigation_config = APP_NAVIGATION_ITEMS.get(installation.app.code, {})
-            route_name = navigation_config.get('route_name', '')
-
-            try:
-                route_url = reverse(route_name) if route_name else ''
-            except NoReverseMatch:
-                route_url = ''
+            route_url = IntegrationCatalogService.resolve_navigation_url(installation.app.code)
 
             navigation_items.append(
                 {

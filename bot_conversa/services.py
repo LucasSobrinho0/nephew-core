@@ -31,7 +31,7 @@ class BotConversaAuthorizationService:
     def ensure_membership(*, user, organization):
         membership = MembershipRepository.get_for_user_and_organization(user, organization)
         if membership is None:
-            raise PermissionDenied('Voce nao faz parte da organizacao ativa.')
+            raise PermissionDenied('Você não faz parte da organização ativa.')
         return membership
 
     @staticmethod
@@ -54,7 +54,7 @@ class BotConversaInstallationService:
 
         installation = AppInstallationRepository.get_for_organization_and_app(organization, app)
         if installation is None or not installation.is_installed:
-            raise ValidationError('Instale o Bot Conversa para a organizacao ativa antes de usar este modulo.')
+            raise ValidationError('Instale o Bot Conversa para a organização ativa antes de usar este módulo.')
         return installation
 
     @staticmethod
@@ -90,7 +90,7 @@ class BotConversaDashboardService:
 
 class BotConversaPeopleService:
     @staticmethod
-    def create_person(*, user, organization, first_name, last_name, phone):
+    def create_person(*, user, organization, first_name, last_name, phone, email=''):
         BotConversaAuthorizationService.ensure_operator_access(user=user, organization=organization)
         return PersonService.create_person(
             user=user,
@@ -98,6 +98,7 @@ class BotConversaPeopleService:
             first_name=first_name,
             last_name=last_name,
             phone=phone,
+            email=email,
         )
 
     @staticmethod
@@ -221,7 +222,7 @@ class BotConversaContactSyncService:
     @staticmethod
     def ensure_person_access(*, organization, person):
         if person.organization_id != organization.id:
-            raise PermissionDenied('A pessoa selecionada nao pertence a organizacao ativa.')
+            raise PermissionDenied('A pessoa selecionada não pertence à organização ativa.')
 
     @staticmethod
     def upsert_contact_link(*, user, organization, installation, person, remote_contact):
@@ -249,7 +250,7 @@ class BotConversaContactSyncService:
                     updated_by=user,
                 )
             except IntegrityError as exc:
-                raise ValidationError('Ja existe um contato do Bot Conversa com este subscriber nesta organizacao.') from exc
+                raise ValidationError('Já existe um contato do Bot Conversa com este subscriber nesta organização.') from exc
 
         contact_link.external_subscriber_id = remote_contact['external_subscriber_id']
         contact_link.external_name = remote_contact['name'] or person.full_name
@@ -436,7 +437,7 @@ class BotConversaDispatchService:
         seen_person_ids = set()
         for person in persons:
             if person.organization_id != organization.id:
-                raise PermissionDenied('Uma ou mais pessoas selecionadas nao pertencem a organizacao ativa.')
+                raise PermissionDenied('Uma ou mais pessoas selecionadas não pertencem à organização ativa.')
             if person.id not in seen_person_ids:
                 unique_persons.append(person)
                 seen_person_ids.add(person.id)
@@ -470,14 +471,14 @@ class BotConversaDispatchService:
     @staticmethod
     def ensure_flow_access(*, organization, flow_cache):
         if flow_cache.organization_id != organization.id:
-            raise PermissionDenied('O fluxo selecionado nao pertence a organizacao ativa.')
+            raise PermissionDenied('O fluxo selecionado não pertence à organização ativa.')
 
     @staticmethod
     @transaction.atomic
     def process_pending_items(*, user, organization, dispatch, batch_size=DEFAULT_DISPATCH_BATCH_SIZE):
         BotConversaAuthorizationService.ensure_operator_access(user=user, organization=organization)
         if dispatch.organization_id != organization.id:
-            raise PermissionDenied('O disparo selecionado nao pertence a organizacao ativa.')
+            raise PermissionDenied('O disparo selecionado não pertence à organização ativa.')
 
         if dispatch.status in {
             BotConversaFlowDispatch.Status.COMPLETED,

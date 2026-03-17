@@ -1,0 +1,12 @@
+<section class="mb-4">
+  <div class="d-flex flex-wrap gap-2">
+    {% for tab in gmail_tabs %}
+      <a
+        href="{% url tab.url %}"
+        class="btn {% if gmail_active_tab == tab.key %}btn-brand{% else %}btn-outline-secondary{% endif %}"
+      >
+        {{ tab.label }}
+      </a>
+    {% endfor %}
+  </div>
+</section>

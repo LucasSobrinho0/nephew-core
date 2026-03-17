@@ -630,6 +630,11 @@ a {
   word-break: break-all;
 }
 
+.long-value {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .bot-conversa-subnav {
   display: flex;
   flex-wrap: wrap;

@@ -5,15 +5,15 @@
 {% block content %}
   <section class="page-header mb-4">
     <span class="section-kicker">Aplicativos</span>
-    <h1>Central de integracoes</h1>
-    <p class="text-body-secondary mb-0">Esta secao foi deixada propositalmente para o proximo ciclo de implementacao.</p>
+      <h1>Central de integrações</h1>
+      <p class="text-body-secondary mb-0">Esta seção foi deixada propositalmente para o próximo ciclo de implementação.</p>
   </section>
 
   {% if not active_organization %}
     <section class="empty-state glass-card">
-      <h2>Escolha uma organizacao primeiro</h2>
-      <p>O catalogo de aplicativos ficara disponivel depois que uma organizacao estiver ativa na sua sessao atual.</p>
-      <a href="{% url 'organizations:index' %}" class="btn btn-outline-secondary">Ir para organizacoes</a>
+      <h2>Escolha uma organização primeiro</h2>
+      <p>O catálogo de aplicativos ficará disponível depois que uma organização estiver ativa na sua sessão atual.</p>
+      <a href="{% url 'organizations:index' %}" class="btn btn-outline-secondary">Ir para organizações</a>
     </section>
   {% else %}
     <section class="row g-4">
@@ -21,7 +21,7 @@
         <div class="glass-card placeholder-card">
           <span class="placeholder-icon"><i class="bi bi-rocket-takeoff-fill"></i></span>
           <h2>Apollo</h2>
-          <p>Enriquecimento de leads e fluxos outbound chegarao em uma etapa futura.</p>
+          <p>Enriquecimento de leads e fluxos outbound chegarão em uma etapa futura.</p>
           <span class="status-badge status-pending">Planejado</span>
         </div>
       </div>
@@ -29,7 +29,7 @@
         <div class="glass-card placeholder-card">
           <span class="placeholder-icon"><i class="bi bi-chat-dots-fill"></i></span>
           <h2>Bot Conversa</h2>
-          <p>Automacao de mensagens e fluxos de conversa estao reservados para a fase de integracoes.</p>
+          <p>Automação de mensagens e fluxos de conversa estão reservados para a fase de integrações.</p>
           <span class="status-badge status-pending">Planejado</span>
         </div>
       </div>
@@ -37,7 +37,7 @@
         <div class="glass-card placeholder-card">
           <span class="placeholder-icon"><i class="bi bi-envelope-fill"></i></span>
           <h2>Gmail</h2>
-          <p>O gerenciamento de campanhas sera adicionado quando os modulos base do CRM estiverem prontos.</p>
+          <p>O gerenciamento de campanhas será adicionado quando os módulos base do CRM estiverem prontos.</p>
           <span class="status-badge status-pending">Planejado</span>
         </div>
       </div>
@@ -45,7 +45,7 @@
         <div class="glass-card placeholder-card">
           <span class="placeholder-icon"><i class="bi bi-box-seam-fill"></i></span>
           <h2>HubSpot</h2>
-          <p>A sincronizacao com CRM externo sera introduzida depois que a fundacao para varias organizacoes estiver concluida.</p>
+          <p>A sincronização com CRM externo será introduzida depois que a fundação para várias organizações estiver concluída.</p>
           <span class="status-badge status-pending">Planejado</span>
         </div>
       </div>

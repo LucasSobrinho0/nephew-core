@@ -36,6 +36,16 @@ class PersonRepository:
         )
 
     @staticmethod
+    def get_for_organization_and_email_lookup(organization, email_lookup):
+        return (
+            Person.objects.active()
+            .for_organization(organization)
+            .with_related_objects()
+            .filter(email_lookup=email_lookup)
+            .first()
+        )
+
+    @staticmethod
     def get_for_organization_and_bot_conversa_id(organization, bot_conversa_id):
         return (
             Person.objects.active()
@@ -54,6 +64,13 @@ class PersonRepository:
             .filter(public_id__in=public_ids)
             .order_by('first_name', 'last_name')
         )
+
+    @staticmethod
+    def update(person, **kwargs):
+        for field_name, field_value in kwargs.items():
+            setattr(person, field_name, field_value)
+        person.save()
+        return person
 
     @staticmethod
     def create(**kwargs):

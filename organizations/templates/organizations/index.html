@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
 
-{% block title %}Organizacoes{% endblock %}
+{% block title %}Organizações{% endblock %}
 
 {% block content %}
   <section class="page-header mb-4">
-    <span class="section-kicker">Organizacoes</span>
-    <h1>Acesso a organizacoes e membros</h1>
-    <p class="text-body-secondary mb-0">Revise as organizacoes vinculadas ao seu usuario, troque a organizacao ativa e consulte membros com seguranca.</p>
+    <span class="section-kicker">Organizações</span>
+    <h1>Acesso a organizações e membros</h1>
+    <p class="text-body-secondary mb-0">Revise as organizações vinculadas ao seu usuário, troque a organização ativa e consulte membros com segurança.</p>
   </section>
 
   {% if memberships %}
@@ -16,7 +16,7 @@
           <div class="glass-card org-card {% if active_organization and membership.organization_id == active_organization.id %}org-card-active{% endif %}">
             <div class="d-flex justify-content-between align-items-start gap-3">
               <div>
-                <span class="section-kicker">Organizacao</span>
+                <span class="section-kicker">Organização</span>
                 <h2>{{ membership.organization.name }}</h2>
               </div>
               <span class="role-badge {% if membership.role == 'owner' or membership.role == 'admin' %}role-badge-primary{% else %}role-badge-secondary{% endif %}">
@@ -33,7 +33,7 @@
                   {% csrf_token %}
                   <input type="hidden" name="organization_public_id" value="{{ membership.organization.public_id }}">
                   <input type="hidden" name="next" value="{% url 'organizations:index' %}">
-                  <button type="submit" class="btn btn-outline-secondary">Usar esta organizacao</button>
+                  <button type="submit" class="btn btn-outline-secondary">Usar esta organização</button>
                 </form>
               {% endif %}
               <span class="text-body-secondary small">{{ membership.organization.slug }}</span>
@@ -44,10 +44,10 @@
     </section>
   {% else %}
     <section class="empty-state glass-card mb-4">
-      <h2>Nenhuma organizacao vinculada ainda</h2>
-      <p>Voce esta autenticado, mas seu usuario nao esta vinculado a nenhuma organizacao. Crie uma ou entre com um codigo de convite.</p>
+      <h2>Nenhuma organização vinculada ainda</h2>
+      <p>Você está autenticado, mas seu usuário não está vinculado a nenhuma organização. Crie uma ou entre com um código de convite.</p>
       <div class="d-flex flex-column flex-sm-row gap-3 justify-content-center">
-        <a href="{% url 'organizations:onboarding' %}?step=create" class="btn btn-brand">Criar organizacao</a>
+        <a href="{% url 'organizations:onboarding' %}?step=create" class="btn btn-brand">Criar organização</a>
         <a href="{% url 'organizations:onboarding' %}?step=join" class="btn btn-outline-secondary">Entrar com convite</a>
       </div>
     </section>
@@ -59,7 +59,7 @@
         <div class="glass-card content-card h-100">
           <div class="content-card-header">
             <div>
-              <span class="section-kicker">Organizacao selecionada</span>
+              <span class="section-kicker">Organização selecionada</span>
               <h2>{{ active_organization.name }}</h2>
             </div>
             {% if active_membership %}
@@ -88,7 +88,7 @@
             {% if can_manage_invites %}
               <a href="{% url 'organizations:invites' %}" class="btn btn-brand">Gerenciar convites</a>
             {% endif %}
-            <a href="{% url 'organizations:onboarding' %}?step=create" class="btn btn-outline-secondary">Criar outra organizacao</a>
+            <a href="{% url 'organizations:onboarding' %}?step=create" class="btn btn-outline-secondary">Criar outra organização</a>
           </div>
         </div>
       </div>
@@ -97,7 +97,7 @@
           <div class="content-card-header">
             <div>
               <span class="section-kicker">Membros</span>
-              <h2>Pessoas vinculadas a esta organizacao</h2>
+              <h2>Pessoas vinculadas a esta organização</h2>
             </div>
           </div>
           <div class="table-responsive">
@@ -106,7 +106,7 @@
                 <tr>
                   <th>Membro</th>
                   <th>Perfil</th>
-                  <th>Situacao</th>
+                  <th>Situação</th>
                 </tr>
               </thead>
               <tbody>
@@ -132,7 +132,7 @@
                   <tr>
                     <td colspan="3">
                       <div class="soft-empty">
-                        <p class="mb-0">Nenhum membro foi encontrado para a organizacao ativa.</p>
+                        <p class="mb-0">Nenhum membro foi encontrado para a organização ativa.</p>
                       </div>
                     </td>
                   </tr>

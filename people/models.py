@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.db import models
 
+from common.encryption import build_email_lookup, normalize_email_address
+from common.fields import EncryptedTextField
 from common.models import PublicIdentifierMixin, TimeStampedModel
 from common.phone import format_phone_display, normalize_phone
 from organizations.models import Organization
@@ -26,6 +28,8 @@ class Person(PublicIdentifierMixin, TimeStampedModel):
     bot_conversa_id = models.CharField(max_length=128, null=True, blank=True, db_index=True)
     phone = models.CharField(max_length=32)
     normalized_phone = models.CharField(max_length=16, editable=False, db_index=True)
+    email = EncryptedTextField(blank=True, default='')
+    email_lookup = models.CharField(max_length=64, blank=True, default='', db_index=True)
     first_name = models.CharField(max_length=120)
     last_name = models.CharField(max_length=120)
     is_active = models.BooleanField(default=True)
@@ -54,6 +58,11 @@ class Person(PublicIdentifierMixin, TimeStampedModel):
                 name='unique_person_phone_per_organization',
             ),
             models.UniqueConstraint(
+                fields=('organization', 'email_lookup'),
+                condition=~models.Q(email_lookup=''),
+                name='unique_person_email_per_organization',
+            ),
+            models.UniqueConstraint(
                 fields=('organization', 'bot_conversa_id'),
                 condition=models.Q(bot_conversa_id__isnull=False),
                 name='unique_person_bot_conversa_id_per_organization',
@@ -64,6 +73,9 @@ class Person(PublicIdentifierMixin, TimeStampedModel):
         self.bot_conversa_id = (self.bot_conversa_id or '').strip() or None
         self.normalized_phone = normalize_phone(self.phone)
         self.phone = format_phone_display(self.normalized_phone)
+        normalized_email = normalize_email_address(self.email) if self.email else ''
+        self.email = normalized_email
+        self.email_lookup = build_email_lookup(normalized_email) if normalized_email else ''
         self.first_name = self.first_name.strip()
         self.last_name = self.last_name.strip()
         super().save(*args, **kwargs)

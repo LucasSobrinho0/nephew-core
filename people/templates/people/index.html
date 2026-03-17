@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+
+{% block title %}Pessoas{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">CRM</span>
+    <h1>Pessoas da organização</h1>
+    <p class="text-body-secondary mb-0">Cadastre, consulte e mantenha atualizados os contatos que poderão ser usados nos aplicativos instalados.</p>
+  </section>
+
+  <section class="row g-4">
+    <div class="col-xl-4">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Novo cadastro</span>
+            <h2>Adicionar pessoa</h2>
+          </div>
+        </div>
+        <form method="post" action="{% url 'people:create' %}" class="row g-3">
+          {% csrf_token %}
+          {% for field in create_form %}
+            <div class="col-12">
+              <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+              {{ field }}
+              {% if field.errors %}
+                <div class="text-danger small mt-1">{{ field.errors|join:', ' }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+          <div class="col-12">
+            <button type="submit" class="btn btn-brand">Salvar pessoa</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div class="col-xl-8">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Base ativa</span>
+            <h2>Pessoas cadastradas</h2>
+            <p class="text-body-secondary mb-0">Todas as pessoas abaixo pertencem somente à organização ativa.</p>
+          </div>
+          <span class="status-badge status-available">{{ person_rows|length }} registro{{ person_rows|length|pluralize }}</span>
+        </div>
+
+        {% if person_rows %}
+          <div class="table-responsive">
+            <table class="table table-clean align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>E-mail</th>
+                  <th>Telefone</th>
+                  <th class="text-end">Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for person in person_rows %}
+                  <tr>
+                    <td>{{ person.full_name }}</td>
+                    <td>{{ person.email|default:'Não informado' }}</td>
+                    <td>{{ person.phone }}</td>
+                    <td class="text-end">
+                      <a href="{% url 'people:edit' person.public_id %}" class="btn btn-outline-secondary btn-sm">Editar</a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="soft-empty text-start px-0 pb-0">
+            <p class="mb-0">Nenhuma pessoa cadastrada ainda para a organização ativa.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endblock %}

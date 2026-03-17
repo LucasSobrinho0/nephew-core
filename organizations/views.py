@@ -62,7 +62,7 @@ class OnboardingCreateOrganizationView(LoginRequiredMixin, OnboardingContextMixi
             organization_public_id=organization.public_id,
         )
 
-        messages.success(request, 'Organizacao criada com sucesso.')
+        messages.success(request, 'Organização criada com sucesso.')
         return redirect('dashboard:home')
 
 
@@ -86,7 +86,7 @@ class OnboardingJoinOrganizationView(LoginRequiredMixin, OnboardingContextMixin,
             form.add_error('code', message)
             return self.render_onboarding(step='join', join_form=form)
 
-        messages.success(request, 'Voce entrou na organizacao com sucesso.')
+        messages.success(request, 'Você entrou na organização com sucesso.')
         return redirect('dashboard:home')
 
 
@@ -115,7 +115,7 @@ class SwitchActiveOrganizationView(LoginRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         form = OrganizationSwitchForm(request.POST)
         if not form.is_valid():
-            messages.error(request, 'Selecione uma organizacao valida.')
+            messages.error(request, 'Selecione uma organização válida.')
             return redirect('organizations:index')
 
         try:
@@ -125,10 +125,10 @@ class SwitchActiveOrganizationView(LoginRequiredMixin, View):
                 organization_public_id=form.cleaned_data['organization_public_id'],
             )
         except PermissionDenied:
-            messages.error(request, 'Voce nao pode trocar para uma organizacao da qual nao faz parte.')
+            messages.error(request, 'Você não pode trocar para uma organização da qual não faz parte.')
             return redirect('organizations:index')
 
-        messages.success(request, 'Organizacao ativa atualizada.')
+        messages.success(request, 'Organização ativa atualizada.')
         return redirect(request.POST.get('next') or 'organizations:index')
 
 
@@ -166,8 +166,8 @@ class InviteGenerateView(InviteManagerRequiredMixin, View):
                 target_role=form.cleaned_data['target_role'],
             )
         except PermissionDenied:
-            messages.error(request, 'Voce nao tem permissao para gerar codigos de convite.')
+            messages.error(request, 'Você não tem permissão para gerar códigos de convite.')
             return redirect('dashboard:home')
 
-        messages.success(request, 'Codigo de convite criado com sucesso.')
+        messages.success(request, 'Código de convite criado com sucesso.')
         return redirect('organizations:invites')

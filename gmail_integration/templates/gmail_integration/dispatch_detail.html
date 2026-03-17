@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+
+{% block title %}Detalhe do Disparo{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Gmail</span>
+    <h1>Detalhe do disparo</h1>
+    <p class="text-body-secondary mb-0">Acompanhe o resultado por destinatário e os identificadores retornados pelo Gmail.</p>
+  </section>
+
+  {% include 'gmail_integration/_subnav.html' %}
+
+  <section class="row g-4">
+    <div class="col-lg-4">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Resumo</span>
+            <h2>{{ dispatch.subject_snapshot }}</h2>
+          </div>
+        </div>
+        <p class="mb-1"><strong>Status:</strong> {{ dispatch.get_status_display }}</p>
+        <p class="mb-1"><strong>Sucesso:</strong> {{ dispatch.success_recipients }}</p>
+        <p class="mb-1"><strong>Falhas:</strong> {{ dispatch.failed_recipients }}</p>
+        <p class="mb-0 text-body-secondary"><strong>Cópias:</strong> {{ dispatch.cc_recipients_snapshot|length }}</p>
+      </div>
+    </div>
+    <div class="col-lg-8">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Resultado por pessoa</span>
+            <h2>Destinatários</h2>
+          </div>
+        </div>
+        {% if dispatch_recipients %}
+          <div class="table-responsive">
+            <table class="table table-clean align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Pessoa</th>
+                  <th>E-mail</th>
+                  <th>Status</th>
+                  <th>Message ID</th>
+                  <th>Thread ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for recipient in dispatch_recipients %}
+                  <tr>
+                    <td>{{ recipient.first_name_snapshot }} {{ recipient.last_name_snapshot }}</td>
+                    <td>{{ recipient.email_snapshot }}</td>
+                    <td>
+                      {{ recipient.get_status_display }}
+                      {% if recipient.error_message %}
+                        <div class="text-danger small">{{ recipient.error_message }}</div>
+                      {% endif %}
+                    </td>
+                    <td class="small">{{ recipient.gmail_message_id|default:'-' }}</td>
+                    <td class="small">{{ recipient.gmail_thread_id|default:'-' }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="soft-empty text-start px-0 pb-0">
+            <p class="mb-0">Nenhum destinatário foi registrado para este disparo.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endblock %}

@@ -7,12 +7,16 @@
     <i class="bi bi-grid-1x2-fill"></i>
     <span>Painel</span>
   </a>
+  <a href="{% url 'people:index' %}" class="nav-link crm-nav-link {% if request.resolver_match.namespace == 'people' %}active{% endif %}">
+    <i class="bi bi-people-fill"></i>
+    <span>Pessoas</span>
+  </a>
   <button
-    class="nav-link crm-nav-link crm-nav-dropdown-button {% if request.resolver_match.namespace == 'bot_conversa' or request.resolver_match.namespace == 'integrations' %}active{% endif %}"
+    class="nav-link crm-nav-link crm-nav-dropdown-button {% if request.resolver_match.namespace == 'bot_conversa' or request.resolver_match.namespace == 'integrations' or request.resolver_match.namespace == 'gmail_integration' %}active{% endif %}"
     type="button"
     data-bs-toggle="collapse"
     data-bs-target="#sidebarInstalledApps"
-    aria-expanded="{% if request.resolver_match.namespace == 'bot_conversa' or request.resolver_match.namespace == 'integrations' %}true{% else %}false{% endif %}"
+    aria-expanded="{% if request.resolver_match.namespace == 'bot_conversa' or request.resolver_match.namespace == 'integrations' or request.resolver_match.namespace == 'gmail_integration' %}true{% else %}false{% endif %}"
     aria-controls="sidebarInstalledApps"
   >
     <span class="d-flex align-items-center gap-3">
@@ -21,11 +25,11 @@
     </span>
     <i class="bi bi-chevron-down small"></i>
   </button>
-  <div class="collapse {% if request.resolver_match.namespace == 'bot_conversa' or request.resolver_match.namespace == 'integrations' %}show{% endif %}" id="sidebarInstalledApps">
+  <div class="collapse {% if request.resolver_match.namespace == 'bot_conversa' or request.resolver_match.namespace == 'integrations' or request.resolver_match.namespace == 'gmail_integration' %}show{% endif %}" id="sidebarInstalledApps">
     <div class="sidebar-subnav">
       <a href="{% url 'integrations:apps' %}" class="nav-link crm-subnav-link {% if request.resolver_match.namespace == 'integrations' and request.resolver_match.url_name == 'apps' %}active{% endif %}">
         <i class="bi bi-grid"></i>
-        <span>Catalogo de apps</span>
+        <span>Catálogo de apps</span>
       </a>
       {% if active_membership and active_membership.can_manage_integrations %}
         <a href="{% url 'integrations:api_keys' %}" class="nav-link crm-subnav-link {% if request.resolver_match.namespace == 'integrations' and request.resolver_match.url_name == 'api_keys' %}active{% endif %}">
@@ -58,20 +62,20 @@
   </a>
   <a href="{% url 'organizations:index' %}" class="nav-link crm-nav-link {% if request.resolver_match.namespace == 'organizations' and request.resolver_match.url_name == 'index' %}active{% endif %}">
     <i class="bi bi-buildings-fill"></i>
-    <span>Organizacoes</span>
+    <span>Organizações</span>
   </a>
 </nav>
 
 <div class="sidebar-context glass-card mt-auto">
   {% if active_organization %}
-    <p class="sidebar-context-label">Organizacao ativa</p>
+    <p class="sidebar-context-label">Organização ativa</p>
     <h2 class="sidebar-context-title">{{ active_organization.name }}</h2>
     {% if active_membership %}
       <span class="role-badge role-badge-primary">{{ active_membership.get_role_display }}</span>
     {% endif %}
   {% else %}
-    <p class="sidebar-context-label">Status da organizacao</p>
-    <h2 class="sidebar-context-title">Nenhuma organizacao ativa</h2>
-    <p class="sidebar-context-copy">Crie ou entre em uma organizacao para liberar o ambiente do CRM.</p>
+    <p class="sidebar-context-label">Status da organização</p>
+    <h2 class="sidebar-context-title">Nenhuma organização ativa</h2>
+    <p class="sidebar-context-copy">Crie ou entre em uma organização para liberar o ambiente do CRM.</p>
   {% endif %}
 </div>

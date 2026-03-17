@@ -5,8 +5,8 @@
 {% block content %}
   <section class="page-header mb-4">
     <span class="section-kicker">Bot Conversa</span>
-    <h1>Catalogo de fluxos</h1>
-    <p class="text-body-secondary mb-0">Mantenha um cache seguro dos fluxos do Bot Conversa para que o CRM possa preparar disparos sem expor credenciais ou misturar organizacoes.</p>
+    <h1>Catálogo de fluxos</h1>
+    <p class="text-body-secondary mb-0">Mantenha um cache seguro dos fluxos do Bot Conversa para que o CRM possa preparar disparos sem expor credenciais ou misturar organizações.</p>
   </section>
 
   {% include 'bot_conversa/_subnav.html' %}
@@ -14,9 +14,9 @@
   <section class="glass-card content-card mb-4">
     <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
       <div>
-        <span class="section-kicker">Atualizacao</span>
-        <h2 class="mb-1">Sincronizar fluxos disponiveis</h2>
-        <p class="text-body-secondary mb-0">O cache e atualizado sob demanda usando a chave de API armazenada para a organizacao ativa.</p>
+        <span class="section-kicker">Atualização</span>
+        <h2 class="mb-1">Sincronizar fluxos disponíveis</h2>
+        <p class="text-body-secondary mb-0">O cache é atualizado sob demanda usando a chave de API armazenada para a organização ativa.</p>
       </div>
       {% if can_manage_bot_conversa %}
         <form method="post" action="{% url 'bot_conversa:refresh_flows' %}">
@@ -25,7 +25,7 @@
           <button type="submit" class="btn btn-brand">Atualizar fluxos</button>
         </form>
       {% else %}
-        <span class="status-badge status-pending">Somente visualizacao</span>
+        <span class="status-badge status-pending">Somente visualização</span>
       {% endif %}
     </div>
   </section>
@@ -44,16 +44,16 @@
               {{ flow.get_status_display }}
             </span>
           </div>
-          <p class="text-body-secondary">{{ flow.description|default:'Nenhuma descricao de fluxo foi retornada pelo Bot Conversa.' }}</p>
-          <div class="small text-body-secondary">
-            Ultima sincronizacao: {{ flow.last_synced_at|date:'Y-m-d H:i' }}
-          </div>
+            <p class="text-body-secondary">{{ flow.description|default:'Nenhuma descrição de fluxo foi retornada pelo Bot Conversa.' }}</p>
+            <div class="small text-body-secondary">
+              Última sincronização: {{ flow.last_synced_at|date:'Y-m-d H:i' }}
+            </div>
         </div>
       </div>
     {% empty %}
       <div class="col-12">
         <div class="glass-card soft-empty">
-          <p class="mb-0">Nenhum fluxo do Bot Conversa esta em cache ainda. Atualize o catalogo para carregar os fluxos remotos atuais.</p>
+          <p class="mb-0">Nenhum fluxo do Bot Conversa está em cache ainda. Atualize o catálogo para carregar os fluxos remotos atuais.</p>
         </div>
       </div>
     {% endfor %}

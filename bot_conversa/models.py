@@ -164,7 +164,7 @@ class BotConversaSyncLog(TimeStampedModel):
 
     class Outcome(models.TextChoices):
         SUCCESS = 'success', 'Sucesso'
-        NOT_FOUND = 'not_found', 'Nao encontrado'
+        NOT_FOUND = 'not_found', 'Não encontrado'
         ERROR = 'error', 'Erro'
 
     organization = models.ForeignKey(

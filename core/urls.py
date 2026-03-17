@@ -10,5 +10,7 @@ urlpatterns = [
     path('', include('organizations.urls')),
     path('', include('dashboard.urls')),
     path('', include('integrations.urls')),
+    path('', include('people.urls')),
     path('', include('bot_conversa.urls')),
+    path('', include('gmail_integration.urls')),
 ]

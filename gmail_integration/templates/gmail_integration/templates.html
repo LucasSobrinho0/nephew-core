@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+
+{% block title %}Templates do Gmail{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Gmail</span>
+    <h1>Templates de e-mail</h1>
+    <p class="text-body-secondary mb-0">Monte assuntos e mensagens reutilizáveis com variáveis como ${nome}, ${sobrenome} e ${email}.</p>
+  </section>
+
+  {% include 'gmail_integration/_subnav.html' %}
+
+  <section class="row g-4">
+    <div class="col-xl-5">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Novo template</span>
+            <h2>Salvar template</h2>
+          </div>
+        </div>
+        <form method="post" action="{% url 'gmail_integration:create_template' %}" class="row g-3">
+          {% csrf_token %}
+          {% for field in template_form %}
+            <div class="col-12">
+              <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+              {{ field }}
+              {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors|join:', ' }}</div>{% endif %}
+            </div>
+          {% endfor %}
+          <div class="col-12">
+            <button type="submit" class="btn btn-brand">Salvar template</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div class="col-xl-7">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Biblioteca</span>
+            <h2>Templates cadastrados</h2>
+          </div>
+        </div>
+        {% if templates_list %}
+          <div class="table-responsive">
+            <table class="table table-clean align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Assunto</th>
+                  <th>Status</th>
+                  <th class="text-end">Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for template in templates_list %}
+                  <tr>
+                    <td>{{ template.name }}</td>
+                    <td>{{ template.subject }}</td>
+                    <td>{{ template.is_active|yesno:'Ativo,Inativo' }}</td>
+                    <td class="text-end">
+                      <a href="{% url 'gmail_integration:edit_template' template.public_id %}" class="btn btn-outline-secondary btn-sm">Editar</a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="soft-empty text-start px-0 pb-0">
+            <p class="mb-0">Nenhum template salvo ainda.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endblock %}

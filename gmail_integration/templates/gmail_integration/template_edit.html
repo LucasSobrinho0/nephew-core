@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+
+{% block title %}Editar Template do Gmail{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Gmail</span>
+    <h1>Editar template</h1>
+    <p class="text-body-secondary mb-0">Atualize o template {{ template_object.name }} mantendo o escopo isolado da organização ativa.</p>
+  </section>
+
+  {% include 'gmail_integration/_subnav.html' %}
+
+  <section class="row justify-content-center">
+    <div class="col-xl-8">
+      <div class="glass-card content-card">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Edição</span>
+            <h2>Atualizar template</h2>
+          </div>
+        </div>
+        <form method="post" class="row g-3">
+          {% csrf_token %}
+          {% for field in template_form %}
+            <div class="col-12">
+              <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+              {{ field }}
+              {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors|join:', ' }}</div>{% endif %}
+            </div>
+          {% endfor %}
+          <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-brand">Salvar alterações</button>
+            <a href="{% url 'gmail_integration:templates' %}" class="btn btn-outline-secondary">Voltar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+{% endblock %}

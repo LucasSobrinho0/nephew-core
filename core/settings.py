@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     'integrations',
     'people',
     'bot_conversa',
+    'gmail_integration',
 ]
 
 MIDDLEWARE = [

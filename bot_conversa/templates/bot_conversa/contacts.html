@@ -6,7 +6,7 @@
   <section class="page-header mb-4">
     <span class="section-kicker">Bot Conversa</span>
     <h1>Contatos remotos</h1>
-    <p class="text-body-secondary mb-0">Carregue todos os contatos do Bot Conversa e compare com os vinculos do CRM armazenados para a organizacao ativa.</p>
+    <p class="text-body-secondary mb-0">Carregue todos os contatos do Bot Conversa e compare com os vínculos do CRM armazenados para a organização ativa.</p>
   </section>
 
   {% include 'bot_conversa/_subnav.html' %}
@@ -50,7 +50,7 @@
                       <strong>{{ remote_contact.name|default:'Contato sem nome' }}</strong>
                       <div class="text-body-secondary small">{{ remote_contact.external_subscriber_id }}</div>
                     </td>
-                    <td>{{ remote_contact.phone|default:'Telefone indisponivel' }}</td>
+                    <td>{{ remote_contact.phone|default:'Telefone indisponível' }}</td>
                     <td><span class="status-badge status-used">{{ remote_contact.status|capfirst }}</span></td>
                     <td>
                       {% if remote_contact.is_saved_in_crm and remote_contact.linked_person %}
@@ -70,7 +70,7 @@
                           <button type="submit" class="btn btn-outline-secondary btn-sm">Salvar no sistema</button>
                         </form>
                       {% else %}
-                        <span class="status-badge status-pending">Nao salvo no CRM</span>
+                        <span class="status-badge status-pending">Não salvo no CRM</span>
                       {% endif %}
                     </td>
                   </tr>
@@ -80,7 +80,7 @@
           </div>
         {% else %}
           <div class="soft-empty">
-            <p class="mb-0">Clique em listar para carregar a base remota do Bot Conversa da organizacao ativa.</p>
+            <p class="mb-0">Clique em listar para carregar a base remota do Bot Conversa da organização ativa.</p>
           </div>
         {% endif %}
       </div>
@@ -89,8 +89,8 @@
       <div class="glass-card content-card h-100 bot-scroll-card">
         <div class="content-card-header">
           <div>
-            <span class="section-kicker">Vinculos locais</span>
-            <h2>Pessoas do CRM ja vinculadas</h2>
+            <span class="section-kicker">Vínculos locais</span>
+            <h2>Pessoas do CRM já vinculadas</h2>
           </div>
         </div>
         {% if local_contacts %}
@@ -109,7 +109,7 @@
           </div>
         {% else %}
           <div class="soft-empty">
-            <p class="mb-0">Nenhum vinculo local do Bot Conversa foi criado ainda.</p>
+            <p class="mb-0">Nenhum vínculo local do Bot Conversa foi criado ainda.</p>
           </div>
         {% endif %}
       </div>

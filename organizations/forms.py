@@ -14,7 +14,7 @@ class OrganizationCreateForm(BootstrapFormMixin, forms.ModelForm):
             'team_size': 'Tamanho da equipe',
         }
         widgets = {
-            'name': forms.TextInput(attrs={'placeholder': 'Nome da organizacao'}),
+            'name': forms.TextInput(attrs={'placeholder': 'Nome da organização'}),
         }
 
 

@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+
+{% block title %}Disparos do Gmail{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Gmail</span>
+    <h1>Disparos de e-mail</h1>
+    <p class="text-body-secondary mb-0">Selecione um template salvo, marque as pessoas da base interna e informe os e-mails que devem entrar em cópia.</p>
+  </section>
+
+  {% include 'gmail_integration/_subnav.html' %}
+
+  <section class="row g-4">
+    <div class="col-xl-5">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Novo disparo</span>
+            <h2>Preparar público</h2>
+          </div>
+        </div>
+        {% if can_manage_gmail %}
+          <form method="post" action="{% url 'gmail_integration:create_dispatch' %}" class="row g-3">
+            {% csrf_token %}
+            <div class="col-12">
+              <label for="{{ dispatch_form.template_public_id.id_for_label }}" class="form-label">Template salvo</label>
+              {{ dispatch_form.template_public_id }}
+              {% for error in dispatch_form.template_public_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12">
+              <label class="form-label">Selecionar pessoas</label>
+              <div class="bot-checkbox-shell">
+                {% if dispatch_form.person_public_ids %}
+                  <div class="bot-selection-list">
+                    {% for option in dispatch_form.person_public_ids %}
+                      <label class="bot-selection-card">
+                        {{ option.tag }}
+                        <span class="bot-selection-text">{{ option.choice_label }}</span>
+                      </label>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <div class="soft-empty text-start p-0">
+                    <p class="mb-0">Nenhuma pessoa com e-mail cadastrado está disponível para este disparo.</p>
+                  </div>
+                {% endif %}
+              </div>
+              <div class="form-text">Marque as pessoas que devem receber o e-mail.</div>
+              {% for error in dispatch_form.person_public_ids.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12">
+              <label for="{{ dispatch_form.cc_emails.id_for_label }}" class="form-label">Cópias</label>
+              {{ dispatch_form.cc_emails }}
+              <div class="form-text">Informe um ou mais e-mails separados por vírgula, ponto e vírgula ou quebra de linha.</div>
+              {% for error in dispatch_form.cc_emails.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            {% if dispatch_form.non_field_errors %}
+              <div class="col-12 text-danger small">{{ dispatch_form.non_field_errors|join:', ' }}</div>
+            {% endif %}
+            <div class="col-12">
+              <button type="submit" class="btn btn-brand w-100">Criar disparo</button>
+            </div>
+          </form>
+          <hr>
+          <p class="mb-1"><strong>Variáveis disponíveis</strong></p>
+          <div class="d-flex flex-wrap gap-2">
+            {% for variable_name in available_variables %}
+              <span class="code-pill">{{ variable_name }}</span>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="soft-empty text-start p-0">
+            <p class="mb-0">Somente proprietários e administradores podem criar disparos do Gmail.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-xl-7">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Histórico</span>
+            <h2>Disparos anteriores</h2>
+          </div>
+        </div>
+        {% if dispatches %}
+          <div class="table-responsive">
+            <table class="table table-clean align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Assunto</th>
+                  <th>Status</th>
+                  <th>Sucesso</th>
+                  <th>Falhas</th>
+                  <th class="text-end">Detalhe</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for dispatch in dispatches %}
+                  <tr>
+                    <td>{{ dispatch.subject_snapshot }}</td>
+                    <td>{{ dispatch.get_status_display }}</td>
+                    <td>{{ dispatch.success_recipients }}</td>
+                    <td>{{ dispatch.failed_recipients }}</td>
+                    <td class="text-end">
+                      <a href="{% url 'gmail_integration:dispatch_detail' dispatch.public_id %}" class="btn btn-outline-secondary btn-sm">Abrir</a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="soft-empty text-start px-0 pb-0">
+            <p class="mb-0">Nenhum disparo foi registrado ainda.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endblock %}

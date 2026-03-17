@@ -87,7 +87,7 @@ class OrganizationService:
     def switch_active_organization(*, request, user, organization_public_id):
         membership = MembershipRepository.get_for_user_and_org_public_id(user, organization_public_id)
         if membership is None:
-            raise PermissionDenied('Voce nao pode ativar uma organizacao da qual nao faz parte.')
+            raise PermissionDenied('Você não pode ativar uma organização da qual não faz parte.')
 
         ActiveOrganizationService.set_active_organization(request, membership.organization)
         return membership.organization
@@ -110,14 +110,14 @@ class InviteService:
     def ensure_organization_access(cls, *, user, organization):
         membership = MembershipRepository.get_for_user_and_organization(user, organization)
         if membership is None:
-            raise PermissionDenied('Voce nao faz parte desta organizacao.')
+            raise PermissionDenied('Você não faz parte desta organização.')
         return membership
 
     @classmethod
     def ensure_invite_management_permission(cls, *, user, organization):
         membership = cls.ensure_organization_access(user=user, organization=organization)
         if not membership.can_manage_invites:
-            raise PermissionDenied('Somente proprietarios e administradores podem gerenciar convites.')
+            raise PermissionDenied('Somente proprietários e administradores podem gerenciar convites.')
         return membership
 
     @classmethod
@@ -135,7 +135,7 @@ class InviteService:
             if InviteRepository.get_by_code(code) is None:
                 return code
 
-        raise ValidationError('Nao foi possivel gerar um codigo de convite unico. Tente novamente.')
+        raise ValidationError('Não foi possível gerar um código de convite único. Tente novamente.')
 
     @classmethod
     def generate_invite(cls, *, user, organization, target_role):
@@ -156,23 +156,23 @@ class InviteService:
         code = cls.normalize_code(raw_code)
 
         if not cls.CODE_PATTERN.match(code):
-            raise ValidationError('Informe um codigo de convite valido.')
+            raise ValidationError('Informe um código de convite válido.')
 
         invite = InviteRepository.get_by_code(code)
         if invite is None:
-            raise ValidationError('Este codigo de convite nao foi encontrado.')
+            raise ValidationError('Este código de convite não foi encontrado.')
 
         cls.expire_outdated_invites(invite.organization)
         invite.refresh_from_db()
 
         if invite.status == OrganizationInvite.Status.EXPIRED:
-            raise ValidationError('Este codigo de convite expirou.')
+            raise ValidationError('Este código de convite expirou.')
         if invite.status == OrganizationInvite.Status.USED:
-            raise ValidationError('Este codigo de convite ja foi usado.')
+            raise ValidationError('Este código de convite já foi usado.')
 
         existing_membership = MembershipRepository.get_for_user_and_organization(user, invite.organization)
         if existing_membership and existing_membership.is_active:
-            raise ValidationError('Voce ja faz parte desta organizacao.')
+            raise ValidationError('Você já faz parte desta organização.')
 
         if existing_membership:
             existing_membership.role = invite.target_role

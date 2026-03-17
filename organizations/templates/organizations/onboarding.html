@@ -1,13 +1,13 @@
 {% extends 'centered_base.html' %}
 
-{% block title %}Configuracao Inicial{% endblock %}
+{% block title %}Configuração Inicial{% endblock %}
 
 {% block content %}
   <div class="mx-auto onboarding-shell">
     <div class="text-center mb-5">
-      <span class="section-kicker">Configuracao inicial</span>
-      <h1 class="display-6 fw-semibold mb-3">Configure seu acesso a organizacoes</h1>
-      <p class="lead text-body-secondary mb-0">Crie uma nova organizacao ou entre em uma existente com um codigo de convite.</p>
+      <span class="section-kicker">Configuração inicial</span>
+      <h1 class="display-6 fw-semibold mb-3">Configure seu acesso a organizações</h1>
+      <p class="lead text-body-secondary mb-0">Crie uma nova organização ou entre em uma existente com um código de convite.</p>
     </div>
 
     {% if step == 'choice' %}
@@ -16,8 +16,8 @@
           <a href="{% url 'organizations:onboarding' %}?step=create" class="choice-card glass-card">
             <span class="choice-icon"><i class="bi bi-buildings-fill"></i></span>
             <div>
-              <h2>Criar organizacao</h2>
-              <p>Comece com seu proprio ambiente e torne-se o proprietario.</p>
+              <h2>Criar organização</h2>
+              <p>Comece com seu próprio ambiente e torne-se o proprietário.</p>
             </div>
             <i class="bi bi-arrow-right-short choice-arrow"></i>
           </a>
@@ -26,8 +26,8 @@
           <a href="{% url 'organizations:onboarding' %}?step=join" class="choice-card glass-card">
             <span class="choice-icon"><i class="bi bi-person-plus-fill"></i></span>
             <div>
-              <h2>Entrar em organizacao</h2>
-              <p>Cole um codigo de convite gerado por um proprietario ou administrador.</p>
+              <h2>Entrar em organização</h2>
+              <p>Cole um código de convite gerado por um proprietário ou administrador.</p>
             </div>
             <i class="bi bi-arrow-right-short choice-arrow"></i>
           </a>
@@ -37,12 +37,12 @@
       <div class="glass-card onboarding-card">
         <a href="{% url 'organizations:onboarding' %}" class="back-link">
           <i class="bi bi-arrow-left"></i>
-          <span>Voltar para as opcoes</span>
+          <span>Voltar para as opções</span>
         </a>
         <div class="mb-4">
-          <span class="section-kicker">Nova organizacao</span>
-          <h2 class="mb-2">Crie sua organizacao</h2>
-          <p class="text-body-secondary mb-0">Precisamos apenas do essencial para criar a organizacao e definir voce como proprietario.</p>
+          <span class="section-kicker">Nova organização</span>
+          <h2 class="mb-2">Crie sua organização</h2>
+          <p class="text-body-secondary mb-0">Precisamos apenas do essencial para criar a organização e definir você como proprietário.</p>
         </div>
         <form method="post" action="{% url 'organizations:onboarding_create' %}" novalidate class="row g-4">
           {% csrf_token %}
@@ -68,7 +68,7 @@
             {% endfor %}
           </div>
           <div class="col-12">
-            <button type="submit" class="btn btn-brand btn-lg">Criar organizacao</button>
+            <button type="submit" class="btn btn-brand btn-lg">Criar organização</button>
           </div>
         </form>
       </div>
@@ -76,17 +76,17 @@
       <div class="glass-card onboarding-card">
         <a href="{% url 'organizations:onboarding' %}" class="back-link">
           <i class="bi bi-arrow-left"></i>
-          <span>Voltar para as opcoes</span>
+          <span>Voltar para as opções</span>
         </a>
         <div class="mb-4">
           <span class="section-kicker">Acesso por convite</span>
-          <h2 class="mb-2">Entrar em uma organizacao existente</h2>
-          <p class="text-body-secondary mb-0">Os codigos de convite aceitam os padroes <strong>ADM XXXXXXXX</strong> e <strong>USR XXXXXXXX</strong>.</p>
+          <h2 class="mb-2">Entrar em uma organização existente</h2>
+          <p class="text-body-secondary mb-0">Os códigos de convite aceitam os padrões <strong>ADM XXXXXXXX</strong> e <strong>USR XXXXXXXX</strong>.</p>
         </div>
         <form method="post" action="{% url 'organizations:onboarding_join' %}" novalidate class="row g-4">
           {% csrf_token %}
           <div class="col-12">
-            <label for="{{ join_form.code.id_for_label }}" class="form-label">Codigo de convite</label>
+            <label for="{{ join_form.code.id_for_label }}" class="form-label">Código de convite</label>
             {{ join_form.code }}
             {% for error in join_form.code.errors %}
               <div class="invalid-feedback d-block">{{ error }}</div>
@@ -95,25 +95,25 @@
           <div class="col-12">
             <div class="form-note glass-card">
               <p class="mb-1"><strong>Prefixos de perfil</strong></p>
-              <p class="mb-0">Use <strong>ADM</strong> para acesso de administrador e <strong>USR</strong> para acesso de usuario padrao.</p>
+              <p class="mb-0">Use <strong>ADM</strong> para acesso de administrador e <strong>USR</strong> para acesso de usuário padrão.</p>
             </div>
           </div>
           <div class="col-12">
-            <button type="submit" class="btn btn-brand btn-lg">Entrar na organizacao</button>
+            <button type="submit" class="btn btn-brand btn-lg">Entrar na organização</button>
           </div>
         </form>
       </div>
     {% endif %}
 
     {% if memberships %}
-      <div class="glass-card mt-4 p-4">
-        <div class="d-flex flex-column flex-md-row justify-content-between gap-3 align-items-md-center">
+      <div class="glass-card content-card mt-4">
+        <div class="content-card-header">
           <div>
             <span class="section-kicker">Acessos atuais</span>
-            <h3 class="mb-1">Organizacoes ja vinculadas ao seu usuario</h3>
-            <p class="text-body-secondary mb-0">Voce pode pular a configuracao inicial e continuar com seus acessos existentes.</p>
+            <h2>Organizações já vinculadas ao seu usuário</h2>
+            <p class="text-body-secondary mb-0">Você pode pular a configuração inicial e continuar com seus acessos existentes.</p>
           </div>
-          <a href="{% url 'organizations:index' %}" class="btn btn-outline-secondary">Ver organizacoes</a>
+          <a href="{% url 'organizations:index' %}" class="btn btn-outline-secondary">Ver organizações</a>
         </div>
         <div class="row g-3 mt-1">
           {% for membership in memberships %}

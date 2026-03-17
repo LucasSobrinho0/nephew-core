@@ -7,12 +7,12 @@
     <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 align-items-lg-center">
       <div>
         <span class="section-kicker">Convites</span>
-        <h1>Codigos de convite de {{ active_organization.name }}</h1>
-        <p class="text-body-secondary mb-0">Somente proprietarios e administradores da organizacao ativa podem gerar e gerenciar codigos de convite.</p>
+        <h1>Códigos de convite de {{ active_organization.name }}</h1>
+        <p class="text-body-secondary mb-0">Somente proprietários e administradores da organização ativa podem gerar e gerenciar códigos de convite.</p>
       </div>
       <button type="button" class="btn btn-brand" data-bs-toggle="modal" data-bs-target="#inviteGenerateModal">
         <i class="bi bi-plus-circle-fill"></i>
-        <span>Gerar codigo</span>
+        <span>Gerar código</span>
       </button>
     </div>
   </section>
@@ -22,7 +22,7 @@
       <div class="stat-card glass-card">
         <div class="stat-icon"><i class="bi bi-hourglass-split"></i></div>
         <div>
-          <span class="stat-label">Disponiveis</span>
+          <span class="stat-label">Disponíveis</span>
           <h2>{{ available_count }}</h2>
         </div>
       </div>
@@ -50,8 +50,8 @@
   <section class="glass-card content-card">
     <div class="content-card-header">
       <div>
-        <span class="section-kicker">Codigos gerados</span>
-        <h2>Lista de convites da organizacao</h2>
+        <span class="section-kicker">Códigos gerados</span>
+        <h2>Lista de convites da organização</h2>
       </div>
     </div>
 
@@ -60,13 +60,13 @@
         <table class="table table-clean align-middle mb-0">
           <thead>
             <tr>
-              <th>Codigo</th>
+              <th>Código</th>
               <th>Perfil</th>
-              <th>Situacao</th>
+              <th>Situação</th>
               <th>Criado em</th>
               <th>Criado por</th>
               <th>Usado por</th>
-              <th class="text-end">Acao</th>
+              <th class="text-end">Ação</th>
             </tr>
           </thead>
           <tbody>
@@ -80,7 +80,7 @@
                 </td>
                 <td>
                   {% if invite.status == 'available' %}
-                    <span class="status-badge status-available">Disponivel</span>
+                    <span class="status-badge status-available">Disponível</span>
                   {% elif invite.status == 'used' %}
                     <span class="status-badge status-used">Usado</span>
                   {% else %}
@@ -110,7 +110,7 @@
       </div>
     {% else %}
       <div class="soft-empty">
-        <p class="mb-0">Nenhum codigo de convite foi gerado para esta organizacao ainda.</p>
+        <p class="mb-0">Nenhum código de convite foi gerado para esta organização ainda.</p>
       </div>
     {% endif %}
   </section>
@@ -121,7 +121,7 @@
         <div class="modal-header border-0">
           <div>
             <span class="section-kicker">Gerar convite</span>
-            <h2 class="modal-title fs-4 mb-0" id="inviteGenerateModalLabel">Criar um novo codigo de organizacao</h2>
+            <h2 class="modal-title fs-4 mb-0" id="inviteGenerateModalLabel">Criar um novo código de organização</h2>
           </div>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
         </div>
@@ -136,10 +136,10 @@
               {% endfor %}
             </div>
             <div class="form-note glass-card">
-              <p class="mb-1"><strong>Prefixos dos codigos</strong></p>
-              <p class="mb-0">Codigos de administrador usam <strong>ADM</strong>. Codigos de usuario usam <strong>USR</strong>.</p>
+              <p class="mb-1"><strong>Prefixos dos códigos</strong></p>
+              <p class="mb-0">Códigos de administrador usam <strong>ADM</strong>. Códigos de usuário usam <strong>USR</strong>.</p>
             </div>
-            <button type="submit" class="btn btn-brand">Gerar codigo</button>
+            <button type="submit" class="btn btn-brand">Gerar código</button>
           </form>
         </div>
       </div>

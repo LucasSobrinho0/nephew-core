@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+
+{% block title %}Configuração do Gmail{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Gmail</span>
+    <h1>Configuração da conta de envio</h1>
+    <p class="text-body-secondary mb-0">Os arquivos enviados são lidos pelo backend, convertidos em texto JSON, criptografados e persistidos no banco da organização ativa.</p>
+  </section>
+
+  {% include 'gmail_integration/_subnav.html' %}
+
+  <section class="row g-4">
+    <div class="col-lg-5">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Status</span>
+            <h2>Credencial salva</h2>
+          </div>
+        </div>
+        {% if credential %}
+          <p class="mb-1"><strong>Conta de envio:</strong>
+            {% if credential.sender_email %}
+              {{ credential.sender_email }}
+            {% else %}
+              Detectada pelo token no momento do envio
+            {% endif %}
+          </p>
+          <p class="mb-1 text-body-secondary long-value"><strong>Escopos:</strong> {{ credential.scopes|join:', ' }}</p>
+          <p class="mb-0 text-body-secondary">
+            {% if credential.token_expires_at %}
+              Token com expiração registrada em {{ credential.token_expires_at|date:'d/m/Y H:i' }}.
+            {% else %}
+              Token salvo sem expiração detectada.
+            {% endif %}
+          </p>
+        {% else %}
+          <p class="mb-0 text-body-secondary">Nenhuma configuração de Gmail foi salva ainda.</p>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-lg-7">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Upload seguro</span>
+            <h2>Salvar credenciais</h2>
+          </div>
+        </div>
+        <p class="text-body-secondary">
+          O Gmail vai enviar usando a conta autenticada pelo próprio <code>token.json</code>. Você não precisa informar um remetente manualmente.
+        </p>
+        <form method="post" action="{% url 'gmail_integration:save_settings' %}" enctype="multipart/form-data" class="row g-3">
+          {% csrf_token %}
+          {% for field in credential_form %}
+            <div class="col-12">
+              <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+              {{ field }}
+              {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+              {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors|join:', ' }}</div>{% endif %}
+            </div>
+          {% endfor %}
+          <div class="col-12">
+            <button type="submit" class="btn btn-brand">Salvar configuração</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+{% endblock %}
