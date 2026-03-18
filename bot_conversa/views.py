@@ -658,6 +658,75 @@ class BotConversaDispatchDetailView(BotConversaAccessMixin, TemplateView):
         return context
 
 
+class BotConversaDispatchPauseView(BotConversaOperatorRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        dispatch = BotConversaFlowDispatchRepository.get_for_organization_and_public_id(
+            self.active_organization,
+            kwargs['dispatch_public_id'],
+        )
+        if dispatch is None:
+            raise Http404('Disparo nao encontrado.')
+
+        try:
+            BotConversaDispatchService.pause_dispatch(
+                user=request.user,
+                organization=self.active_organization,
+                dispatch=dispatch,
+            )
+        except (PermissionDenied, ValidationError) as exc:
+            messages.error(request, str(exc))
+            return redirect('bot_conversa:dispatch_detail', dispatch_public_id=dispatch.public_id)
+
+        messages.success(request, 'Envio pausado.')
+        return redirect('bot_conversa:dispatch_detail', dispatch_public_id=dispatch.public_id)
+
+
+class BotConversaDispatchResumeView(BotConversaOperatorRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        dispatch = BotConversaFlowDispatchRepository.get_for_organization_and_public_id(
+            self.active_organization,
+            kwargs['dispatch_public_id'],
+        )
+        if dispatch is None:
+            raise Http404('Disparo nao encontrado.')
+
+        try:
+            BotConversaDispatchService.resume_dispatch(
+                user=request.user,
+                organization=self.active_organization,
+                dispatch=dispatch,
+            )
+        except (PermissionDenied, ValidationError) as exc:
+            messages.error(request, str(exc))
+            return redirect('bot_conversa:dispatch_detail', dispatch_public_id=dispatch.public_id)
+
+        messages.success(request, 'Envio retomado.')
+        return redirect('bot_conversa:dispatch_detail', dispatch_public_id=dispatch.public_id)
+
+
+class BotConversaDispatchReprocessRunningView(BotConversaOperatorRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        dispatch = BotConversaFlowDispatchRepository.get_for_organization_and_public_id(
+            self.active_organization,
+            kwargs['dispatch_public_id'],
+        )
+        if dispatch is None:
+            raise Http404('Disparo nao encontrado.')
+
+        try:
+            requeued_count = BotConversaDispatchService.reprocess_running_items(
+                user=request.user,
+                organization=self.active_organization,
+                dispatch=dispatch,
+            )
+        except (PermissionDenied, ValidationError) as exc:
+            messages.error(request, str(exc))
+            return redirect('bot_conversa:dispatch_detail', dispatch_public_id=dispatch.public_id)
+
+        messages.success(request, f'{requeued_count} item(ns) travado(s) foram recolocados na fila.')
+        return redirect('bot_conversa:dispatch_detail', dispatch_public_id=dispatch.public_id)
+
+
 @method_decorator(never_cache, name='dispatch')
 class BotConversaDispatchAudienceView(BotConversaAccessMixin, View):
     http_method_names = ['get']

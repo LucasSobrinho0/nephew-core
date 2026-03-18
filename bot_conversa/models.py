@@ -329,6 +329,7 @@ class BotConversaFlowDispatch(PublicIdentifierMixin, TimeStampedModel):
     class Status(models.TextChoices):
         PENDING = 'pending', 'Pendente'
         RUNNING = 'running', 'Em andamento'
+        PAUSED = 'paused', 'Pausado'
         COMPLETED = 'completed', 'Concluido'
         COMPLETED_WITH_ERRORS = 'completed_with_errors', 'Concluido com erros'
         FAILED = 'failed', 'Falhou'
@@ -355,8 +356,8 @@ class BotConversaFlowDispatch(PublicIdentifierMixin, TimeStampedModel):
     processed_items = models.PositiveIntegerField(default=0)
     success_items = models.PositiveIntegerField(default=0)
     failed_items = models.PositiveIntegerField(default=0)
-    min_delay_seconds = models.PositiveSmallIntegerField(default=0)
-    max_delay_seconds = models.PositiveSmallIntegerField(default=0)
+    min_delay_seconds = models.PositiveIntegerField(default=0)
+    max_delay_seconds = models.PositiveIntegerField(default=0)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
     error_summary = models.CharField(max_length=255, blank=True)

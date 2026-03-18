@@ -31,8 +31,8 @@ class BotConversaDispatchCreateForm(BootstrapFormMixin, forms.Form):
         required=False,
         widget=forms.CheckboxSelectMultiple(),
     )
-    min_delay_seconds = forms.IntegerField(label='Delay minimo (segundos)', min_value=0, max_value=60, initial=0)
-    max_delay_seconds = forms.IntegerField(label='Delay maximo (segundos)', min_value=0, max_value=60, initial=0)
+    min_delay_seconds = forms.IntegerField(label='Delay minimo (segundos)', min_value=0, initial=0)
+    max_delay_seconds = forms.IntegerField(label='Delay maximo (segundos)', min_value=0, initial=0)
 
     def __init__(self, *args, flow_choices=(), person_choices=(), tag_choices=(), **kwargs):
         super().__init__(*args, **kwargs)

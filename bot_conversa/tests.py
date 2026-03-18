@@ -1,8 +1,10 @@
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import User
 from bot_conversa.constants import BOT_CONVERSA_CONTACTS_LIST_PATH
@@ -488,6 +490,125 @@ class BotConversaModuleTests(TestCase):
         self.assertEqual(payload['success_items'], 1)
         self.assertTrue(payload['is_finished'])
         self.assertEqual(fake_client.sent_payloads[0]['flow_id'], '8325072')
+
+    @patch('bot_conversa.services.BotConversaInstallationService.build_client')
+    def test_dispatch_process_requeues_stale_running_items_after_restart(self, build_client_mock):
+        fake_client = FakeBotConversaClient()
+        build_client_mock.return_value = fake_client
+        dispatch = BotConversaFlowDispatch.objects.create(
+            organization=self.organization,
+            installation=self.installation,
+            flow=self.flow_cache,
+            external_flow_id=self.flow_cache.external_flow_id,
+            flow_name=self.flow_cache.name,
+            status=BotConversaFlowDispatch.Status.RUNNING,
+            total_items=1,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        item = BotConversaFlowDispatchItem.objects.create(
+            organization=self.organization,
+            dispatch=dispatch,
+            person=self.person,
+            target_name=self.person.full_name,
+            target_phone=self.person.phone,
+            status=BotConversaFlowDispatchItem.Status.RUNNING,
+            attempt_count=1,
+            last_attempt_at=timezone.now() - timedelta(minutes=10),
+        )
+        self.client.force_login(self.owner)
+        self.activate_organization(self.organization)
+
+        response = self.client.post(
+            reverse('bot_conversa:dispatch_process', args=[dispatch.public_id]),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        item.refresh_from_db()
+        dispatch.refresh_from_db()
+        self.assertEqual(item.status, BotConversaFlowDispatchItem.Status.SUCCESS)
+        self.assertEqual(dispatch.status, BotConversaFlowDispatch.Status.COMPLETED)
+
+    def test_pause_dispatch_button_sets_status_to_paused(self):
+        dispatch = BotConversaFlowDispatch.objects.create(
+            organization=self.organization,
+            installation=self.installation,
+            flow=self.flow_cache,
+            external_flow_id=self.flow_cache.external_flow_id,
+            flow_name=self.flow_cache.name,
+            status=BotConversaFlowDispatch.Status.RUNNING,
+            total_items=1,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        self.client.force_login(self.owner)
+        self.activate_organization(self.organization)
+
+        response = self.client.post(
+            reverse('bot_conversa:dispatch_pause', args=[dispatch.public_id]),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        dispatch.refresh_from_db()
+        self.assertEqual(dispatch.status, BotConversaFlowDispatch.Status.PAUSED)
+
+    def test_resume_dispatch_button_returns_status_to_pending(self):
+        dispatch = BotConversaFlowDispatch.objects.create(
+            organization=self.organization,
+            installation=self.installation,
+            flow=self.flow_cache,
+            external_flow_id=self.flow_cache.external_flow_id,
+            flow_name=self.flow_cache.name,
+            status=BotConversaFlowDispatch.Status.PAUSED,
+            total_items=1,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        self.client.force_login(self.owner)
+        self.activate_organization(self.organization)
+
+        response = self.client.post(
+            reverse('bot_conversa:dispatch_resume', args=[dispatch.public_id]),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        dispatch.refresh_from_db()
+        self.assertEqual(dispatch.status, BotConversaFlowDispatch.Status.PENDING)
+
+    def test_reprocess_running_button_requeues_running_items(self):
+        dispatch = BotConversaFlowDispatch.objects.create(
+            organization=self.organization,
+            installation=self.installation,
+            flow=self.flow_cache,
+            external_flow_id=self.flow_cache.external_flow_id,
+            flow_name=self.flow_cache.name,
+            status=BotConversaFlowDispatch.Status.RUNNING,
+            total_items=1,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        item = BotConversaFlowDispatchItem.objects.create(
+            organization=self.organization,
+            dispatch=dispatch,
+            person=self.person,
+            target_name=self.person.full_name,
+            target_phone=self.person.phone,
+            status=BotConversaFlowDispatchItem.Status.RUNNING,
+            attempt_count=1,
+            last_attempt_at=timezone.now(),
+        )
+        self.client.force_login(self.owner)
+        self.activate_organization(self.organization)
+
+        response = self.client.post(
+            reverse('bot_conversa:dispatch_reprocess_running', args=[dispatch.public_id]),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        item.refresh_from_db()
+        dispatch.refresh_from_db()
+        self.assertEqual(item.status, BotConversaFlowDispatchItem.Status.PENDING)
+        self.assertEqual(dispatch.status, BotConversaFlowDispatch.Status.PENDING)
 
     @patch('bot_conversa.services.BotConversaInstallationService.build_client')
     def test_refresh_tags_persists_remote_cache(self, build_client_mock):

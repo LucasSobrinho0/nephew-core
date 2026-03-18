@@ -1,4 +1,5 @@
 import random
+from datetime import timedelta
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
@@ -1000,6 +1001,8 @@ class BotConversaRemoteContactService:
 
 
 class BotConversaDispatchService:
+    STALE_RUNNING_ITEM_TIMEOUT_SECONDS = 300
+
     @staticmethod
     @transaction.atomic
     def create_dispatch(
@@ -1092,6 +1095,7 @@ class BotConversaDispatchService:
             raise PermissionDenied('O disparo selecionado não pertence à organização ativa.')
 
         if dispatch.status in {
+            BotConversaFlowDispatch.Status.PAUSED,
             BotConversaFlowDispatch.Status.COMPLETED,
             BotConversaFlowDispatch.Status.COMPLETED_WITH_ERRORS,
             BotConversaFlowDispatch.Status.FAILED,
@@ -1105,6 +1109,8 @@ class BotConversaDispatchService:
             dispatch.started_at = dispatch.started_at or timezone.now()
             dispatch.updated_by = user
             dispatch.save(update_fields=['status', 'started_at', 'updated_by', 'updated_at'])
+
+        BotConversaDispatchService.requeue_stale_running_items(dispatch=dispatch)
 
         effective_batch_size = 1 if dispatch.max_delay_seconds > 0 else batch_size
         pending_items = list(
@@ -1169,6 +1175,72 @@ class BotConversaDispatchService:
 
         BotConversaDispatchService.refresh_dispatch_counters(dispatch=dispatch, user=user)
         return dispatch
+
+    @staticmethod
+    def requeue_stale_running_items(*, dispatch):
+        cutoff_time = timezone.now() - timedelta(seconds=BotConversaDispatchService.STALE_RUNNING_ITEM_TIMEOUT_SECONDS)
+        return BotConversaFlowDispatchItemRepository.requeue_stale_running_for_dispatch(
+            dispatch,
+            cutoff_time=cutoff_time,
+        )
+
+    @staticmethod
+    @transaction.atomic
+    def pause_dispatch(*, user, organization, dispatch):
+        BotConversaAuthorizationService.ensure_operator_access(user=user, organization=organization)
+        if dispatch.organization_id != organization.id:
+            raise PermissionDenied('O disparo selecionado nÃ£o pertence Ã  organizaÃ§Ã£o ativa.')
+        if dispatch.status in {
+            BotConversaFlowDispatch.Status.COMPLETED,
+            BotConversaFlowDispatch.Status.COMPLETED_WITH_ERRORS,
+            BotConversaFlowDispatch.Status.FAILED,
+        }:
+            raise ValidationError('Nao e possivel pausar um disparo ja finalizado.')
+        if dispatch.status == BotConversaFlowDispatch.Status.PAUSED:
+            return dispatch
+
+        dispatch.status = BotConversaFlowDispatch.Status.PAUSED
+        dispatch.updated_by = user
+        dispatch.save(update_fields=['status', 'updated_by', 'updated_at'])
+        return dispatch
+
+    @staticmethod
+    @transaction.atomic
+    def resume_dispatch(*, user, organization, dispatch):
+        BotConversaAuthorizationService.ensure_operator_access(user=user, organization=organization)
+        if dispatch.organization_id != organization.id:
+            raise PermissionDenied('O disparo selecionado nÃ£o pertence Ã  organizaÃ§Ã£o ativa.')
+        if dispatch.status in {
+            BotConversaFlowDispatch.Status.COMPLETED,
+            BotConversaFlowDispatch.Status.COMPLETED_WITH_ERRORS,
+            BotConversaFlowDispatch.Status.FAILED,
+        }:
+            raise ValidationError('Nao e possivel continuar um disparo ja finalizado.')
+
+        dispatch.status = BotConversaFlowDispatch.Status.PENDING
+        dispatch.updated_by = user
+        dispatch.save(update_fields=['status', 'updated_by', 'updated_at'])
+        return dispatch
+
+    @staticmethod
+    @transaction.atomic
+    def reprocess_running_items(*, user, organization, dispatch):
+        BotConversaAuthorizationService.ensure_operator_access(user=user, organization=organization)
+        if dispatch.organization_id != organization.id:
+            raise PermissionDenied('O disparo selecionado nÃ£o pertence Ã  organizaÃ§Ã£o ativa.')
+        if dispatch.status in {
+            BotConversaFlowDispatch.Status.COMPLETED,
+            BotConversaFlowDispatch.Status.COMPLETED_WITH_ERRORS,
+            BotConversaFlowDispatch.Status.FAILED,
+        }:
+            raise ValidationError('Nao e possivel reprocessar itens de um disparo ja finalizado.')
+
+        requeued_count = BotConversaFlowDispatchItemRepository.requeue_all_running_for_dispatch(dispatch)
+        if dispatch.status != BotConversaFlowDispatch.Status.PAUSED:
+            dispatch.status = BotConversaFlowDispatch.Status.PENDING
+            dispatch.updated_by = user
+            dispatch.save(update_fields=['status', 'updated_by', 'updated_at'])
+        return requeued_count
 
     @staticmethod
     def refresh_dispatch_counters(*, dispatch, user):
@@ -1238,6 +1310,7 @@ class BotConversaDispatchService:
                 'next_poll_delay_ms': BotConversaDispatchService.build_next_poll_delay_ms(dispatch=dispatch),
                 'is_finished': dispatch.status
                 in {
+                    BotConversaFlowDispatch.Status.PAUSED,
                     BotConversaFlowDispatch.Status.COMPLETED,
                     BotConversaFlowDispatch.Status.COMPLETED_WITH_ERRORS,
                     BotConversaFlowDispatch.Status.FAILED,

@@ -319,3 +319,25 @@ class BotConversaFlowDispatchItemRepository:
             last_attempt_at=attempted_at,
             attempt_count=item.attempt_count + 1,
         )
+
+    @staticmethod
+    def requeue_stale_running_for_dispatch(dispatch, *, cutoff_time):
+        return BotConversaFlowDispatchItem.objects.filter(
+            dispatch=dispatch,
+            organization=dispatch.organization,
+            status=BotConversaFlowDispatchItem.Status.RUNNING,
+            last_attempt_at__lt=cutoff_time,
+        ).update(
+            status=BotConversaFlowDispatchItem.Status.PENDING,
+            updated_at=cutoff_time,
+        )
+
+    @staticmethod
+    def requeue_all_running_for_dispatch(dispatch):
+        return BotConversaFlowDispatchItem.objects.filter(
+            dispatch=dispatch,
+            organization=dispatch.organization,
+            status=BotConversaFlowDispatchItem.Status.RUNNING,
+        ).update(
+            status=BotConversaFlowDispatchItem.Status.PENDING,
+        )

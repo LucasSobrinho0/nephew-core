@@ -47,7 +47,28 @@
             <span class="section-kicker">Progresso</span>
             <h2>Execucao do disparo</h2>
           </div>
-          <span class="status-badge status-used" id="dispatchStatusBadge">{{ dispatch.get_status_display }}</span>
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            {% if can_manage_bot_conversa %}
+              {% if dispatch.status == 'paused' %}
+                <form method="post" action="{% url 'bot_conversa:dispatch_resume' dispatch.public_id %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-brand btn-sm">Continuar envio</button>
+                </form>
+              {% elif dispatch.status == 'pending' or dispatch.status == 'running' %}
+                <form method="post" action="{% url 'bot_conversa:dispatch_pause' dispatch.public_id %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-outline-secondary btn-sm">Pausar envio</button>
+                </form>
+              {% endif %}
+              {% if dispatch.status == 'pending' or dispatch.status == 'running' or dispatch.status == 'paused' %}
+                <form method="post" action="{% url 'bot_conversa:dispatch_reprocess_running' dispatch.public_id %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-outline-secondary btn-sm">Reprocessar travados</button>
+                </form>
+              {% endif %}
+            {% endif %}
+            <span class="status-badge status-used" id="dispatchStatusBadge">{{ dispatch.get_status_display }}</span>
+          </div>
         </div>
         <div class="bot-progress-shell bot-progress-shell-lg">
           <div class="progress">
@@ -56,7 +77,9 @@
           <span id="dispatchProgressValue">{{ status_payload.progress_percent }}%</span>
         </div>
         <p class="text-body-secondary mb-0 mt-3" id="dispatchStatusCopy">
-          {% if can_manage_bot_conversa %}
+          {% if dispatch.status == 'paused' %}
+            O envio esta pausado. Use continuar para retomar ou reprocessar travados para recolocar itens em fila.
+          {% elif can_manage_bot_conversa %}
             A interface continuara consultando enquanto existirem contatos pendentes.
           {% else %}
             Voce esta visualizando o progresso mais recente armazenado para este disparo.

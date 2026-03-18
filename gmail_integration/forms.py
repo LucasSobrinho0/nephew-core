@@ -58,8 +58,8 @@ class GmailDispatchCreateForm(BootstrapFormMixin, forms.Form):
             }
         ),
     )
-    min_delay_seconds = forms.IntegerField(label='Delay minimo (segundos)', min_value=0, max_value=60, initial=0)
-    max_delay_seconds = forms.IntegerField(label='Delay maximo (segundos)', min_value=0, max_value=60, initial=0)
+    min_delay_seconds = forms.IntegerField(label='Delay minimo (segundos)', min_value=0, initial=0)
+    max_delay_seconds = forms.IntegerField(label='Delay maximo (segundos)', min_value=0, initial=0)
 
     def __init__(self, *args, template_choices=(), person_choices=(), **kwargs):
         super().__init__(*args, **kwargs)

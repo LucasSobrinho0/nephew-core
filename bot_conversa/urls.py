@@ -8,7 +8,10 @@ from bot_conversa.views import (
     BotConversaDispatchAudienceView,
     BotConversaDispatchCreateView,
     BotConversaDispatchDetailView,
+    BotConversaDispatchPauseView,
     BotConversaDispatchProcessView,
+    BotConversaDispatchReprocessRunningView,
+    BotConversaDispatchResumeView,
     BotConversaDispatchesView,
     BotConversaFlowRefreshView,
     BotConversaFlowsView,
@@ -49,5 +52,20 @@ urlpatterns = [
         'apps/bot-conversa/dispatches/<uuid:dispatch_public_id>/process/',
         BotConversaDispatchProcessView.as_view(),
         name='dispatch_process',
+    ),
+    path(
+        'apps/bot-conversa/dispatches/<uuid:dispatch_public_id>/pause/',
+        BotConversaDispatchPauseView.as_view(),
+        name='dispatch_pause',
+    ),
+    path(
+        'apps/bot-conversa/dispatches/<uuid:dispatch_public_id>/resume/',
+        BotConversaDispatchResumeView.as_view(),
+        name='dispatch_resume',
+    ),
+    path(
+        'apps/bot-conversa/dispatches/<uuid:dispatch_public_id>/reprocess-running/',
+        BotConversaDispatchReprocessRunningView.as_view(),
+        name='dispatch_reprocess_running',
     ),
 ]
