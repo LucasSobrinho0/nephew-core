@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+
+{% block title %}Enriquecimento do Apollo{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Apollo</span>
+    <h1>Enriquecimento de pessoas</h1>
+    <p class="text-body-secondary mb-0">Selecione pessoas ja sincronizadas com o Apollo para buscar nome completo sem censura e e-mail direto no CRM.</p>
+  </section>
+
+  {% include 'apollo_integration/_subnav.html' %}
+
+  <section class="glass-card content-card scroll-card">
+    <div class="content-card-header">
+      <div>
+        <span class="section-kicker">CRM local</span>
+        <h2>Pessoas elegiveis para enrichment</h2>
+      </div>
+      {% if can_manage_apollo and enrichment_rows %}
+        <button type="submit" form="apolloPeopleEnrichmentForm" class="btn btn-brand">Enriquecer selecionadas</button>
+      {% endif %}
+    </div>
+
+    {% if enrichment_rows %}
+      <div class="mb-3">
+        <label for="apolloEnrichmentFilter" class="form-label">Filtrar pessoas sincronizadas</label>
+        <input id="apolloEnrichmentFilter" type="search" class="form-control" placeholder="Buscar por nome, e-mail, empresa ou status" data-filter-target="#apolloEnrichmentTableBody" data-filter-item="tr">
+      </div>
+
+      <form method="post" action="{% url 'apollo_integration:enrich_people_bulk' %}" id="apolloPeopleEnrichmentForm">
+        {% csrf_token %}
+        <div class="scroll-area scroll-area-table">
+          <table class="table table-clean align-middle mb-0">
+            <thead>
+              <tr>
+                {% if can_manage_apollo %}<th style="width: 44px;"><input type="checkbox" data-select-all="apollo-people-enrichment"></th>{% endif %}
+                <th>Pessoa</th>
+                <th>Empresa</th>
+                <th>E-mail</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="apolloEnrichmentTableBody">
+              {% for row in enrichment_rows %}
+                <tr data-filter-item data-filter-text="{{ row.person.full_name }} {{ row.person.email|default:'' }} {{ row.person.company.name|default:'Sem empresa' }} {% if row.is_enriched %}Enriquecida{% else %}Pendente{% endif %}">
+                  {% if can_manage_apollo %}
+                    <td>
+                      <input type="checkbox" name="person_public_ids" value="{{ row.person.public_id }}" data-checkbox-group="apollo-people-enrichment">
+                    </td>
+                  {% endif %}
+                  <td>
+                    {{ row.person.full_name }}
+                    <div class="small text-body-secondary">Apollo ID: {{ row.person.apollo_person_id }}</div>
+                  </td>
+                  <td>{{ row.person.company.name|default:'Sem empresa' }}</td>
+                  <td>{{ row.person.email|default:'-' }}</td>
+                  <td>
+                    {% if row.is_enriched %}
+                      Enriquecida
+                    {% elif row.has_email %}
+                      Nome pendente
+                    {% else %}
+                      Nome e e-mail pendentes
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </form>
+      {% if enrichment_form.person_public_ids.errors %}
+        <div class="text-danger small mt-3">{{ enrichment_form.person_public_ids.errors|join:', ' }}</div>
+      {% endif %}
+    {% else %}
+      <div class="soft-empty">
+        <p class="mb-0">Nenhuma pessoa sincronizada com o Apollo foi encontrada neste tenant.</p>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

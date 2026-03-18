@@ -2,8 +2,10 @@ APOLLO_APP_CODE = 'apollo'
 APOLLO_API_BASE_URL = 'https://api.apollo.io'
 APOLLO_DEFAULT_TIMEOUT_SECONDS = 30
 APOLLO_MAX_RESULTS_PER_PAGE = 100
+APOLLO_BULK_ENRICH_MAX_BATCH_SIZE = 10
 APOLLO_ORGANIZATION_SEARCH_PATH = '/api/v1/mixed_companies/search'
 APOLLO_PEOPLE_SEARCH_PATH = '/api/v1/mixed_people/api_search'
+APOLLO_BULK_PEOPLE_ENRICH_PATH = '/api/v1/people/bulk_match'
 APOLLO_USAGE_STATS_PATH = '/api/v1/usage_stats/api_usage_stats'
 APOLLO_HTTP_USER_AGENT = 'NephewCRM Apollo Integration/1.0'
 

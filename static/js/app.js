@@ -830,6 +830,7 @@
           var emptyMessage = emptyState ? emptyState.querySelector('p') : null;
           var countTarget = countSelector ? document.querySelector(countSelector) : null;
           var tagField = tagFieldSelector ? document.querySelector(tagFieldSelector) : null;
+          var checkboxGroup = target.getAttribute('data-checkbox-group') || '';
           var selectedValues = [];
           var originalText = trigger.textContent;
           var query = new URLSearchParams();
@@ -877,10 +878,11 @@
 
             target.innerHTML = (payload.items || []).map(function (item) {
               var isChecked = selectedValues.indexOf(item.value) >= 0;
+              var checkboxGroupAttr = checkboxGroup ? ' data-checkbox-group="' + escapeHtml(checkboxGroup) + '"' : '';
 
               return (
                 '<label class="bot-selection-card" data-filter-item data-filter-text="' + escapeHtml(item.label) + '">' +
-                  '<input class="bot-selection-checkbox" type="checkbox" name="person_public_ids" value="' + escapeHtml(item.value) + '"' + (isChecked ? ' checked' : '') + '>' +
+                  '<input class="bot-selection-checkbox" type="checkbox" name="person_public_ids" value="' + escapeHtml(item.value) + '"' + checkboxGroupAttr + (isChecked ? ' checked' : '') + '>' +
                   '<span class="bot-selection-text">' + escapeHtml(item.label) + '</span>' +
                 '</label>'
               );

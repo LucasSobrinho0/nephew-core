@@ -11,9 +11,9 @@
   - sincronizar empresas locais selecionadas com o HubSpot
   - consultar pessoas remotas no Apollo com filtros por empresa opcional, cargo e palavras-chave
   - salvar pessoas remotas no CRM com `apollo_person_id`, mesmo quando a busca retorna dados censurados
+  - enriquecer pessoas ja sincronizadas com o Apollo para recuperar nome completo sem censura e email
   - visualizar um resumo de uso da API do Apollo
 - O modulo ainda nao cobre:
-  - enrichment de pessoas
   - enrichment de empresas
   - automacoes em background
 
@@ -38,6 +38,8 @@
   Usado para listar empresas remotas com filtros.
 - `POST /api/v1/mixed_people/api_search`
   Usado para buscar pessoas remotas com dados censurados e filtros de cargo, empresa e palavras-chave.
+- `POST /api/v1/people/bulk_match`
+  Usado para enriquecer pessoas ja sincronizadas com o Apollo por `apollo_person_id`.
 - `POST /api/v1/usage_stats/api_usage_stats`
   Usado para montar o resumo de uso exibido no dashboard.
 
@@ -113,11 +115,20 @@
 6. O usuario pode salvar essas pessoas no CRM.
 7. O registro local guarda `apollo_person_id` e tenta vincular a empresa local correspondente quando houver match por `apollo_company_id`, dominio ou nome.
 
+## Fluxo de enrichment de pessoas
+
+1. O usuario abre `Apps > Apollo > Enriquecimento`.
+2. A tela lista apenas `people.Person` do tenant atual que ja possuem `apollo_person_id`.
+3. O usuario seleciona as pessoas desejadas.
+4. O backend chama `POST /api/v1/people/bulk_match` em lotes pequenos, usando o `apollo_person_id` como chave principal.
+5. Quando o Apollo retorna `first_name`, `last_name` e email real, o CRM atualiza o cadastro local existente.
+6. Nesta fase, o enrichment nao busca telefone. O foco fica em nome completo e email.
+
 ## Decisao sobre dados censurados
 
 - O search de pessoas do Apollo nao garante email e telefone reais.
 - Mesmo assim, o CRM pode salvar o contato com `apollo_person_id`, nome e empresa, deixando `phone` vazio quando o dado nao vier.
-- Isso prepara o registro para enriquecimento ou reconciliacao futura sem exigir `people/bulk_match` nesta fase.
+- Isso prepara o registro para enrichment posterior sem depender de uma importacao nova.
 
 ## Matching e reutilizacao do CRM
 
@@ -153,5 +164,6 @@
 
 ## Decisoes intencionais desta fase
 
-- Enrichment fica para uma fase posterior, porque muda bastante custo, UX e regra de negocio.
+- O enrichment de pessoas atualiza apenas nome completo e email.
+- Telefone do Apollo continua fora desta fase para manter custo e UX mais controlados.
 - A sincronizacao com HubSpot permanece opcional e parte das empresas locais, nao como dependencia de runtime do Apollo.

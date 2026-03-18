@@ -102,6 +102,7 @@ integrations/
 - The shared dependency is the tenant-scoped CRM core, especially `people.Person`, company relations, and the common matching helpers.
 - Apollo agora interage com o CRM por meio de `companies.Company` e `people.Person`.
 - A busca de pessoas do Apollo salva resultados censurados no CRM por `apollo_person_id`, sem depender de enrichment nesta fase.
+- O enrichment de pessoas do Apollo opera sobre `people.Person` ja sincronizadas e atualiza nome completo e email no proprio registro local.
 - HubSpot and Bot Conversa therefore interoperate through shared people records:
   - one contact can be imported from HubSpot and later receive a Bot Conversa flow
   - one remote Bot Conversa contact can be saved in the CRM and later be enriched with HubSpot identifiers
@@ -212,6 +213,15 @@ Templates:
 5. The screen shows those results and whether each person is already linked to a local `Person`.
 6. Owner or admin can save one or more results into the tenant-scoped CRM.
 7. The saved local person keeps `apollo_person_id` and can remain without phone until a later enrichment or reconciliation step.
+
+### Apollo people enrichment flow
+
+1. Owner or admin opens the Apollo enrichment screen inside the active organization.
+2. The screen lists only local CRM people that already have `apollo_person_id`.
+3. The user selects one or more people and starts enrichment.
+4. Backend calls Apollo bulk people enrichment in batches, keyed by `apollo_person_id`.
+5. Returned full name and email update the same tenant-scoped `people.Person` rows.
+6. Phone enrichment remains intentionally out of scope for this phase.
 
 ### Bot Conversa dispatch flow
 

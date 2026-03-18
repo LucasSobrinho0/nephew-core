@@ -2,10 +2,12 @@ from django.urls import path
 
 from apollo_integration.views import (
     ApolloBulkCompanyHubSpotSyncView,
+    ApolloBulkPeopleEnrichmentView,
     ApolloBulkRemoteCompanyImportView,
     ApolloBulkRemotePersonImportView,
     ApolloCompaniesView,
     ApolloDashboardView,
+    ApolloPeopleEnrichmentView,
     ApolloPeopleView,
 )
 
@@ -18,4 +20,6 @@ urlpatterns = [
     path('apps/apollo/companies/hubspot/sync/bulk/', ApolloBulkCompanyHubSpotSyncView.as_view(), name='sync_companies_hubspot_bulk'),
     path('apps/apollo/people/', ApolloPeopleView.as_view(), name='people'),
     path('apps/apollo/people/import/bulk/', ApolloBulkRemotePersonImportView.as_view(), name='import_people_bulk'),
+    path('apps/apollo/enrichment/', ApolloPeopleEnrichmentView.as_view(), name='enrichment'),
+    path('apps/apollo/enrichment/bulk/', ApolloBulkPeopleEnrichmentView.as_view(), name='enrich_people_bulk'),
 ]

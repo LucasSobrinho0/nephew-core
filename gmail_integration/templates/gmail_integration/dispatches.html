@@ -68,7 +68,7 @@
               <input type="search" class="form-control mb-3" placeholder="Buscar pessoa por nome, e-mail ou empresa" data-filter-target="#gmailDispatchSelectionList" data-filter-item="label">
               <div class="bot-checkbox-shell">
                 {% if dispatch_form.person_public_ids %}
-                  <div class="bot-selection-list" id="gmailDispatchSelectionList">
+                  <div class="bot-selection-list" id="gmailDispatchSelectionList" data-checkbox-group="gmail-dispatch-selection">
                     {% for option in dispatch_form.person_public_ids %}
                       <label class="bot-selection-card" data-filter-item data-filter-text="{{ option.choice_label }}">
                         {{ option.tag }}

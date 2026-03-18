@@ -3,6 +3,7 @@ import json
 import requests
 from apollo_integration.constants import (
     APOLLO_API_BASE_URL,
+    APOLLO_BULK_PEOPLE_ENRICH_PATH,
     APOLLO_DEFAULT_TIMEOUT_SECONDS,
     APOLLO_HTTP_USER_AGENT,
     APOLLO_MAX_RESULTS_PER_PAGE,
@@ -47,7 +48,7 @@ class ApolloClient:
 
     def search_people(self, *, payload):
         response_payload = self._request('POST', APOLLO_PEOPLE_SEARCH_PATH, payload=payload)
-        people = response_payload.get('people', []) or []
+        people = self._extract_person_items(response_payload)
         pagination = self._extract_people_pagination(response_payload=response_payload, payload=payload)
         return {
             'people': [
@@ -56,6 +57,25 @@ class ApolloClient:
                 if isinstance(item, dict)
             ],
             'pagination': pagination,
+            'raw_payload': response_payload,
+        }
+
+    def enrich_people(self, *, details, reveal_personal_emails=True):
+        response_payload = self._request(
+            'POST',
+            APOLLO_BULK_PEOPLE_ENRICH_PATH,
+            payload={'details': details},
+            query={
+                'reveal_personal_emails': 'true' if reveal_personal_emails else 'false',
+            },
+        )
+        people = self._extract_person_items(response_payload)
+        return {
+            'people': [
+                self._normalize_person_payload(item)
+                for item in people
+                if isinstance(item, dict)
+            ],
             'raw_payload': response_payload,
         }
 
@@ -171,6 +191,27 @@ class ApolloClient:
             'total_entries': total_entries,
             'total_pages': total_pages,
         }
+
+    @staticmethod
+    def _extract_person_items(response_payload):
+        if isinstance(response_payload, list):
+            return response_payload
+        if not isinstance(response_payload, dict):
+            return []
+
+        for key in ('people', 'matches', 'contacts'):
+            value = response_payload.get(key)
+            if isinstance(value, list):
+                return value
+
+        person = response_payload.get('person')
+        if isinstance(person, dict):
+            return [person]
+
+        if isinstance(response_payload.get('id'), str):
+            return [response_payload]
+
+        return []
 
     @staticmethod
     def _strip_bearer(value):

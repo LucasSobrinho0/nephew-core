@@ -179,3 +179,17 @@ class ApolloBulkRemotePersonImportForm(BootstrapFormMixin, forms.Form):
         if not apollo_person_ids:
             raise forms.ValidationError('Selecione pelo menos uma pessoa remota para salvar.')
         return apollo_person_ids
+
+
+class ApolloPeopleEnrichmentForm(BootstrapFormMixin, forms.Form):
+    person_public_ids = forms.MultipleChoiceField(required=False, widget=forms.MultipleHiddenInput())
+
+    def __init__(self, *args, person_choices=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['person_public_ids'].choices = person_choices
+
+    def clean_person_public_ids(self):
+        person_public_ids = self.cleaned_data.get('person_public_ids') or []
+        if not person_public_ids:
+            raise forms.ValidationError('Selecione pelo menos uma pessoa sincronizada com o Apollo para enriquecer.')
+        return person_public_ids

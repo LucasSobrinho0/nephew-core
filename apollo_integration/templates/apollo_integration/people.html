@@ -6,7 +6,7 @@
   <section class="page-header mb-4">
     <span class="section-kicker">Apollo</span>
     <h1>Pessoas</h1>
-    <p class="text-body-secondary mb-0">Liste pessoas salvas no CRM e busque contatos remotos do Apollo por empresa, cargo ou palavra-chave antes de importar.</p>
+    <p class="text-body-secondary mb-0">Liste pessoas ja sincronizadas com o Apollo no CRM e busque contatos remotos por empresa, cargo ou palavra-chave antes de importar.</p>
   </section>
 
   {% include 'apollo_integration/_subnav.html' %}
@@ -15,13 +15,13 @@
     <div class="col-xl-7">
       <div class="glass-card content-card h-100 scroll-card" id="apolloLocalPeopleCard">
         <div class="content-card-header">
-          <div><span class="section-kicker">CRM local</span><h2>Pessoas cadastradas</h2></div>
+          <div><span class="section-kicker">CRM local</span><h2>Pessoas sincronizadas</h2></div>
           {% if has_loaded_local_people %}
             <span class="status-badge status-available">{{ person_rows|length }} registro{{ person_rows|length|pluralize }}</span>
           {% else %}
             <form method="get" action="{% url 'apollo_integration:people' %}" data-async-list-form data-async-target="#apolloLocalPeopleCard" data-loading-text="Listando pessoas...">
               <input type="hidden" name="load_local" value="1">
-              <button type="submit" class="btn btn-outline-secondary">Listar pessoas</button>
+              <button type="submit" class="btn btn-outline-secondary">Listar sincronizadas</button>
             </form>
           {% endif %}
         </div>
@@ -51,9 +51,9 @@
             </table>
           </div>
         {% elif has_loaded_local_people %}
-          <div class="soft-empty"><p class="mb-0">Nenhuma pessoa salva ainda no CRM para esta organizacao.</p></div>
+          <div class="soft-empty"><p class="mb-0">Nenhuma pessoa sincronizada com o Apollo foi encontrada nesta organizacao.</p></div>
         {% else %}
-          <div class="soft-empty"><p class="mb-0">Clique em listar para carregar as pessoas cadastradas no sistema.</p></div>
+          <div class="soft-empty"><p class="mb-0">Clique em listar para carregar as pessoas do CRM que ja possuem Apollo ID.</p></div>
         {% endif %}
       </div>
     </div>

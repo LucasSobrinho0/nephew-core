@@ -10,6 +10,7 @@ from django.views.generic import TemplateView
 from apollo_integration.exceptions import ApolloApiError, ApolloConfigurationError
 from apollo_integration.forms import (
     ApolloBulkCompanyHubSpotSyncForm,
+    ApolloPeopleEnrichmentForm,
     ApolloBulkRemoteCompanyImportForm,
     ApolloBulkRemotePersonImportForm,
     ApolloLocalCompanyListForm,
@@ -23,6 +24,7 @@ from apollo_integration.services import (
     ApolloPersonService,
 )
 from companies.repositories import CompanyRepository
+from people.repositories import PersonRepository
 
 
 class ApolloAccessMixin(LoginRequiredMixin):
@@ -69,6 +71,7 @@ class ApolloAccessMixin(LoginRequiredMixin):
                 {'label': 'Visao geral', 'url': 'apollo_integration:dashboard', 'key': 'dashboard'},
                 {'label': 'Empresas', 'url': 'apollo_integration:companies', 'key': 'companies'},
                 {'label': 'Pessoas', 'url': 'apollo_integration:people', 'key': 'people'},
+                {'label': 'Enriquecimento', 'url': 'apollo_integration:enrichment', 'key': 'enrichment'},
             ],
             'apollo_active_tab': active_tab,
             'can_manage_apollo': self.active_membership.can_manage_integrations,
@@ -300,6 +303,24 @@ class ApolloPeopleView(ApolloAccessMixin, TemplateView):
         return context
 
 
+class ApolloPeopleEnrichmentView(ApolloAccessMixin, TemplateView):
+    template_name = 'apollo_integration/enrichment.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        enrichment_rows = ApolloPersonService.build_enrichment_rows(organization=self.active_organization)
+        context.update(self.build_base_context(active_tab='enrichment'))
+        context.update(
+            {
+                'enrichment_rows': enrichment_rows,
+                'enrichment_form': kwargs.get('enrichment_form') or ApolloPeopleEnrichmentForm(
+                    person_choices=[(str(row['person'].public_id), row['person'].full_name) for row in enrichment_rows]
+                ),
+            }
+        )
+        return context
+
+
 class ApolloBulkRemoteCompanyImportView(ApolloOperatorRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         current_query = request.POST.get('current_query', '')
@@ -310,19 +331,30 @@ class ApolloBulkRemoteCompanyImportView(ApolloOperatorRequiredMixin, View):
             organization=self.active_organization,
             filters=search_form.cleaned_data if search_form.cleaned_data else {},
         )
-        choices = [(company['apollo_company_id'], company['name']) for company in remote_result['companies']]
-        form = ApolloBulkRemoteCompanyImportForm(request.POST, company_choices=choices)
-
-        if not form.is_valid():
-            messages.error(request, form.errors.get('apollo_company_ids', ['Selecione empresas remotas validas.'])[0])
+        selected_ids = [value.strip() for value in request.POST.getlist('apollo_company_ids') if value.strip()]
+        if not selected_ids:
+            messages.error(request, 'Selecione pelo menos uma empresa remota para salvar.')
             return redirect(self.build_url_with_query('apollo_integration:companies', current_query))
 
-        selected_ids = set(form.cleaned_data['apollo_company_ids'])
+        selected_ids = set(selected_ids)
         selected_companies = [
             company
             for company in remote_result['companies']
             if company['apollo_company_id'] in selected_ids
         ]
+
+        if not selected_companies:
+            messages.error(
+                request,
+                'A listagem remota mudou antes do salvamento. Atualize a busca e selecione novamente as empresas desejadas.',
+            )
+            return redirect(self.build_url_with_query('apollo_integration:companies', current_query))
+
+        if len(selected_companies) != len(selected_ids):
+            messages.warning(
+                request,
+                'Algumas empresas selecionadas nao estavam mais na listagem atual e foram ignoradas.',
+            )
 
         try:
             ApolloCompanyService.import_remote_companies(
@@ -351,25 +383,30 @@ class ApolloBulkRemotePersonImportView(ApolloOperatorRequiredMixin, View):
             organization=self.active_organization,
             filters=search_form.cleaned_data if search_form.cleaned_data else {},
         )
-        choices = [
-            (
-                person['apollo_person_id'],
-                person['first_name'] or person['apollo_person_id'],
-            )
-            for person in remote_result['people']
-        ]
-        form = ApolloBulkRemotePersonImportForm(request.POST, person_choices=choices)
-
-        if not form.is_valid():
-            messages.error(request, form.errors.get('apollo_person_ids', ['Selecione pessoas remotas validas.'])[0])
+        selected_ids = [value.strip() for value in request.POST.getlist('apollo_person_ids') if value.strip()]
+        if not selected_ids:
+            messages.error(request, 'Selecione pelo menos uma pessoa remota para salvar.')
             return redirect(self.build_url_with_query('apollo_integration:people', current_query))
 
-        selected_ids = set(form.cleaned_data['apollo_person_ids'])
+        selected_ids = set(selected_ids)
         selected_people = [
             person
             for person in remote_result['people']
             if person['apollo_person_id'] in selected_ids
         ]
+
+        if not selected_people:
+            messages.error(
+                request,
+                'A listagem remota mudou antes do salvamento. Atualize a busca e selecione novamente as pessoas desejadas.',
+            )
+            return redirect(self.build_url_with_query('apollo_integration:people', current_query))
+
+        if len(selected_people) != len(selected_ids):
+            messages.warning(
+                request,
+                'Algumas pessoas selecionadas nao estavam mais na listagem atual e foram ignoradas.',
+            )
 
         try:
             ApolloPersonService.import_remote_people(
@@ -383,6 +420,50 @@ class ApolloBulkRemotePersonImportView(ApolloOperatorRequiredMixin, View):
 
         messages.success(request, f'{len(selected_people)} pessoas do Apollo foram salvas no CRM.')
         return redirect(self.build_url_with_query('apollo_integration:people', current_query))
+
+
+class ApolloBulkPeopleEnrichmentView(ApolloOperatorRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        enrichment_rows = ApolloPersonService.build_enrichment_rows(organization=self.active_organization)
+        form = ApolloPeopleEnrichmentForm(
+            request.POST,
+            person_choices=[(str(row['person'].public_id), row['person'].full_name) for row in enrichment_rows],
+        )
+        if not form.is_valid():
+            view = ApolloPeopleEnrichmentView()
+            view.request = request
+            view.args = args
+            view.kwargs = kwargs
+            view.installation = self.installation
+            view.active_organization = self.active_organization
+            view.active_membership = self.active_membership
+            return view.render_to_response(view.get_context_data(enrichment_form=form))
+
+        people = list(
+            PersonRepository.list_for_organization_and_public_ids(
+                self.active_organization,
+                form.cleaned_data['person_public_ids'],
+            )
+        )
+        people = [person for person in people if person.apollo_person_id]
+        try:
+            result = ApolloPersonService.enrich_people(
+                user=request.user,
+                organization=self.active_organization,
+                people=people,
+            )
+        except (ApolloApiError, ApolloConfigurationError, PermissionDenied, ValidationError) as exc:
+            messages.error(request, str(exc))
+            return redirect('apollo_integration:enrichment')
+
+        messages.success(
+            request,
+            (
+                f"{result['enriched_count']} pessoa(s) foram atualizadas com nome completo e e-mail "
+                f'a partir do Apollo.'
+            ),
+        )
+        return redirect('apollo_integration:enrichment')
 
 
 class ApolloBulkCompanyHubSpotSyncView(ApolloAccessMixin, View):

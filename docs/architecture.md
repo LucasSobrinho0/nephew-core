@@ -10,7 +10,7 @@
 - `companies`: tenant-scoped CRM companies.
 - `people`: tenant-scoped CRM persons and contact identity.
 - `integrations`: app catalog, tenant installations, encrypted credentials, and credential access audit.
-- `apollo_integration`: Apollo API key wiring, remote company search, usage snapshots, bulk import, and optional company sync handoff to HubSpot.
+- `apollo_integration`: Apollo API key wiring, remote company search, person search, person enrichment, usage snapshots, bulk import, and optional company sync handoff to HubSpot.
 - `bot_conversa`: Bot Conversa contact linking, tag cache, flow cache, dispatching, and sync logs.
 - `hubspot_integration`: HubSpot company/contact/deal synchronization and pipeline cache.
 - `gmail_integration`: Gmail credential management, templates, and email dispatches.
@@ -136,7 +136,7 @@ NephewCRM/
 - `hubspot_integration.services.*`
   Encapsulates HubSpot installation resolution, company/contact sync, pipeline refresh, and deal creation.
 - `apollo_integration.services.*`
-  Encapsulates Apollo installation resolution, remote company search, usage snapshots, bulk import into CRM, and optional sync handoff to HubSpot.
+  Encapsulates Apollo installation resolution, remote company search, remote person search, person enrichment, usage snapshots, bulk import into CRM, and optional sync handoff to HubSpot.
 - `gmail_integration.services.*`
   Encapsulates Gmail credential handling, template management, email dispatch creation, and paced dispatch processing.
 
@@ -206,6 +206,6 @@ NephewCRM/
 3. Integration platform
    App catalog, installations, encrypted credentials, secure reveal flow, and access audit.
 4. Operational modules
-   Apollo company search/import, Bot Conversa tag synchronization/assignment and flow dispatches, HubSpot sync/deals, and Gmail templates/dispatches with configurable pacing and async audience filters for people who have not yet received sends in each channel.
+   Apollo company search/import, Apollo person search/enrichment, Bot Conversa tag synchronization/assignment and flow dispatches, HubSpot sync/deals, and Gmail templates/dispatches with configurable pacing and async audience filters for people who have not yet received sends in each channel.
 5. Next evolution
    Stronger model-level tenant consistency guarantees, broader audit coverage, background processing options, and richer CRM workflows.

@@ -19,6 +19,7 @@ class FakeApolloClient:
     def __init__(self):
         self.last_search_payload = None
         self.last_people_payload = None
+        self.last_enrichment_details = None
 
     def search_organizations(self, *, payload):
         self.last_search_payload = payload
@@ -81,6 +82,21 @@ class FakeApolloClient:
                 'per_hour': 1000,
                 'per_day': 10000,
             },
+        }
+
+    def enrich_people(self, *, details, reveal_personal_emails=True):
+        self.last_enrichment_details = details
+        return {
+            'people': [
+                {
+                    'apollo_person_id': 'apollo-person-1',
+                    'first_name': 'Carla',
+                    'last_name': 'Souza',
+                    'email': 'carla.souza@example.com',
+                    'raw_payload': {'id': 'apollo-person-1'},
+                }
+            ],
+            'raw_payload': {},
         }
 
 
@@ -353,6 +369,7 @@ class ApolloModuleTests(TestCase):
             first_name='Pessoa',
             last_name='Local',
             email='pessoa.local@example.com',
+            apollo_person_id='apollo-person-local',
             created_by=self.owner,
             updated_by=self.owner,
         )
@@ -376,6 +393,101 @@ class ApolloModuleTests(TestCase):
         self.assertContains(response, 'Filtrar pessoas remotas')
         self.assertContains(response, 'Salvar selecionadas')
         self.assertNotContains(response, 'Salvar no CRM')
+
+    def test_people_page_local_list_shows_only_apollo_synced_people(self):
+        synced_person = Person.objects.create(
+            organization=self.organization,
+            first_name='Pessoa',
+            last_name='Sincronizada',
+            email='sincronizada@example.com',
+            apollo_person_id='apollo-person-local',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        Person.objects.create(
+            organization=self.organization,
+            first_name='Pessoa',
+            last_name='Sem Apollo',
+            email='semapollo@example.com',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.get(reverse('apollo_integration:people'), {'load_local': '1'})
+
+        self.assertContains(response, synced_person.full_name)
+        self.assertNotContains(response, 'Pessoa Sem Apollo')
+
+    @patch('apollo_integration.services.ApolloInstallationService.build_client')
+    def test_enrichment_updates_local_person_name_and_email(self, build_client_mock):
+        fake_client = FakeApolloClient()
+        build_client_mock.return_value = fake_client
+        person = Person.objects.create(
+            organization=self.organization,
+            first_name='Carla',
+            last_name='So***a',
+            apollo_person_id='apollo-person-1',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+
+        result = ApolloPersonService.enrich_people(
+            user=self.owner,
+            organization=self.organization,
+            people=[person],
+        )
+
+        person.refresh_from_db()
+        self.assertEqual(result['enriched_count'], 1)
+        self.assertEqual(fake_client.last_enrichment_details, [{'id': 'apollo-person-1'}])
+        self.assertEqual(person.last_name, 'Souza')
+        self.assertEqual(person.email, 'carla.souza@example.com')
+
+    @patch('apollo_integration.services.ApolloInstallationService.build_client')
+    def test_enrichment_page_renders_synced_people(self, build_client_mock):
+        build_client_mock.return_value = FakeApolloClient()
+        Person.objects.create(
+            organization=self.organization,
+            first_name='Carla',
+            last_name='So***a',
+            apollo_person_id='apollo-person-1',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.get(reverse('apollo_integration:enrichment'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Enriquecimento')
+        self.assertContains(response, 'apollo-person-1')
+
+    @patch('apollo_integration.services.ApolloInstallationService.build_client')
+    def test_bulk_enrichment_view_updates_selected_people(self, build_client_mock):
+        build_client_mock.return_value = FakeApolloClient()
+        person = Person.objects.create(
+            organization=self.organization,
+            first_name='Carla',
+            last_name='So***a',
+            apollo_person_id='apollo-person-1',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.post(
+            reverse('apollo_integration:enrich_people_bulk'),
+            {'person_public_ids': [str(person.public_id)]},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        person.refresh_from_db()
+        self.assertEqual(person.last_name, 'Souza')
+        self.assertEqual(person.email, 'carla.souza@example.com')
 
     @patch('apollo_integration.services.ApolloInstallationService.build_client')
     def test_people_page_renders_remote_people(self, build_client_mock):

@@ -13,6 +13,7 @@ from gmail_integration.forms import GmailCredentialSaveForm, GmailDispatchCreate
 from gmail_integration.repositories import (
     GmailCredentialRepository,
     GmailDispatchRepository,
+    GmailDispatchRecipientRepository,
     GmailTemplateRepository,
 )
 from gmail_integration.services import (

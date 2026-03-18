@@ -5,7 +5,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apollo_integration.client import ApolloClient
-from apollo_integration.constants import APOLLO_APP_CODE
+from apollo_integration.constants import APOLLO_APP_CODE, APOLLO_BULK_ENRICH_MAX_BATCH_SIZE
 from apollo_integration.exceptions import ApolloApiError, ApolloConfigurationError
 from apollo_integration.models import ApolloCompanySyncLog
 from apollo_integration.repositories import ApolloCompanySyncLogRepository, ApolloUsageSnapshotRepository
@@ -409,7 +409,11 @@ class ApolloCompanyService:
 class ApolloPersonService:
     @staticmethod
     def build_person_rows(*, organization):
-        persons = list(PersonRepository.list_for_organization(organization))
+        persons = [
+            person
+            for person in PersonRepository.list_for_organization(organization)
+            if person.apollo_person_id
+        ]
         return [
             {
                 'person': person,
@@ -417,6 +421,27 @@ class ApolloPersonService:
             }
             for person in persons
         ]
+
+    @staticmethod
+    def build_enrichment_rows(*, organization):
+        persons = [
+            person
+            for person in PersonRepository.list_for_organization(organization)
+            if person.apollo_person_id
+        ]
+        rows = []
+        for person in persons:
+            has_uncensored_last_name = bool(person.last_name and '*' not in person.last_name)
+            has_email = bool(person.email)
+            rows.append(
+                {
+                    'person': person,
+                    'has_email': has_email,
+                    'has_uncensored_last_name': has_uncensored_last_name,
+                    'is_enriched': has_email and has_uncensored_last_name,
+                }
+            )
+        return rows
 
     @staticmethod
     def build_company_filter_choices(*, organization):
@@ -577,3 +602,76 @@ class ApolloPersonService:
                 ['apollo_person_id', 'company', 'updated_by', 'updated_at'],
             )
         return persisted_people
+
+    @staticmethod
+    @transaction.atomic
+    def enrich_people(*, user, organization, people):
+        ApolloAuthorizationService.ensure_operator_access(user=user, organization=organization)
+        client = ApolloInstallationService.build_client(organization=organization)
+        people_by_apollo_id = {
+            person.apollo_person_id: person
+            for person in people
+            if person.apollo_person_id
+        }
+        apollo_person_ids = [apollo_person_id for apollo_person_id in people_by_apollo_id.keys() if apollo_person_id]
+        if not apollo_person_ids:
+            raise ValidationError('Selecione pelo menos uma pessoa sincronizada com o Apollo para enriquecer.')
+
+        enriched_payload_by_apollo_id = {}
+        for start_index in range(0, len(apollo_person_ids), APOLLO_BULK_ENRICH_MAX_BATCH_SIZE):
+            batch_ids = apollo_person_ids[start_index:start_index + APOLLO_BULK_ENRICH_MAX_BATCH_SIZE]
+            details = []
+            for apollo_person_id in batch_ids:
+                person = people_by_apollo_id[apollo_person_id]
+                detail = {'id': apollo_person_id}
+                if person.company and person.company.website:
+                    detail['organization_website'] = person.company.website
+                details.append(detail)
+
+            result = client.enrich_people(details=details, reveal_personal_emails=True)
+            for remote_person in result['people']:
+                remote_apollo_person_id = remote_person.get('apollo_person_id', '')
+                if remote_apollo_person_id:
+                    enriched_payload_by_apollo_id[remote_apollo_person_id] = remote_person
+
+        persons_to_update = []
+        enriched_count = 0
+        synced_at = timezone.now()
+        for apollo_person_id, person in people_by_apollo_id.items():
+            remote_person = enriched_payload_by_apollo_id.get(apollo_person_id)
+            if remote_person is None:
+                continue
+
+            changed = False
+            first_name = (remote_person.get('first_name') or '').strip()
+            last_name = (remote_person.get('last_name') or '').strip()
+            email = (remote_person.get('email') or '').strip().lower()
+
+            if first_name and person.first_name != first_name:
+                person.first_name = first_name
+                changed = True
+            if last_name and person.last_name != last_name:
+                person.last_name = last_name
+                changed = True
+            if email and person.email != email:
+                person.email = email
+                changed = True
+
+            if changed:
+                person.updated_by = user
+                person.updated_at = synced_at
+                ApolloBulkPreparationService.prepare_person(person)
+                persons_to_update.append(person)
+                enriched_count += 1
+
+        if persons_to_update:
+            PersonRepository.bulk_update(
+                persons_to_update,
+                ['first_name', 'last_name', 'email', 'email_lookup', 'updated_by', 'updated_at'],
+            )
+
+        return {
+            'requested_count': len(apollo_person_ids),
+            'enriched_count': enriched_count,
+            'updated_people': persons_to_update,
+        }
