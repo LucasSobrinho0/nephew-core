@@ -3,8 +3,10 @@ from django.urls import path
 from gmail_integration.views import (
     GmailCredentialSaveView,
     GmailDashboardView,
+    GmailDispatchAudienceView,
     GmailDispatchCreateView,
     GmailDispatchDetailView,
+    GmailDispatchProcessView,
     GmailDispatchesView,
     GmailSettingsView,
     GmailTemplateCreateView,
@@ -23,5 +25,7 @@ urlpatterns = [
     path('apps/gmail/templates/<uuid:template_public_id>/edit/', GmailTemplateUpdateView.as_view(), name='edit_template'),
     path('apps/gmail/dispatches/', GmailDispatchesView.as_view(), name='dispatches'),
     path('apps/gmail/dispatches/create/', GmailDispatchCreateView.as_view(), name='create_dispatch'),
+    path('apps/gmail/dispatches/audience/', GmailDispatchAudienceView.as_view(), name='dispatch_audience'),
     path('apps/gmail/dispatches/<uuid:dispatch_public_id>/', GmailDispatchDetailView.as_view(), name='dispatch_detail'),
+    path('apps/gmail/dispatches/<uuid:dispatch_public_id>/process/', GmailDispatchProcessView.as_view(), name='dispatch_process'),
 ]

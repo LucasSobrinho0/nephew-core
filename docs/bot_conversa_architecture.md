@@ -40,11 +40,16 @@ bot_conversa/
 
 - Internal CRM person table.
 - Tenant-scoped with `organization`.
-- Stores:
+- Stores core CRM identity and communication fields, including:
   - `phone`
   - `normalized_phone`
+  - `email`
+  - `email_lookup`
   - `first_name`
   - `last_name`
+  - integration identifiers such as `bot_conversa_id` and `hubspot_contact_id`
+  - optional `company`
+  - `is_active`
   - `created_by`
   - `updated_by`
   - `created_at`
@@ -84,13 +89,13 @@ bot_conversa/
 
 ### `bot_conversa.BotConversaSyncLog`
 
-- Audit trail for contact verification and creation.
+- Audit trail for contact verification, creation, CRM import, and linking.
 - Stores action, outcome, actor, person, local link, and remote payload metadata.
 
 ### `bot_conversa.BotConversaFlowDispatch`
 
 - Parent job record for a flow send operation.
-- Stores organization, installation, selected flow, lifecycle status, counters, and timestamps.
+- Stores organization, installation, selected flow, lifecycle status, counters, timestamps, and a configurable min/max delay interval between polls when the operator wants to pace WhatsApp sends.
 
 ### `bot_conversa.BotConversaFlowDispatchItem`
 
@@ -114,7 +119,7 @@ bot_conversa/
 - `admin`
   Full Bot Conversa operational access.
 - `user`
-  Can view module pages, but cannot create persons, sync contacts, refresh flows, or create/process dispatches.
+  Can view module pages, but cannot create persons, sync contacts, refresh flows, save remote contacts into CRM, or create/process dispatches.
 
 ## Services
 
@@ -124,12 +129,12 @@ bot_conversa/
   Creates tenant-scoped internal persons.
 - `BotConversaContactSyncService`
   Searches Bot Conversa by phone, creates contacts when missing, and stores the local link.
+- `BotConversaRemoteContactService`
+  Loads live remote contacts, enriches them with local link information, and saves selected contacts into the local CRM.
 - `BotConversaFlowService`
   Refreshes the local flow cache.
-- `BotConversaRemoteContactService`
-  Loads live remote contacts and enriches them with local link information.
 - `BotConversaDispatchService`
-  Creates dispatch jobs and processes pending items in safe batches.
+  Creates dispatch jobs and processes pending items while respecting terminal item counters and configured pacing.
 
 ## Repositories
 
@@ -145,11 +150,7 @@ bot_conversa/
 - `bot_conversa.client.BotConversaClient`
   Encapsulates HTTP requests, error handling, and response normalization.
 - Base URL comes from `NephewCRM/.env` through `BOT_CONVERSA_API_BASE_URL`.
-- Endpoint paths are centralized in `bot_conversa/constants.py` and aligned with the validated Bot Conversa webhook contract:
-  - `/api/v1/webhook/flows/`
-  - `/api/v1/webhook/subscriber/`
-  - `/api/v1/webhook/subscriber/get_by_phone/{phone}/`
-  - `/api/v1/webhook/subscriber/{subscriber_id}/send_flow/`
+- Endpoint paths are centralized in `bot_conversa/constants.py`.
 - API key is never loaded from `.env` inside business logic; it always comes from `integrations` credentials for the active organization.
 
 ## Navigation flow
@@ -158,8 +159,8 @@ bot_conversa/
 2. If Bot Conversa is installed, it appears in the dropdown.
 3. Clicking it opens the Bot Conversa module.
 4. Inside the module, sub-navigation separates:
-   - Overview
-   - Persons
+   - Dashboard
+   - People
    - Contacts
    - Flows
    - Dispatches
@@ -176,6 +177,16 @@ bot_conversa/
    backend creates the remote contact and then stores the local link.
 7. Sync logs are recorded without exposing secrets.
 
+## Remote contact save flow
+
+1. User loads remote contacts from the active organization installation.
+2. Owner or admin selects one or more remote contacts to save in the CRM.
+3. Backend tries to match an existing person by integration id, phone, or other local indexes.
+4. If no match exists:
+   a new tenant-scoped `Person` is created.
+5. Backend creates or updates the `BotConversaContact` local link.
+6. Sync logs keep the final `contact_link` reference for auditability.
+
 ## Flow list flow
 
 1. User opens the flows page.
@@ -187,14 +198,17 @@ bot_conversa/
 
 1. Owner or admin selects a cached flow.
 2. Owner or admin selects one or more internal persons.
-3. Backend creates one dispatch job and one item per person.
-4. The dispatch detail page polls a backend endpoint.
-5. Each poll processes a small batch:
-   - ensure remote subscriber exists
-   - create if missing
-   - send the flow
-   - persist success or failure per item
-6. Progress is computed from persisted item status counters.
+3. Owner or admin optionally defines a min/max delay interval in seconds.
+4. Backend creates one dispatch job and one item per person.
+5. The dispatch detail page polls a backend endpoint.
+6. When a delay interval is configured, the frontend waits a randomized value between the configured min and max before requesting the next processing step.
+7. Each processing cycle:
+   - ensures the remote subscriber exists
+   - creates it if missing
+   - sends the flow
+   - persists success or failure per item
+8. Progress is computed from terminal item status counters only; `running` items do not count as completed.
+9. The dispatch creation screen can asynchronously filter the audience to only show people who have not yet received a successful WhatsApp send in the active tenant.
 
 ## Status update strategy
 
@@ -213,3 +227,4 @@ bot_conversa/
 - API key is never rendered in HTML, JavaScript, messages, or logs.
 - Phone numbers are normalized consistently before uniqueness checks and API calls.
 - Cross-tenant resources resolve by organization plus public identifier, not by global ids alone.
+- Tenant isolation in this module is enforced primarily in views, repositories, and services; model-level foreign keys do not encode every cross-field tenant consistency rule by themselves.

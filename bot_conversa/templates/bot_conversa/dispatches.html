@@ -17,7 +17,7 @@
         <div class="content-card-header">
           <div>
             <span class="section-kicker">Novo disparo</span>
-            <h2>Preparar público</h2>
+            <h2>Preparar publico</h2>
           </div>
         </div>
         {% if can_manage_bot_conversa %}
@@ -29,7 +29,24 @@
               {% for error in dispatch_form.flow_public_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
             </div>
             <div class="col-12">
-              <label class="form-label">Selecionar pessoas</label>
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                <label class="form-label mb-0">Selecionar pessoas</label>
+                <div class="d-flex align-items-center gap-2">
+                  <span class="small text-body-secondary" id="botConversaAudienceCount">{{ initial_bot_conversa_audience_count }} disponiveis</span>
+                  <button
+                    type="button"
+                    class="btn btn-outline-secondary btn-sm"
+                    data-audience-url="{% url 'bot_conversa:dispatch_audience' %}"
+                    data-audience-target="#botDispatchSelectionList"
+                    data-empty-target="#botDispatchSelectionEmpty"
+                    data-count-target="#botConversaAudienceCount"
+                    data-channel-label="WhatsApp"
+                    data-only-unsent="false"
+                  >
+                    Mostrar apenas nao enviados
+                  </button>
+                </div>
+              </div>
               <input type="search" class="form-control mb-3" placeholder="Buscar pessoa por nome ou telefone" data-filter-target="#botDispatchSelectionList" data-filter-item="label">
               <div class="bot-checkbox-shell">
                 {% if dispatch_form.person_public_ids %}
@@ -41,22 +58,47 @@
                       </label>
                     {% endfor %}
                   </div>
+                  <div class="soft-empty text-start p-0 d-none" id="botDispatchSelectionEmpty">
+                    <p class="mb-0">Nenhuma pessoa cadastrada no CRM esta disponivel para este disparo.</p>
+                  </div>
                 {% else %}
-                  <div class="soft-empty text-start p-0">
-                    <p class="mb-0">Nenhuma pessoa cadastrada no CRM está disponível para este disparo.</p>
+                  <div class="bot-selection-list d-none" id="botDispatchSelectionList"></div>
+                  <div class="soft-empty text-start p-0" id="botDispatchSelectionEmpty">
+                    <p class="mb-0">Nenhuma pessoa cadastrada no CRM esta disponivel para este disparo.</p>
                   </div>
                 {% endif %}
               </div>
-              <div class="form-text">Marque as pessoas que devem receber o fluxo.</div>
+              <div class="form-text">Clique no filtro para alternar entre toda a base elegivel e quem ainda nao recebeu envio por WhatsApp.</div>
               {% for error in dispatch_form.person_public_ids.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
             </div>
+            <div class="col-md-6">
+              <label for="{{ dispatch_form.min_delay_seconds.id_for_label }}" class="form-label">Delay minimo</label>
+              <div class="input-group">
+                {{ dispatch_form.min_delay_seconds }}
+                <span class="input-group-text">seg</span>
+              </div>
+              <div class="form-text">Menor intervalo entre os envios do fluxo.</div>
+              {% for error in dispatch_form.min_delay_seconds.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-md-6">
+              <label for="{{ dispatch_form.max_delay_seconds.id_for_label }}" class="form-label">Delay maximo</label>
+              <div class="input-group">
+                {{ dispatch_form.max_delay_seconds }}
+                <span class="input-group-text">seg</span>
+              </div>
+              <div class="form-text">O valor maximo nao pode ser menor que o minimo.</div>
+              {% for error in dispatch_form.max_delay_seconds.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            {% if dispatch_form.non_field_errors %}
+              <div class="col-12 text-danger small">{{ dispatch_form.non_field_errors|join:', ' }}</div>
+            {% endif %}
             <div class="col-12">
               <button type="submit" class="btn btn-brand w-100">Criar disparo</button>
             </div>
           </form>
         {% else %}
           <div class="soft-empty text-start p-0">
-            <p class="mb-0">Somente proprietários e administradores podem criar disparos do Bot Conversa.</p>
+            <p class="mb-0">Somente proprietarios e administradores podem criar disparos do Bot Conversa.</p>
           </div>
         {% endif %}
       </div>
@@ -65,7 +107,7 @@
       <div class="glass-card content-card h-100">
         <div class="content-card-header">
           <div>
-            <span class="section-kicker">Histórico</span>
+            <span class="section-kicker">Historico</span>
             <h2>Disparos recentes</h2>
           </div>
         </div>

@@ -5,6 +5,7 @@ from bot_conversa.views import (
     BotConversaBulkRemoteContactSaveView,
     BotConversaContactsView,
     BotConversaDashboardView,
+    BotConversaDispatchAudienceView,
     BotConversaDispatchCreateView,
     BotConversaDispatchDetailView,
     BotConversaDispatchProcessView,
@@ -32,6 +33,7 @@ urlpatterns = [
     path('apps/bot-conversa/flows/refresh/', BotConversaFlowRefreshView.as_view(), name='refresh_flows'),
     path('apps/bot-conversa/dispatches/', BotConversaDispatchesView.as_view(), name='dispatches'),
     path('apps/bot-conversa/dispatches/create/', BotConversaDispatchCreateView.as_view(), name='create_dispatch'),
+    path('apps/bot-conversa/dispatches/audience/', BotConversaDispatchAudienceView.as_view(), name='dispatch_audience'),
     path(
         'apps/bot-conversa/dispatches/<uuid:dispatch_public_id>/',
         BotConversaDispatchDetailView.as_view(),

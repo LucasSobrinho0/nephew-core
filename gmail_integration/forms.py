@@ -58,6 +58,8 @@ class GmailDispatchCreateForm(BootstrapFormMixin, forms.Form):
             }
         ),
     )
+    min_delay_seconds = forms.IntegerField(label='Delay minimo (segundos)', min_value=0, max_value=60, initial=0)
+    max_delay_seconds = forms.IntegerField(label='Delay maximo (segundos)', min_value=0, max_value=60, initial=0)
 
     def __init__(self, *args, template_choices=(), person_choices=(), **kwargs):
         super().__init__(*args, **kwargs)
@@ -94,3 +96,16 @@ class GmailDispatchCreateForm(BootstrapFormMixin, forms.Form):
             seen_emails.add(email_address)
 
         return unique_emails
+
+    def clean(self):
+        cleaned_data = super().clean()
+        min_delay_seconds = cleaned_data.get('min_delay_seconds')
+        max_delay_seconds = cleaned_data.get('max_delay_seconds')
+
+        if min_delay_seconds is None or max_delay_seconds is None:
+            return cleaned_data
+
+        if max_delay_seconds < min_delay_seconds:
+            raise forms.ValidationError('O delay maximo nao pode ser menor que o delay minimo.')
+
+        return cleaned_data

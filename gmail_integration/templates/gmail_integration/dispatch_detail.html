@@ -6,7 +6,7 @@
   <section class="page-header mb-4">
     <span class="section-kicker">Gmail</span>
     <h1>Detalhe do disparo</h1>
-    <p class="text-body-secondary mb-0">Acompanhe o resultado por destinatário e os identificadores retornados pelo Gmail.</p>
+    <p class="text-body-secondary mb-0">Acompanhe o resultado por destinatario e os identificadores retornados pelo Gmail.</p>
   </section>
 
   {% include 'gmail_integration/_subnav.html' %}
@@ -20,10 +20,12 @@
             <h2>{{ dispatch.subject_snapshot }}</h2>
           </div>
         </div>
-        <p class="mb-1"><strong>Status:</strong> {{ dispatch.get_status_display }}</p>
-        <p class="mb-1"><strong>Sucesso:</strong> {{ dispatch.success_recipients }}</p>
-        <p class="mb-1"><strong>Falhas:</strong> {{ dispatch.failed_recipients }}</p>
-        <p class="mb-0 text-body-secondary"><strong>Cópias:</strong> {{ dispatch.cc_recipients_snapshot|length }}</p>
+        <p class="mb-1"><strong>Status:</strong> <span id="gmailDispatchStatusLabel">{{ dispatch.get_status_display }}</span></p>
+        <p class="mb-1"><strong>Processado:</strong> <span id="gmailDispatchProcessedCount">{{ dispatch.processed_recipients }}</span> / <span id="gmailDispatchTotalCount">{{ dispatch.total_recipients }}</span></p>
+        <p class="mb-1"><strong>Sucesso:</strong> <span id="gmailDispatchSuccessCount">{{ dispatch.success_recipients }}</span></p>
+        <p class="mb-1"><strong>Falhas:</strong> <span id="gmailDispatchFailedCount">{{ dispatch.failed_recipients }}</span></p>
+        <p class="mb-1"><strong>Intervalo:</strong> {{ dispatch.min_delay_seconds }}s a {{ dispatch.max_delay_seconds }}s</p>
+        <p class="mb-0 text-body-secondary"><strong>Copias:</strong> {{ dispatch.cc_recipients_snapshot|length }}</p>
       </div>
     </div>
     <div class="col-lg-8">
@@ -31,10 +33,18 @@
         <div class="content-card-header">
           <div>
             <span class="section-kicker">Resultado por pessoa</span>
-            <h2>Destinatários</h2>
+            <h2>Destinatarios</h2>
           </div>
+          <span class="status-badge status-used" id="gmailDispatchStatusBadge">{{ dispatch.get_status_display }}</span>
         </div>
-        {% if dispatch_recipients %}
+        <p class="text-body-secondary mb-3" id="gmailDispatchStatusCopy">
+          {% if can_manage_gmail %}
+            A interface continuara consultando enquanto existirem destinatarios pendentes.
+          {% else %}
+            Voce esta visualizando o progresso mais recente armazenado para este disparo.
+          {% endif %}
+        </p>
+        {% if recipients %}
           <div class="table-responsive">
             <table class="table table-clean align-middle mb-0">
               <thead>
@@ -46,8 +56,8 @@
                   <th>Thread ID</th>
                 </tr>
               </thead>
-              <tbody>
-                {% for recipient in dispatch_recipients %}
+              <tbody id="gmailDispatchRecipientsTableBody">
+                {% for recipient in recipients %}
                   <tr>
                     <td>{{ recipient.first_name_snapshot }} {{ recipient.last_name_snapshot }}</td>
                     <td>{{ recipient.email_snapshot }}</td>
@@ -66,10 +76,19 @@
           </div>
         {% else %}
           <div class="soft-empty text-start px-0 pb-0">
-            <p class="mb-0">Nenhum destinatário foi registrado para este disparo.</p>
+            <p class="mb-0">Nenhum destinatario foi registrado para este disparo.</p>
           </div>
         {% endif %}
       </div>
     </div>
   </section>
+
+  {% if can_manage_gmail %}
+    <form id="gmailDispatchPoller" class="d-none">
+      {% csrf_token %}
+      <input type="hidden" name="poll_url" value="{% url 'gmail_integration:dispatch_process' dispatch.public_id %}">
+      <input type="hidden" name="is_finished" value="{% if status_payload.is_finished %}true{% else %}false{% endif %}">
+      <input type="hidden" name="next_poll_delay_ms" value="{{ status_payload.next_poll_delay_ms }}">
+    </form>
+  {% endif %}
 {% endblock %}

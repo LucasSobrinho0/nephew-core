@@ -158,7 +158,7 @@ class BotConversaFlowDispatchItemRepository:
     def list_for_dispatch(dispatch):
         return (
             BotConversaFlowDispatchItem.objects.with_related_objects()
-            .filter(dispatch=dispatch)
+            .filter(dispatch=dispatch, organization=dispatch.organization)
             .order_by('created_at', 'target_name')
         )
 
@@ -167,10 +167,35 @@ class BotConversaFlowDispatchItemRepository:
         return (
             BotConversaFlowDispatchItem.objects.pending()
             .with_related_objects()
-            .filter(dispatch=dispatch)
+            .filter(dispatch=dispatch, organization=dispatch.organization)
             .order_by('created_at')[:limit]
+        )
+
+    @staticmethod
+    def list_success_person_ids_for_organization(organization):
+        return (
+            BotConversaFlowDispatchItem.objects.filter(
+                organization=organization,
+                status=BotConversaFlowDispatchItem.Status.SUCCESS,
+            )
+            .exclude(person_id__isnull=True)
+            .values_list('person_id', flat=True)
+            .distinct()
         )
 
     @staticmethod
     def create(**kwargs):
         return BotConversaFlowDispatchItem.objects.create(**kwargs)
+
+    @staticmethod
+    def claim_for_processing(item, *, attempted_at):
+        return BotConversaFlowDispatchItem.objects.filter(
+            pk=item.pk,
+            dispatch=item.dispatch,
+            organization=item.organization,
+            status=BotConversaFlowDispatchItem.Status.PENDING,
+        ).update(
+            status=BotConversaFlowDispatchItem.Status.RUNNING,
+            last_attempt_at=attempted_at,
+            attempt_count=item.attempt_count + 1,
+        )

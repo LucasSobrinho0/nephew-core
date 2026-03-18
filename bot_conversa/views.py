@@ -80,10 +80,20 @@ class BotConversaAccessMixin(LoginRequiredMixin):
             {'label': 'Disparos', 'url': 'bot_conversa:dispatches', 'key': 'dispatches'},
         ]
 
-    def build_person_choices(self):
+    def build_person_choices(self, *, only_unsent=False):
+        persons = list(PersonRepository.list_for_organization(self.active_organization))
+
+        if only_unsent:
+            successful_person_ids = set(
+                BotConversaFlowDispatchItemRepository.list_success_person_ids_for_organization(
+                    self.active_organization,
+                )
+            )
+            persons = [person for person in persons if person.id not in successful_person_ids]
+
         return [
             (str(person.public_id), f'{person.full_name} - {person.phone}')
-            for person in PersonRepository.list_for_organization(self.active_organization)
+            for person in persons
         ]
 
     def build_flow_choices(self):
@@ -405,6 +415,7 @@ class BotConversaDispatchesView(BotConversaAccessMixin, TemplateView):
                 'recent_dispatches': BotConversaFlowDispatchRepository.list_recent_for_organization(
                     self.active_organization,
                 ),
+                'initial_bot_conversa_audience_count': len(self.build_person_choices()),
             }
         )
         return context
@@ -446,6 +457,8 @@ class BotConversaDispatchCreateView(BotConversaOperatorRequiredMixin, View):
                 organization=self.active_organization,
                 flow_cache=flow_cache,
                 persons=persons,
+                min_delay_seconds=form.cleaned_data['min_delay_seconds'],
+                max_delay_seconds=form.cleaned_data['max_delay_seconds'],
             )
         except (PermissionDenied, ValidationError) as exc:
             messages.error(request, str(exc))
@@ -470,6 +483,37 @@ class BotConversaDispatchDetailView(BotConversaAccessMixin, TemplateView):
         context.update(self.build_base_context(active_tab='dispatches'))
         context.update(BotConversaDispatchService.build_dispatch_payload(dispatch=dispatch))
         return context
+
+
+@method_decorator(never_cache, name='dispatch')
+class BotConversaDispatchAudienceView(BotConversaAccessMixin, View):
+    http_method_names = ['get']
+
+    def get(self, request, *args, **kwargs):
+        only_unsent = request.GET.get('only_unsent') == '1'
+        person_choices = self.build_person_choices(only_unsent=only_unsent)
+        response = JsonResponse(
+            {
+                'items': [
+                    {
+                        'value': value,
+                        'label': label,
+                    }
+                    for value, label in person_choices
+                ],
+                'count': len(person_choices),
+                'only_unsent': only_unsent,
+                'empty_message': (
+                    'Nenhuma pessoa sem envio anterior no WhatsApp esta disponivel para este disparo.'
+                    if only_unsent
+                    else 'Nenhuma pessoa cadastrada no CRM esta disponivel para este disparo.'
+                ),
+            }
+        )
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        return response
 
 
 @method_decorator(never_cache, name='dispatch')

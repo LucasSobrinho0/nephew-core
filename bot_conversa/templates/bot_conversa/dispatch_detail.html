@@ -33,6 +33,10 @@
             <dt>Falhas</dt>
             <dd id="dispatchFailedCount">{{ dispatch.failed_items }}</dd>
           </div>
+          <div>
+            <dt>Intervalo</dt>
+            <dd>{{ dispatch.min_delay_seconds }}s a {{ dispatch.max_delay_seconds }}s</dd>
+          </div>
         </dl>
       </div>
     </div>
@@ -98,6 +102,7 @@
       {% csrf_token %}
       <input type="hidden" name="poll_url" value="{% url 'bot_conversa:dispatch_process' dispatch.public_id %}">
       <input type="hidden" name="is_finished" value="{% if status_payload.is_finished %}true{% else %}false{% endif %}">
+      <input type="hidden" name="next_poll_delay_ms" value="{{ status_payload.next_poll_delay_ms }}">
     </form>
   {% endif %}
 {% endblock %}

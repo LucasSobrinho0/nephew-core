@@ -161,6 +161,13 @@
             initAsyncListForms();
           })
           .catch(function () {
+            if (crmErrorModal) {
+              crmErrorModal.open({
+                title: 'Falha ao atualizar a listagem',
+                message: 'Nao foi possivel atualizar os dados desta tela agora.',
+                details: 'Tente novamente em instantes.'
+              });
+            }
           })
           .finally(function () {
             if (submitButton.isConnected) {
@@ -205,6 +212,40 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  function initCrmErrorModal() {
+    var modalElement = document.getElementById('crmErrorModal');
+
+    if (!modalElement || typeof bootstrap === 'undefined') {
+      return null;
+    }
+
+    var modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+    var titleElement = document.getElementById('crmErrorModalLabel');
+    var messageElement = document.getElementById('crmErrorModalMessage');
+    var detailsElement = document.getElementById('crmErrorModalDetails');
+
+    return {
+      open: function (options) {
+        var title = options && options.title ? options.title : 'Nao foi possivel concluir a operacao';
+        var message = options && options.message ? options.message : 'Ocorreu um erro inesperado.';
+        var details = options && options.details ? options.details : '';
+
+        if (titleElement) {
+          titleElement.textContent = title;
+        }
+        if (messageElement) {
+          messageElement.textContent = message;
+        }
+        if (detailsElement) {
+          detailsElement.textContent = details;
+          detailsElement.classList.toggle('d-none', !details);
+        }
+
+        modal.show();
+      }
+    };
   }
 
   function initApiKeyRevealFlow() {
@@ -390,6 +431,7 @@
     var statusLabel = document.getElementById('dispatchStatusLabel');
     var statusBadge = document.getElementById('dispatchStatusBadge');
     var itemsTableBody = document.getElementById('dispatchItemsTableBody');
+    var nextPollDelayField = pollerForm.querySelector('input[name="next_poll_delay_ms"]');
     var timerId = null;
     var isPolling = false;
 
@@ -468,6 +510,9 @@
       if (Array.isArray(payload.items)) {
         renderItems(payload.items);
       }
+      if (nextPollDelayField && payload.next_poll_delay_ms != null) {
+        nextPollDelayField.value = String(payload.next_poll_delay_ms);
+      }
 
       if (payload.is_finished && isFinishedField) {
         isFinishedField.value = 'true';
@@ -479,7 +524,7 @@
         return;
       }
 
-      timerId = window.setTimeout(runPoll, 1600);
+      timerId = window.setTimeout(runPoll, Number(nextPollDelayField && nextPollDelayField.value ? nextPollDelayField.value : 1600));
     }
 
     function runPoll() {
@@ -513,10 +558,32 @@
         })
         .then(function (result) {
           if (!result.ok) {
+            if (crmErrorModal) {
+              crmErrorModal.open({
+                title: 'Erro no processamento do disparo',
+                message: 'O dispatch nao pode continuar neste momento.',
+                details: result.payload && result.payload.detail ? result.payload.detail : 'Verifique a configuracao e tente novamente.'
+              });
+            }
+            if (isFinishedField) {
+              isFinishedField.value = 'true';
+            }
             return;
           }
 
           renderPayload(result.payload);
+        })
+        .catch(function () {
+          if (crmErrorModal) {
+            crmErrorModal.open({
+              title: 'Erro de comunicacao com o dispatch',
+              message: 'Nao foi possivel atualizar o status do disparo.',
+              details: 'A conexao com o backend falhou durante o polling.'
+            });
+          }
+          if (isFinishedField) {
+            isFinishedField.value = 'true';
+          }
         })
         .finally(function () {
           isPolling = false;
@@ -537,8 +604,287 @@
     };
   }
 
+  function initGmailDispatchPoller() {
+    var pollerForm = document.getElementById('gmailDispatchPoller');
+
+    if (!pollerForm) {
+      return null;
+    }
+
+    var csrfField = pollerForm.querySelector('input[name="csrfmiddlewaretoken"]');
+    var pollUrlField = pollerForm.querySelector('input[name="poll_url"]');
+    var isFinishedField = pollerForm.querySelector('input[name="is_finished"]');
+    var nextPollDelayField = pollerForm.querySelector('input[name="next_poll_delay_ms"]');
+    var processedCount = document.getElementById('gmailDispatchProcessedCount');
+    var totalCount = document.getElementById('gmailDispatchTotalCount');
+    var successCount = document.getElementById('gmailDispatchSuccessCount');
+    var failedCount = document.getElementById('gmailDispatchFailedCount');
+    var statusLabel = document.getElementById('gmailDispatchStatusLabel');
+    var statusBadge = document.getElementById('gmailDispatchStatusBadge');
+    var recipientsTableBody = document.getElementById('gmailDispatchRecipientsTableBody');
+    var timerId = null;
+    var isPolling = false;
+
+    function humanizeStatus(status) {
+      var statusMap = {
+        pending: 'Pendente',
+        running: 'Em andamento',
+        completed: 'Concluido',
+        completed_with_errors: 'Concluido com erros',
+        failed: 'Falhou',
+        sent: 'Enviado'
+      };
+
+      return statusMap[String(status || '').toLowerCase()] || String(status || '')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, function (character) {
+          return character.toUpperCase();
+        });
+    }
+
+    function renderRecipients(recipients) {
+      if (!recipientsTableBody) {
+        return;
+      }
+
+      recipientsTableBody.innerHTML = recipients.map(function (recipient) {
+        var errorBlock = recipient.error_message
+          ? '<div class="text-danger small">' + escapeHtml(recipient.error_message) + '</div>'
+          : '';
+
+        return (
+          '<tr>' +
+            '<td>' + escapeHtml(recipient.person_name) + '</td>' +
+            '<td>' + escapeHtml(recipient.email_snapshot) + '</td>' +
+            '<td>' + escapeHtml(humanizeStatus(recipient.status)) + errorBlock + '</td>' +
+            '<td class="small">' + escapeHtml(recipient.gmail_message_id || '-') + '</td>' +
+            '<td class="small">' + escapeHtml(recipient.gmail_thread_id || '-') + '</td>' +
+          '</tr>'
+        );
+      }).join('');
+    }
+
+    function renderPayload(payload) {
+      if (processedCount) {
+        processedCount.textContent = payload.processed_recipients;
+      }
+      if (totalCount) {
+        totalCount.textContent = payload.total_recipients;
+      }
+      if (successCount) {
+        successCount.textContent = payload.success_recipients;
+      }
+      if (failedCount) {
+        failedCount.textContent = payload.failed_recipients;
+      }
+      if (statusLabel) {
+        statusLabel.textContent = humanizeStatus(payload.status);
+      }
+      if (statusBadge) {
+        statusBadge.textContent = humanizeStatus(payload.status);
+      }
+      if (nextPollDelayField && payload.next_poll_delay_ms != null) {
+        nextPollDelayField.value = String(payload.next_poll_delay_ms);
+      }
+      if (Array.isArray(payload.recipients)) {
+        renderRecipients(payload.recipients);
+      }
+      if (payload.is_finished && isFinishedField) {
+        isFinishedField.value = 'true';
+      }
+    }
+
+    function scheduleNextPoll() {
+      if (!isFinishedField || isFinishedField.value === 'true') {
+        return;
+      }
+
+      timerId = window.setTimeout(runPoll, Number(nextPollDelayField && nextPollDelayField.value ? nextPollDelayField.value : 1200));
+    }
+
+    function runPoll() {
+      var csrfToken;
+      var pollUrl;
+
+      if (isPolling || !pollUrlField || !csrfField || !isFinishedField || isFinishedField.value === 'true') {
+        return;
+      }
+
+      pollUrl = pollUrlField.value;
+      csrfToken = csrfField.value;
+      isPolling = true;
+
+      fetch(pollUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: {
+          'X-CSRFToken': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+        .then(function (response) {
+          return response.json().then(function (payload) {
+            return {
+              ok: response.ok,
+              payload: payload
+            };
+          });
+        })
+        .then(function (result) {
+          if (!result.ok) {
+            if (crmErrorModal) {
+              crmErrorModal.open({
+                title: 'Erro no processamento do disparo',
+                message: 'O dispatch de Gmail nao pode continuar neste momento.',
+                details: result.payload && result.payload.detail ? result.payload.detail : 'Verifique a configuracao e tente novamente.'
+              });
+            }
+            if (isFinishedField) {
+              isFinishedField.value = 'true';
+            }
+            return;
+          }
+
+          renderPayload(result.payload);
+        })
+        .catch(function () {
+          if (crmErrorModal) {
+            crmErrorModal.open({
+              title: 'Erro de comunicacao com o dispatch',
+              message: 'Nao foi possivel atualizar o status do disparo de Gmail.',
+              details: 'A conexao com o backend falhou durante o polling.'
+            });
+          }
+          if (isFinishedField) {
+            isFinishedField.value = 'true';
+          }
+        })
+        .finally(function () {
+          isPolling = false;
+          scheduleNextPoll();
+        });
+    }
+
+    if (isFinishedField.value !== 'true') {
+      scheduleNextPoll();
+    }
+
+    return {
+      stop: function () {
+        if (timerId) {
+          window.clearTimeout(timerId);
+        }
+      }
+    };
+  }
+
+  function initDispatchAudienceFilters() {
+    document.querySelectorAll('[data-audience-url]').forEach(function (trigger) {
+      if (trigger.dataset.audienceBound === 'true') {
+        return;
+      }
+
+      trigger.dataset.audienceBound = 'true';
+      trigger.addEventListener('click', function () {
+        var audienceUrl = trigger.getAttribute('data-audience-url');
+        var targetSelector = trigger.getAttribute('data-audience-target');
+        var emptySelector = trigger.getAttribute('data-empty-target');
+        var countSelector = trigger.getAttribute('data-count-target');
+        var channelLabel = trigger.getAttribute('data-channel-label') || 'canal';
+        var onlyUnsent = trigger.getAttribute('data-only-unsent') === 'true' ? '0' : '1';
+        var target = targetSelector ? document.querySelector(targetSelector) : null;
+        var emptyState = emptySelector ? document.querySelector(emptySelector) : null;
+        var emptyMessage = emptyState ? emptyState.querySelector('p') : null;
+        var countTarget = countSelector ? document.querySelector(countSelector) : null;
+        var selectedValues = [];
+        var originalText = trigger.textContent;
+
+        if (!audienceUrl || !target || trigger.disabled) {
+          return;
+        }
+
+        target.querySelectorAll('input[name="person_public_ids"]:checked').forEach(function (input) {
+          selectedValues.push(input.value);
+        });
+
+        trigger.disabled = true;
+        trigger.textContent = 'Atualizando...';
+
+        fetch(audienceUrl + '?only_unsent=' + onlyUnsent, {
+          method: 'GET',
+          credentials: 'same-origin',
+          cache: 'no-store',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        })
+          .then(function (response) {
+            return response.json().then(function (payload) {
+              return {
+                ok: response.ok,
+                payload: payload
+              };
+            });
+          })
+          .then(function (result) {
+            var payload = result.payload || {};
+
+            if (!result.ok) {
+              throw new Error(payload.detail || 'Nao foi possivel atualizar a audiencia.');
+            }
+
+            target.innerHTML = (payload.items || []).map(function (item) {
+              var isChecked = selectedValues.indexOf(item.value) >= 0;
+
+              return (
+                '<label class="bot-selection-card" data-filter-item data-filter-text="' + escapeHtml(item.label) + '">' +
+                  '<input class="bot-selection-checkbox" type="checkbox" name="person_public_ids" value="' + escapeHtml(item.value) + '"' + (isChecked ? ' checked' : '') + '>' +
+                  '<span class="bot-selection-text">' + escapeHtml(item.label) + '</span>' +
+                '</label>'
+              );
+            }).join('');
+
+            target.classList.toggle('d-none', (payload.items || []).length === 0);
+
+            if (emptyState) {
+              emptyState.classList.toggle('d-none', (payload.items || []).length > 0);
+            }
+            if (emptyMessage) {
+              emptyMessage.textContent = payload.empty_message || '';
+            }
+            if (countTarget) {
+              countTarget.textContent = String(payload.count || 0) + ' disponiveis';
+            }
+
+            trigger.setAttribute('data-only-unsent', payload.only_unsent ? 'true' : 'false');
+            trigger.textContent = payload.only_unsent ? 'Mostrar todos' : 'Mostrar apenas nao enviados';
+            initListFilters();
+          })
+          .catch(function (error) {
+            trigger.textContent = originalText;
+            if (crmErrorModal) {
+              crmErrorModal.open({
+                title: 'Falha ao atualizar a audiencia',
+                message: 'Nao foi possivel carregar as pessoas elegiveis para ' + channelLabel + '.',
+                details: error && error.message ? error.message : 'Tente novamente em instantes.'
+              });
+            }
+          })
+          .finally(function () {
+            trigger.disabled = false;
+            if (trigger.textContent === 'Atualizando...') {
+              trigger.textContent = originalText;
+            }
+          });
+      });
+    });
+  }
+
   var apiKeyRevealFlow = null;
   var botConversaDispatchPoller = null;
+  var gmailDispatchPoller = null;
+  var crmErrorModal = null;
 
   document.addEventListener('click', function (event) {
     var themeTrigger = event.target.closest('[data-theme-toggle]');
@@ -567,11 +913,14 @@
     }
   });
 
+  crmErrorModal = initCrmErrorModal();
   apiKeyRevealFlow = initApiKeyRevealFlow();
   botConversaDispatchPoller = initBotConversaDispatchPoller();
+  gmailDispatchPoller = initGmailDispatchPoller();
   initSelectAllCheckboxes();
   initLoadingForms();
   initListFilters();
   initAsyncListForms();
+  initDispatchAudienceFilters();
   applyTheme(getTheme());
 }());

@@ -1,4 +1,5 @@
 import json
+import random
 from datetime import datetime
 
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -25,7 +26,7 @@ class GmailAuthorizationService:
     def ensure_membership(*, user, organization):
         membership = MembershipRepository.get_for_user_and_organization(user, organization)
         if membership is None:
-            raise PermissionDenied('Você não faz parte da organização ativa.')
+            raise PermissionDenied('Voce nao faz parte da organizacao ativa.')
         return membership
 
     @staticmethod
@@ -45,7 +46,7 @@ class GmailInstallationService:
 
         installation = AppInstallationRepository.get_for_organization_and_app(organization, app)
         if installation is None or not installation.is_installed:
-            raise ValidationError('Instale o Gmail para a organização ativa antes de usar este módulo.')
+            raise ValidationError('Instale o Gmail para a organizacao ativa antes de usar este modulo.')
         return installation
 
     @staticmethod
@@ -61,7 +62,7 @@ class GmailCredentialService:
     @staticmethod
     def ensure_installation_access(*, organization, installation):
         if installation.organization_id != organization.id:
-            raise PermissionDenied('A instalação selecionada não pertence à organização ativa.')
+            raise PermissionDenied('A instalacao selecionada nao pertence a organizacao ativa.')
         if installation.app.code != GMAIL_APP_CODE:
             raise ValidationError('A instalacao selecionada nao pertence ao aplicativo Gmail.')
         if not installation.is_installed:
@@ -227,7 +228,7 @@ class GmailTemplateService:
                 updated_by=user,
             )
         except IntegrityError as exc:
-            raise ValidationError('Já existe um template com este nome na organização ativa.') from exc
+            raise ValidationError('Ja existe um template com este nome na organizacao ativa.') from exc
 
     @staticmethod
     @transaction.atomic
@@ -235,7 +236,7 @@ class GmailTemplateService:
         GmailAuthorizationService.ensure_operator_access(user=user, organization=organization)
 
         if template.organization_id != organization.id:
-            raise ValidationError('O template selecionado não pertence à organização ativa.')
+            raise ValidationError('O template selecionado nao pertence a organizacao ativa.')
 
         template.name = name
         template.subject = subject
@@ -246,7 +247,7 @@ class GmailTemplateService:
         try:
             template.save(update_fields=['name', 'subject', 'body', 'is_active', 'updated_by', 'updated_at'])
         except IntegrityError as exc:
-            raise ValidationError('Já existe um template com este nome na organização ativa.') from exc
+            raise ValidationError('Ja existe um template com este nome na organizacao ativa.') from exc
 
         return template
 
@@ -254,15 +255,20 @@ class GmailTemplateService:
 class GmailDispatchService:
     @staticmethod
     @transaction.atomic
-    def create_dispatch(*, user, organization, template, to_people, cc_emails):
+    def create_dispatch(*, user, organization, template, to_people, cc_emails, min_delay_seconds=0, max_delay_seconds=0):
         GmailAuthorizationService.ensure_operator_access(user=user, organization=organization)
-        installation, credential = GmailInstallationService.get_active_credential(organization=organization)
+        installation, _credential = GmailInstallationService.get_active_credential(organization=organization)
 
         resolved_subject, resolved_body = GmailDispatchService.resolve_message_content(template=template)
+        GmailDispatchService.ensure_template_access(organization=organization, template=template)
         cc_recipients_snapshot = GmailDispatchService.build_cc_snapshot(cc_emails)
         GmailDispatchService.validate_people_for_dispatch(
             organization=organization,
             to_people=to_people,
+        )
+        GmailDispatchService.validate_delay_interval(
+            min_delay_seconds=min_delay_seconds,
+            max_delay_seconds=max_delay_seconds,
         )
 
         dispatch = GmailDispatchRepository.create(
@@ -274,6 +280,8 @@ class GmailDispatchService:
             cc_recipients_snapshot=cc_recipients_snapshot,
             status=GmailDispatch.Status.PENDING,
             total_recipients=len(to_people),
+            min_delay_seconds=min_delay_seconds,
+            max_delay_seconds=max_delay_seconds,
             created_by=user,
             updated_by=user,
         )
@@ -289,11 +297,6 @@ class GmailDispatchService:
                 status=GmailDispatchRecipient.Status.PENDING,
             )
 
-        GmailDispatchService.process_dispatch(
-            organization=organization,
-            dispatch=dispatch,
-            credential=credential,
-        )
         return dispatch
 
     @staticmethod
@@ -303,14 +306,22 @@ class GmailDispatchService:
         return template.subject, template.body
 
     @staticmethod
+    def ensure_template_access(*, organization, template):
+        if template.organization_id != organization.id:
+            raise ValidationError('O template selecionado nao pertence a organizacao ativa.')
+
+    @staticmethod
+    def validate_delay_interval(*, min_delay_seconds, max_delay_seconds):
+        if min_delay_seconds < 0 or max_delay_seconds < 0:
+            raise ValidationError('Os delays do disparo nao podem ser negativos.')
+        if max_delay_seconds < min_delay_seconds:
+            raise ValidationError('O delay maximo nao pode ser menor que o delay minimo.')
+
+    @staticmethod
     def build_cc_snapshot(cc_emails):
         cc_snapshot = []
         for email_address in cc_emails:
-            cc_snapshot.append(
-                {
-                    'email': email_address,
-                }
-            )
+            cc_snapshot.append({'email': email_address})
         return cc_snapshot
 
     @staticmethod
@@ -320,15 +331,22 @@ class GmailDispatchService:
 
         for person in to_people:
             if person.organization_id != organization.id:
-                raise ValidationError('Existe uma pessoa que não pertence à organização ativa.')
+                raise ValidationError('Existe uma pessoa que nao pertence a organizacao ativa.')
             if not person.email:
                 raise ValidationError(f'{person.full_name} nao possui email cadastrado.')
 
     @staticmethod
     @transaction.atomic
-    def process_dispatch(*, organization, dispatch, credential=None):
+    def process_dispatch(*, organization, dispatch, credential=None, batch_size=1):
         if dispatch.organization_id != organization.id:
-            raise ValidationError('O disparo selecionado não pertence à organização ativa.')
+            raise ValidationError('O disparo selecionado nao pertence a organizacao ativa.')
+
+        if dispatch.status in {
+            GmailDispatch.Status.COMPLETED,
+            GmailDispatch.Status.COMPLETED_WITH_ERRORS,
+            GmailDispatch.Status.FAILED,
+        }:
+            return dispatch
 
         if credential is None:
             _installation, credential = GmailInstallationService.get_active_credential(organization=organization)
@@ -339,15 +357,26 @@ class GmailDispatchService:
             required_scopes=credential.scopes or [GMAIL_SEND_SCOPE],
         )
         cc_emails = [cc_recipient['email'] for cc_recipient in dispatch.cc_recipients_snapshot]
-        dispatch_recipients = list(GmailDispatchRecipientRepository.list_for_dispatch(dispatch))
+        effective_batch_size = 1 if dispatch.max_delay_seconds > 0 else batch_size
 
-        dispatch.status = GmailDispatch.Status.RUNNING
-        dispatch.started_at = dispatch.started_at or timezone.now()
-        dispatch.error_summary = ''
-        dispatch.save(update_fields=['status', 'started_at', 'error_summary', 'updated_at'])
+        if dispatch.status == GmailDispatch.Status.PENDING:
+            dispatch.status = GmailDispatch.Status.RUNNING
+            dispatch.started_at = dispatch.started_at or timezone.now()
+            dispatch.error_summary = ''
+            dispatch.save(update_fields=['status', 'started_at', 'error_summary', 'updated_at'])
+
+        dispatch_recipients = list(GmailDispatchRecipientRepository.list_pending_for_dispatch(dispatch, limit=effective_batch_size))
+        if not dispatch_recipients:
+            GmailDispatchService.update_dispatch_counters(dispatch=dispatch)
+            return dispatch
 
         refreshed_token_payload = None
         for dispatch_recipient in dispatch_recipients:
+            claimed_rows = GmailDispatchRecipientRepository.claim_for_processing(dispatch_recipient)
+            if not claimed_rows:
+                continue
+
+            dispatch_recipient.status = GmailDispatchRecipient.Status.RUNNING
             try:
                 rendered_subject = GmailTemplateRenderService.render(dispatch.subject_snapshot, dispatch_recipient.person)
                 rendered_body = GmailTemplateRenderService.render(dispatch.body_snapshot, dispatch_recipient.person)
@@ -388,23 +417,33 @@ class GmailDispatchService:
     @staticmethod
     def update_dispatch_counters(*, dispatch):
         recipients = list(GmailDispatchRecipientRepository.list_for_dispatch(dispatch))
-        processed_recipients = sum(1 for recipient in recipients if recipient.status != GmailDispatchRecipient.Status.PENDING)
+        processed_recipients = sum(
+            1
+            for recipient in recipients
+            if recipient.status in {GmailDispatchRecipient.Status.SENT, GmailDispatchRecipient.Status.FAILED}
+        )
         success_recipients = sum(1 for recipient in recipients if recipient.status == GmailDispatchRecipient.Status.SENT)
         failed_recipients = sum(1 for recipient in recipients if recipient.status == GmailDispatchRecipient.Status.FAILED)
+        pending_recipients = sum(1 for recipient in recipients if recipient.status == GmailDispatchRecipient.Status.PENDING)
+        running_recipients = sum(1 for recipient in recipients if recipient.status == GmailDispatchRecipient.Status.RUNNING)
 
         dispatch.processed_recipients = processed_recipients
         dispatch.success_recipients = success_recipients
         dispatch.failed_recipients = failed_recipients
         dispatch.finished_at = timezone.now()
 
-        if failed_recipients and success_recipients:
-            dispatch.status = GmailDispatch.Status.COMPLETED_WITH_ERRORS
-            dispatch.error_summary = 'Parte dos emails falhou durante o disparo.'
-        elif failed_recipients:
-            dispatch.status = GmailDispatch.Status.FAILED
-            dispatch.error_summary = 'Nenhum email foi enviado com sucesso.'
+        if processed_recipients >= dispatch.total_recipients and pending_recipients == 0 and running_recipients == 0:
+            if failed_recipients and success_recipients:
+                dispatch.status = GmailDispatch.Status.COMPLETED_WITH_ERRORS
+                dispatch.error_summary = 'Parte dos emails falhou durante o disparo.'
+            elif failed_recipients:
+                dispatch.status = GmailDispatch.Status.FAILED
+                dispatch.error_summary = 'Nenhum email foi enviado com sucesso.'
+            else:
+                dispatch.status = GmailDispatch.Status.COMPLETED
+                dispatch.error_summary = ''
         else:
-            dispatch.status = GmailDispatch.Status.COMPLETED
+            dispatch.status = GmailDispatch.Status.RUNNING
             dispatch.error_summary = ''
 
         dispatch.save(
@@ -419,6 +458,45 @@ class GmailDispatchService:
             ]
         )
         return dispatch
+
+    @staticmethod
+    def build_next_poll_delay_ms(*, dispatch):
+        if dispatch.max_delay_seconds > 0:
+            return random.randint(dispatch.min_delay_seconds, dispatch.max_delay_seconds) * 1000
+        return 1200
+
+    @staticmethod
+    def build_dispatch_payload(*, dispatch):
+        recipients = GmailDispatchRecipientRepository.list_for_dispatch(dispatch)
+        return {
+            'dispatch': dispatch,
+            'recipients': recipients,
+            'status_payload': {
+                'status': dispatch.status,
+                'total_recipients': dispatch.total_recipients,
+                'processed_recipients': dispatch.processed_recipients,
+                'success_recipients': dispatch.success_recipients,
+                'failed_recipients': dispatch.failed_recipients,
+                'next_poll_delay_ms': GmailDispatchService.build_next_poll_delay_ms(dispatch=dispatch),
+                'is_finished': dispatch.status
+                in {
+                    GmailDispatch.Status.COMPLETED,
+                    GmailDispatch.Status.COMPLETED_WITH_ERRORS,
+                    GmailDispatch.Status.FAILED,
+                },
+                'recipients': [
+                    {
+                        'person_name': f'{recipient.first_name_snapshot} {recipient.last_name_snapshot}'.strip(),
+                        'email_snapshot': recipient.email_snapshot,
+                        'status': recipient.status,
+                        'gmail_message_id': recipient.gmail_message_id,
+                        'gmail_thread_id': recipient.gmail_thread_id,
+                        'error_message': recipient.error_message,
+                    }
+                    for recipient in recipients
+                ],
+            },
+        }
 
 
 class GmailDashboardService:

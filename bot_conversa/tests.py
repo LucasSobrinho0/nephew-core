@@ -1,13 +1,20 @@
 from unittest.mock import patch
 
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import User
 from bot_conversa.constants import BOT_CONVERSA_CONTACTS_LIST_PATH
 from bot_conversa.client import BotConversaClient
-from bot_conversa.models import BotConversaContact, BotConversaFlowCache, BotConversaFlowDispatch
-from bot_conversa.services import BotConversaInstallationService
+from bot_conversa.models import (
+    BotConversaContact,
+    BotConversaFlowCache,
+    BotConversaFlowDispatch,
+    BotConversaFlowDispatchItem,
+    BotConversaSyncLog,
+)
+from bot_conversa.services import BotConversaInstallationService, BotConversaRemoteContactService
 from common.constants import ACTIVE_ORGANIZATION_SESSION_KEY
 from integrations.models import AppCatalog, OrganizationAppInstallation
 from integrations.services import AppCredentialService
@@ -287,6 +294,38 @@ class BotConversaModuleTests(TestCase):
         self.assertEqual(existing_person.bot_conversa_id, 'subscriber-remote-002')
         self.assertEqual(Person.objects.filter(organization=self.organization, normalized_phone='5511988880000').count(), 1)
 
+    def test_save_contact_to_crm_raises_validation_error_when_contact_cannot_be_saved(self):
+        with self.assertRaises(ValidationError):
+            BotConversaRemoteContactService.save_contact_to_crm(
+                user=self.owner,
+                organization=self.organization,
+                external_subscriber_id='',
+                phone='',
+            )
+
+    def test_save_remote_contact_persists_sync_log_with_contact_link(self):
+        self.client.force_login(self.owner)
+        self.activate_organization(self.organization)
+
+        response = self.client.post(
+            reverse('bot_conversa:save_remote_contact'),
+            {
+                'external_subscriber_id': 'subscriber-remote-003',
+                'first_name': 'Julia',
+                'last_name': 'Prado',
+                'external_name': 'Julia Prado',
+                'phone': '+55 11 97777-0001',
+                'next': reverse('bot_conversa:contacts'),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        sync_log = BotConversaSyncLog.objects.filter(
+            organization=self.organization,
+            person__bot_conversa_id='subscriber-remote-003',
+        ).latest('created_at')
+        self.assertIsNotNone(sync_log.contact_link_id)
+
     def test_user_role_cannot_sync_person(self):
         self.client.force_login(self.user)
         self.activate_organization(self.organization)
@@ -315,6 +354,8 @@ class BotConversaModuleTests(TestCase):
             {
                 'flow_public_id': self.flow_cache.public_id,
                 'person_public_ids': [str(self.person.public_id)],
+                'min_delay_seconds': 2,
+                'max_delay_seconds': 4,
             },
         )
 
@@ -329,6 +370,54 @@ class BotConversaModuleTests(TestCase):
         payload = process_response.json()
         dispatch.refresh_from_db()
         self.assertEqual(dispatch.status, BotConversaFlowDispatch.Status.COMPLETED)
+        self.assertEqual(dispatch.min_delay_seconds, 2)
+        self.assertEqual(dispatch.max_delay_seconds, 4)
         self.assertEqual(payload['success_items'], 1)
         self.assertTrue(payload['is_finished'])
         self.assertEqual(fake_client.sent_payloads[0]['flow_id'], '8325072')
+
+    def test_dispatch_audience_endpoint_filters_people_already_sent_on_whatsapp(self):
+        dispatch = BotConversaFlowDispatch.objects.create(
+            organization=self.organization,
+            installation=self.installation,
+            flow=self.flow_cache,
+            external_flow_id=self.flow_cache.external_flow_id,
+            flow_name=self.flow_cache.name,
+            status=BotConversaFlowDispatch.Status.COMPLETED,
+            total_items=1,
+            processed_items=1,
+            success_items=1,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        BotConversaFlowDispatchItem.objects.create(
+            organization=self.organization,
+            dispatch=dispatch,
+            person=self.person,
+            target_name=self.person.full_name,
+            target_phone=self.person.phone,
+            status=BotConversaFlowDispatchItem.Status.SUCCESS,
+        )
+        other_person = PersonService.create_person(
+            user=self.owner,
+            organization=self.organization,
+            first_name='Bruna',
+            last_name='Silva',
+            phone='+55 11 96666-0000',
+        )
+
+        self.client.force_login(self.owner)
+        self.activate_organization(self.organization)
+
+        response = self.client.get(
+            reverse('bot_conversa:dispatch_audience'),
+            {'only_unsent': '1'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        labels = [item['label'] for item in payload['items']]
+        self.assertTrue(payload['only_unsent'])
+        self.assertNotIn(f'{self.person.full_name} - {self.person.phone}', labels)
+        self.assertIn(f'{other_person.full_name} - {other_person.phone}', labels)

@@ -1,3 +1,5 @@
+import random
+
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
@@ -327,6 +329,14 @@ class BotConversaContactSyncService:
         PersonRepository.bulk_update(persons_to_update, ['bot_conversa_id', 'updated_by', 'updated_at'])
         if contact_links_to_create:
             BotConversaContactRepository.bulk_create(contact_links_to_create)
+            created_contact_links_by_person_id = {
+                contact_link.person_id: contact_link
+                for contact_link in contact_links_to_create
+                if contact_link.person_id
+            }
+            for sync_log in sync_logs:
+                if sync_log.contact_link_id is None and sync_log.person_id in created_contact_links_by_person_id:
+                    sync_log.contact_link = created_contact_links_by_person_id[sync_log.person_id]
         if contact_links_to_update:
             BotConversaContactRepository.bulk_update(
                 contact_links_to_update,
@@ -570,6 +580,14 @@ class BotConversaRemoteContactService:
             PersonRepository.bulk_update(persons_to_update, ['bot_conversa_id', 'updated_by', 'updated_at'])
         if contact_links_to_create:
             BotConversaContactRepository.bulk_create(contact_links_to_create)
+            created_contact_links_by_person_id = {
+                contact_link.person_id: contact_link
+                for contact_link in contact_links_to_create
+                if contact_link.person_id
+            }
+            for sync_log in sync_logs:
+                if sync_log.contact_link_id is None and sync_log.person_id in created_contact_links_by_person_id:
+                    sync_log.contact_link = created_contact_links_by_person_id[sync_log.person_id]
         if contact_links_to_update:
             BotConversaContactRepository.bulk_update(
                 contact_links_to_update,
@@ -608,6 +626,8 @@ class BotConversaRemoteContactService:
                 }
             ],
         )
+        if not saved_persons:
+            raise ValidationError('Nao foi possivel salvar o contato remoto no CRM. Verifique subscriber e telefone.')
         person = saved_persons[0]
         return {
             'person': person,
@@ -636,7 +656,7 @@ class BotConversaRemoteContactService:
 class BotConversaDispatchService:
     @staticmethod
     @transaction.atomic
-    def create_dispatch(*, user, organization, flow_cache, persons):
+    def create_dispatch(*, user, organization, flow_cache, persons, min_delay_seconds=0, max_delay_seconds=0):
         installation = BotConversaInstallationService.get_installation(organization=organization)
         BotConversaAuthorizationService.ensure_operator_access(user=user, organization=organization)
         BotConversaDispatchService.ensure_flow_access(organization=organization, flow_cache=flow_cache)
@@ -653,6 +673,11 @@ class BotConversaDispatchService:
         if not unique_persons:
             raise ValidationError('Selecione pelo menos uma pessoa para o disparo.')
 
+        if min_delay_seconds < 0 or max_delay_seconds < 0:
+            raise ValidationError('Os delays do disparo nao podem ser negativos.')
+        if max_delay_seconds < min_delay_seconds:
+            raise ValidationError('O delay maximo nao pode ser menor que o delay minimo.')
+
         dispatch = BotConversaFlowDispatchRepository.create(
             organization=organization,
             installation=installation,
@@ -661,6 +686,8 @@ class BotConversaDispatchService:
             flow_name=flow_cache.name,
             status=BotConversaFlowDispatch.Status.PENDING,
             total_items=len(unique_persons),
+            min_delay_seconds=min_delay_seconds,
+            max_delay_seconds=max_delay_seconds,
             created_by=user,
             updated_by=user,
         )
@@ -703,22 +730,30 @@ class BotConversaDispatchService:
             dispatch.updated_by = user
             dispatch.save(update_fields=['status', 'started_at', 'updated_by', 'updated_at'])
 
+        effective_batch_size = 1 if dispatch.max_delay_seconds > 0 else batch_size
         pending_items = list(
             BotConversaFlowDispatchItemRepository.list_pending_for_dispatch(
                 dispatch,
-                limit=batch_size,
+                limit=effective_batch_size,
             )
         )
 
         if not pending_items:
-            BotConversaDispatchService.finalize_dispatch(dispatch=dispatch, user=user)
+            BotConversaDispatchService.refresh_dispatch_counters(dispatch=dispatch, user=user)
             return dispatch
 
         for item in pending_items:
+            attempt_time = timezone.now()
+            claimed_rows = BotConversaFlowDispatchItemRepository.claim_for_processing(
+                item,
+                attempted_at=attempt_time,
+            )
+            if not claimed_rows:
+                continue
+
             item.status = BotConversaFlowDispatchItem.Status.RUNNING
-            item.last_attempt_at = timezone.now()
+            item.last_attempt_at = attempt_time
             item.attempt_count += 1
-            item.save(update_fields=['status', 'last_attempt_at', 'attempt_count', 'updated_at'])
 
             try:
                 if item.person is None:
@@ -762,9 +797,17 @@ class BotConversaDispatchService:
     @staticmethod
     def refresh_dispatch_counters(*, dispatch, user):
         items = BotConversaFlowDispatchItemRepository.list_for_dispatch(dispatch)
-        processed_items = items.exclude(status=BotConversaFlowDispatchItem.Status.PENDING).count()
+        processed_items = items.filter(
+            status__in=[
+                BotConversaFlowDispatchItem.Status.SUCCESS,
+                BotConversaFlowDispatchItem.Status.FAILED,
+                BotConversaFlowDispatchItem.Status.SKIPPED,
+            ]
+        ).count()
         success_items = items.filter(status=BotConversaFlowDispatchItem.Status.SUCCESS).count()
         failed_items = items.filter(status=BotConversaFlowDispatchItem.Status.FAILED).count()
+        pending_items = items.filter(status=BotConversaFlowDispatchItem.Status.PENDING).count()
+        running_items = items.filter(status=BotConversaFlowDispatchItem.Status.RUNNING).count()
 
         dispatch.processed_items = processed_items
         dispatch.success_items = success_items
@@ -780,8 +823,14 @@ class BotConversaDispatchService:
             ]
         )
 
-        if processed_items >= dispatch.total_items:
+        if processed_items >= dispatch.total_items and pending_items == 0 and running_items == 0:
             BotConversaDispatchService.finalize_dispatch(dispatch=dispatch, user=user)
+
+    @staticmethod
+    def build_next_poll_delay_ms(*, dispatch):
+        if dispatch.max_delay_seconds > 0:
+            return random.randint(dispatch.min_delay_seconds, dispatch.max_delay_seconds) * 1000
+        return 1600
 
     @staticmethod
     def finalize_dispatch(*, dispatch, user):
@@ -810,6 +859,7 @@ class BotConversaDispatchService:
                 'processed_items': dispatch.processed_items,
                 'success_items': dispatch.success_items,
                 'failed_items': dispatch.failed_items,
+                'next_poll_delay_ms': BotConversaDispatchService.build_next_poll_delay_ms(dispatch=dispatch),
                 'is_finished': dispatch.status
                 in {
                     BotConversaFlowDispatch.Status.COMPLETED,

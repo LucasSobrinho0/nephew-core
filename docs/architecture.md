@@ -2,27 +2,39 @@
 
 ## Suggested architecture
 
-- `core`: project settings, global URL routing, environment-level wiring.
-- `common`: shared abstractions such as timestamps, public identifiers, Bootstrap form helpers, middleware, and generic mixins.
+- `core`: project settings, global URL routing, and environment-level wiring.
+- `common`: shared abstractions such as timestamps, public identifiers, encryption helpers, phone normalization, matching helpers, Bootstrap form helpers, middleware, and generic mixins.
 - `accounts`: custom user model, registration, login, logout, and account-focused services.
 - `organizations`: tenant domain, memberships, invite codes, onboarding, organization switching, and permission-sensitive services.
 - `dashboard`: authenticated application pages that depend on the active organization context.
+- `companies`: tenant-scoped CRM companies.
+- `people`: tenant-scoped CRM persons and contact identity.
+- `integrations`: app catalog, tenant installations, encrypted credentials, and credential access audit.
+- `bot_conversa`: Bot Conversa contact linking, flow cache, dispatching, and sync logs.
+- `hubspot_integration`: HubSpot company/contact/deal synchronization and pipeline cache.
+- `gmail_integration`: Gmail credential management, templates, and email dispatches.
 
 ## Folder structure
 
 ```text
 NephewCRM/
-├─ core/
-├─ common/
-├─ accounts/
-├─ organizations/
-├─ dashboard/
-├─ templates/
-│  └─ partials/
-├─ static/
-│  ├─ css/
-│  └─ js/
-└─ docs/
+|-- core/
+|-- common/
+|-- accounts/
+|-- organizations/
+|-- dashboard/
+|-- companies/
+|-- people/
+|-- integrations/
+|-- bot_conversa/
+|-- hubspot_integration/
+|-- gmail_integration/
+|-- templates/
+|   `-- partials/
+|-- static/
+|   |-- css/
+|   `-- js/
+`-- docs/
 ```
 
 ## Domain model
@@ -55,14 +67,27 @@ NephewCRM/
 - Uses unique codes with `ADM XXXXXXXX` and `USR XXXXXXXX` patterns.
 - Includes `public_id`, `created_at`, and `updated_at`.
 
+### `companies.Company`
+
+- Tenant-scoped CRM company table.
+- Stores `organization`, `name`, `website`, `phone`, `normalized_phone`, `hubspot_company_id`, `is_active`, and audit ownership fields.
+- A company belongs to only one organization and is not shared globally between tenants.
+
+### `people.Person`
+
+- Tenant-scoped CRM person table.
+- Stores `organization`, optional `company`, `phone`, `normalized_phone`, `email`, `email_lookup`, `first_name`, `last_name`, integration identifiers, active flag, and audit ownership fields.
+- Uses normalized phone and deterministic email lookup for uniqueness and matching.
+- Acts as the shared identity hub for HubSpot and Bot Conversa, so the integrations stay operationally independent while still converging into one tenant-scoped person when matching succeeds.
+
 ## Roles and permissions
 
 - `owner`
-  Highest organization role. Can manage invites, members, and organization-level actions.
+  Highest organization role. Can manage invites, members, integrations, and organization-level actions.
 - `admin`
   Can manage invites and tenant-scoped operational actions inside the active organization.
 - `user`
-  Can access tenant data allowed by future modules, but cannot create invite codes.
+  Can access tenant-safe workspace modules but cannot execute manager-only actions.
 
 ## Multi-tenancy decisions
 
@@ -80,9 +105,13 @@ NephewCRM/
 - `organizations.repositories.OrganizationRepository`
   Encapsulates organization creation and public identifier lookup.
 - `organizations.repositories.MembershipRepository`
-  Encapsulates all membership reads, counts, and tenant-scoped member lists.
+  Encapsulates membership reads and tenant-sensitive role checks.
 - `organizations.repositories.InviteRepository`
   Encapsulates invite creation, listing, status counts, and expiry updates.
+- `companies.repositories.CompanyRepository`
+  Encapsulates tenant-scoped company reads and writes.
+- `people.repositories.PersonRepository`
+  Encapsulates tenant-scoped person reads and writes.
 
 ## Services
 
@@ -96,6 +125,16 @@ NephewCRM/
   Generates unique invite codes, validates permissions, expires outdated codes, and redeems invites atomically.
 - `dashboard.services.DashboardMetricsService`
   Builds tenant-safe summary metrics for the dashboard.
+- `companies.services.CompanyService`
+  Creates and updates tenant-scoped companies.
+- `people.services.PersonService`
+  Creates and updates tenant-scoped persons with normalized contact data.
+- `bot_conversa.services.*`
+  Encapsulates Bot Conversa installation resolution, remote contact sync, flow cache refresh, and dispatch processing.
+- `hubspot_integration.services.*`
+  Encapsulates HubSpot installation resolution, company/contact sync, pipeline refresh, and deal creation.
+- `gmail_integration.services.*`
+  Encapsulates Gmail credential handling, template management, email dispatch creation, and paced dispatch processing.
 
 ## Views and routes
 
@@ -106,12 +145,16 @@ NephewCRM/
 - `/onboarding/create/`
 - `/onboarding/join/`
 - `/dashboard/`
-- `/apps/`
-- `/api-keys/`
 - `/organizations/`
 - `/organizations/switch/`
 - `/invites/`
 - `/invites/generate/`
+- `/apps/`
+- `/api-keys/`
+- `/people/`
+- `/apps/bot-conversa/`
+- `/apps/hubspot/`
+- `/apps/gmail/`
 
 ## Navigation flow
 
@@ -124,8 +167,9 @@ NephewCRM/
    join by invite code,
    or skip.
 6. Dashboard checks tenant context:
-   if active organization exists, load tenant summary;
+   if active organization exists, load tenant summary and installed modules;
    if not, show guidance to create or join an organization.
+7. Inside an active tenant, CRM data and integrations resolve only from tenant-scoped repositories and validated services.
 
 ## Security points
 
@@ -135,6 +179,9 @@ NephewCRM/
 - Invite generation requires both:
   a valid active organization,
   and a role of `owner` or `admin`.
+- Bot Conversa, HubSpot, Gmail, and API key mutation flows require both:
+  a valid active organization,
+  and a manager-capable membership.
 - Invite redemption validates:
   code format,
   code existence,
@@ -144,13 +191,15 @@ NephewCRM/
 - Organization switching never trusts client input alone; it always validates membership.
 - Public UUID identifiers avoid exposing sequential IDs in switching flows.
 
-## Initial implementation stages
+## Current implementation focus
 
 1. Tenant foundation
-   Custom user, organization models, memberships, invites, session-backed active organization, middleware.
-2. Access flow
-   Registration, login, logout, onboarding, create organization, join by invite, dashboard empty state.
-3. Workspace shell
-   Sidebar, navbar, theme toggle, organizations page, invites page, apps placeholder, API keys placeholder.
-4. Next stage
-   App catalog, CRM entities, permissions expansion, audit logging, secure API key storage, pipelines, and integrations.
+   Custom user, organization models, memberships, invites, session-backed active organization, and middleware.
+2. CRM foundation
+   Tenant-scoped companies and people with normalized contact data and integration identifiers.
+3. Integration platform
+   App catalog, installations, encrypted credentials, secure reveal flow, and access audit.
+4. Operational modules
+   Bot Conversa flow dispatches, HubSpot sync/deals, and Gmail templates/dispatches with configurable pacing and async audience filters for people who have not yet received sends in each channel.
+5. Next evolution
+   Stronger model-level tenant consistency guarantees, broader audit coverage, background processing options, and richer CRM workflows.

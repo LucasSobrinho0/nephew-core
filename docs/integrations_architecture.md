@@ -5,7 +5,7 @@
 - `integrations` is the bounded context for external app catalog, tenant app installations, credentials, and credential access audit.
 - `organizations` remains the source of tenant identity, memberships, and role evaluation.
 - `common` provides reusable encryption primitives, tenant-aware mixins, and shared model mixins.
-- `dashboard` and future CRM modules consume the active organization already resolved by middleware.
+- `dashboard` and tenant-facing modules such as `bot_conversa`, `hubspot_integration`, and `gmail_integration` consume the active organization already resolved by middleware.
 
 ## Django app structure
 
@@ -46,7 +46,7 @@ integrations/
 ### `integrations.OrganizationAppCredential`
 
 - Tenant-scoped credential record for one installed app.
-- Belongs to one `OrganizationAppInstallation`.
+- Belongs to one `OrganizationAppInstallation`; tenant ownership is derived through the installation relation.
 - Stores `secret_value` encrypted at rest.
 - Stores `masked_value`, `last_four`, `version`, `status`, `created_by`, `updated_by`, `revoked_by`, and `revoked_at`.
 - Enforces:
@@ -94,7 +94,20 @@ integrations/
 - `AppCredentialService`
   Saves API keys, rotates versions, validates reveal confirmation, and writes audit events.
 - `AppMaskingService`
-  Generates a safe preview like `sk_live ********ABCD`.
+  Generates a safe preview while preserving a useful prefix when possible.
+
+## Integration interplay
+
+- `hubspot_integration`, `bot_conversa`, and `gmail_integration` are independent operational modules. They do not need direct runtime calls into each other to work.
+- The shared dependency is the tenant-scoped CRM core, especially `people.Person`, company relations, and the common matching helpers.
+- HubSpot and Bot Conversa therefore interoperate through shared people records:
+  - one contact can be imported from HubSpot and later receive a Bot Conversa flow
+  - one remote Bot Conversa contact can be saved in the CRM and later be enriched with HubSpot identifiers
+- The current unification is partial, not a dedicated identity graph:
+  - `Person` stores fixed provider identifiers such as `hubspot_contact_id` and `bot_conversa_id`
+  - `common.matching` can reconcile by provider id, normalized email, normalized phone, `name + email`, and `name + phone`
+  - fallback matching by name alone still exists, which helps reduce duplicates but is a weaker merge signal
+- This means the modules are independent as apps, but not independent as tenant data.
 
 ## Repositories
 
@@ -166,6 +179,28 @@ Templates:
 5. Only then the backend returns the decrypted key in a no-store JSON response.
 6. Every reveal attempt is audited as `success`, `denied`, or `not_found`.
 
+### Gmail dispatch flow
+
+1. Owner or admin opens the Gmail module inside the active organization.
+2. User selects a saved template and one or more tenant-scoped persons with email.
+3. User can define a configurable min/max delay interval for pacing the email sends.
+4. Backend creates one dispatch record and one recipient record per selected person.
+5. The dispatch detail page polls a backend endpoint.
+6. Each processing cycle sends a safe batch of pending recipients and updates terminal counters.
+7. When a delay interval is configured, the frontend waits a randomized value between the configured min and max before the next processing step.
+8. The dispatch creation screen can asynchronously filter the audience to only show people who have not yet received a Gmail send in that tenant.
+
+### Bot Conversa dispatch flow
+
+1. Owner or admin opens the Bot Conversa module inside the active organization.
+2. User selects a cached flow and one or more tenant-scoped persons.
+3. User can define a configurable min/max delay interval for pacing the sends.
+4. Backend creates one dispatch record and one item record per selected person.
+5. The dispatch detail page polls a backend endpoint.
+6. Each processing cycle claims a safe batch of pending items, ensures a remote subscriber exists, and triggers the flow.
+7. `running` items are not counted as complete, which avoids premature dispatch completion under concurrent polling.
+8. The dispatch creation screen can asynchronously filter the audience to only show people who have not yet received a successful WhatsApp send in that tenant.
+
 ## Encryption strategy
 
 - API keys use `EncryptedTextField` with a dedicated encryption purpose: `app-credential`.
@@ -226,6 +261,7 @@ Templates:
   - `request.active_membership`
 - No view trusts client-provided organization identifiers for installation or credential writes.
 - All repository methods that touch tenant data filter by organization relation.
+- Some tenant consistency guarantees also rely on service-layer validation where models reference other tenant-scoped records indirectly.
 
 ## Security points
 

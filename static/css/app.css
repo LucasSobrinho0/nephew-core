@@ -987,6 +987,11 @@ a {
   background: var(--crm-card-solid);
 }
 
+#crmErrorModalDetails {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .form-control,
 .form-select,
 .input-group > .form-control,

@@ -92,5 +92,38 @@ class GmailDispatchRecipientRepository:
         )
 
     @staticmethod
+    def list_pending_for_dispatch(dispatch, *, limit):
+        return (
+            GmailDispatchRecipient.objects.with_related_objects()
+            .filter(
+                dispatch=dispatch,
+                organization=dispatch.organization,
+                status=GmailDispatchRecipient.Status.PENDING,
+            )
+            .order_by('created_at')[:limit]
+        )
+
+    @staticmethod
+    def list_sent_person_ids_for_organization(organization):
+        return (
+            GmailDispatchRecipient.objects.filter(
+                organization=organization,
+                status=GmailDispatchRecipient.Status.SENT,
+            )
+            .exclude(person_id__isnull=True)
+            .values_list('person_id', flat=True)
+            .distinct()
+        )
+
+    @staticmethod
+    def claim_for_processing(recipient):
+        return GmailDispatchRecipient.objects.filter(
+            pk=recipient.pk,
+            dispatch=recipient.dispatch,
+            organization=recipient.organization,
+            status=GmailDispatchRecipient.Status.PENDING,
+        ).update(status=GmailDispatchRecipient.Status.RUNNING)
+
+    @staticmethod
     def create(**kwargs):
         return GmailDispatchRecipient.objects.create(**kwargs)

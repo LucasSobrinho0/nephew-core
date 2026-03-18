@@ -1,15 +1,17 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.http import Http404, JsonResponse
 from django.shortcuts import redirect
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.cache import never_cache
 from django.views.generic import TemplateView
 
 from gmail_integration.exceptions import GmailApiError, GmailConfigurationError
 from gmail_integration.forms import GmailCredentialSaveForm, GmailDispatchCreateForm, GmailTemplateForm
 from gmail_integration.repositories import (
     GmailCredentialRepository,
-    GmailDispatchRecipientRepository,
     GmailDispatchRepository,
     GmailTemplateRepository,
 )
@@ -25,7 +27,7 @@ from people.repositories import PersonRepository
 
 
 class GmailAccessMixin(LoginRequiredMixin):
-    missing_organization_message = 'Escolha ou crie uma organização antes de acessar o Gmail.'
+    missing_organization_message = 'Escolha ou crie uma organizacao antes de acessar o Gmail.'
     missing_organization_redirect_url = 'dashboard:home'
     missing_installation_redirect_url = 'integrations:apps'
 
@@ -38,7 +40,7 @@ class GmailAccessMixin(LoginRequiredMixin):
             return redirect(self.missing_organization_redirect_url)
 
         if active_membership is None:
-            messages.error(request, 'Você não tem mais acesso à organização ativa.')
+            messages.error(request, 'Voce nao tem mais acesso a organizacao ativa.')
             return redirect(self.missing_organization_redirect_url)
 
         try:
@@ -60,10 +62,24 @@ class GmailAccessMixin(LoginRequiredMixin):
             return redirect_response
         return super().dispatch(request, *args, **kwargs)
 
-    def build_person_choices(self):
-        return [
-            (str(person.public_id), f'{person.full_name} - {person.email or "Sem email"}')
+    def build_person_choices(self, *, only_unsent=False):
+        persons = [
+            person
             for person in PersonRepository.list_for_organization(self.active_organization)
+            if person.email
+        ]
+
+        if only_unsent:
+            sent_person_ids = set(
+                GmailDispatchRecipientRepository.list_sent_person_ids_for_organization(
+                    self.active_organization,
+                )
+            )
+            persons = [person for person in persons if person.id not in sent_person_ids]
+
+        return [
+            (str(person.public_id), f'{person.full_name} - {person.email}')
+            for person in persons
         ]
 
     def build_template_choices(self):
@@ -73,12 +89,17 @@ class GmailAccessMixin(LoginRequiredMixin):
         ]
 
     def build_dispatch_form(self, *args, **kwargs):
-        return GmailDispatchCreateForm(*args, template_choices=self.build_template_choices(), person_choices=self.build_person_choices(), **kwargs)
+        return GmailDispatchCreateForm(
+            *args,
+            template_choices=self.build_template_choices(),
+            person_choices=self.build_person_choices(),
+            **kwargs,
+        )
 
     def get_module_tabs(self):
         return [
             {'label': 'Visao geral', 'url': 'gmail_integration:dashboard', 'key': 'dashboard'},
-            {'label': 'Configuração', 'url': 'gmail_integration:settings', 'key': 'settings'},
+            {'label': 'Configuracao', 'url': 'gmail_integration:settings', 'key': 'settings'},
             {'label': 'Templates', 'url': 'gmail_integration:templates', 'key': 'templates'},
             {'label': 'Disparos', 'url': 'gmail_integration:dispatches', 'key': 'dispatches'},
         ]
@@ -166,7 +187,7 @@ class GmailCredentialSaveView(GmailOperatorRequiredMixin, View):
             messages.error(request, exc.messages[0] if hasattr(exc, 'messages') and exc.messages else str(exc))
             return redirect('gmail_integration:settings')
 
-        messages.success(request, 'Configuração do Gmail salva com sucesso.')
+        messages.success(request, 'Configuracao do Gmail salva com sucesso.')
         return redirect('gmail_integration:settings')
 
 
@@ -293,6 +314,7 @@ class GmailDispatchesView(GmailAccessMixin, TemplateView):
                 'dispatches': GmailDispatchRepository.list_for_organization(self.active_organization),
                 'dispatch_form': kwargs.get('dispatch_form') or self.build_dispatch_form(),
                 'available_variables': ['${nome}', '${sobrenome}', '${email}'],
+                'initial_gmail_audience_count': len(self.build_person_choices()),
             }
         )
         return context
@@ -334,12 +356,14 @@ class GmailDispatchCreateView(GmailOperatorRequiredMixin, View):
                 template=template,
                 to_people=to_people,
                 cc_emails=form.cleaned_data['cc_emails'],
+                min_delay_seconds=form.cleaned_data['min_delay_seconds'],
+                max_delay_seconds=form.cleaned_data['max_delay_seconds'],
             )
         except (GmailApiError, GmailConfigurationError, PermissionDenied, ValidationError) as exc:
             messages.error(request, exc.messages[0] if hasattr(exc, 'messages') and exc.messages else str(exc))
             return redirect('gmail_integration:dispatches')
 
-        messages.success(request, 'Disparo do Gmail processado com sucesso.')
+        messages.success(request, 'Disparo do Gmail criado. O processamento continuara na tela de status.')
         return redirect('gmail_integration:dispatch_detail', dispatch_public_id=dispatch.public_id)
 
 
@@ -364,10 +388,86 @@ class GmailDispatchDetailView(GmailAccessMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(self.build_base_context(active_tab='dispatches'))
-        context.update(
+        context.update(GmailDispatchService.build_dispatch_payload(dispatch=self.dispatch_object))
+        return context
+
+
+@method_decorator(never_cache, name='dispatch')
+class GmailDispatchAudienceView(GmailAccessMixin, View):
+    http_method_names = ['get']
+
+    def get(self, request, *args, **kwargs):
+        only_unsent = request.GET.get('only_unsent') == '1'
+        person_choices = self.build_person_choices(only_unsent=only_unsent)
+        response = JsonResponse(
             {
-                'dispatch': self.dispatch_object,
-                'dispatch_recipients': GmailDispatchRecipientRepository.list_for_dispatch(self.dispatch_object),
+                'items': [
+                    {
+                        'value': value,
+                        'label': label,
+                    }
+                    for value, label in person_choices
+                ],
+                'count': len(person_choices),
+                'only_unsent': only_unsent,
+                'empty_message': (
+                    'Nenhuma pessoa sem envio anterior no Gmail esta disponivel para este disparo.'
+                    if only_unsent
+                    else 'Nenhuma pessoa com e-mail cadastrado esta disponivel para este disparo.'
+                ),
             }
         )
-        return context
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        return response
+
+
+@method_decorator(never_cache, name='dispatch')
+class GmailDispatchProcessView(LoginRequiredMixin, View):
+    http_method_names = ['post']
+
+    def post(self, request, *args, **kwargs):
+        active_organization = getattr(request, 'active_organization', None)
+        if active_organization is None:
+            return self.build_json_response({'detail': 'Nenhuma organizacao ativa foi encontrada.'}, status=400)
+
+        try:
+            GmailAuthorizationService.ensure_operator_access(
+                user=request.user,
+                organization=active_organization,
+            )
+            GmailInstallationService.get_installation(organization=active_organization)
+        except PermissionDenied as exc:
+            return self.build_json_response({'detail': str(exc)}, status=403)
+        except (GmailConfigurationError, ValidationError) as exc:
+            return self.build_json_response({'detail': str(exc)}, status=400)
+
+        dispatch = GmailDispatchRepository.get_for_organization_and_public_id(
+            active_organization,
+            kwargs['dispatch_public_id'],
+        )
+        if dispatch is None:
+            raise Http404('Disparo nao encontrado.')
+
+        try:
+            dispatch = GmailDispatchService.process_dispatch(
+                organization=active_organization,
+                dispatch=dispatch,
+            )
+        except (GmailApiError, GmailConfigurationError, PermissionDenied, ValidationError) as exc:
+            return self.build_json_response({'detail': str(exc)}, status=400)
+
+        return self.build_json_response(
+            GmailDispatchService.build_dispatch_payload(dispatch=dispatch)['status_payload'],
+            status=200,
+        )
+
+    @staticmethod
+    def build_json_response(payload, *, status):
+        response = JsonResponse(payload, status=status)
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
