@@ -52,6 +52,7 @@ load_env_file(BASE_DIR / '.env')
 SECRET_KEY = env('SECRET_KEY', 'django-insecure-phkcri1tr5i4cgopgn^%r)8%2-_hhjlyjp^@h_k63rc+pbzip$')
 DEBUG = env_bool('DEBUG', True)
 ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', '127.0.0.1,localhost,testserver')
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', '')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
