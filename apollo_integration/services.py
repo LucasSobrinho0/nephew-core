@@ -251,6 +251,7 @@ class ApolloCompanyService:
         return {
             'companies': remote_companies,
             'pagination': search_result.get('pagination') or {},
+            'diagnostics': search_result.get('diagnostics') or {},
             'payload': payload,
         }
 

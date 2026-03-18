@@ -21,14 +21,21 @@ class ApolloClient:
 
     def search_organizations(self, *, payload):
         response_payload = self._request('POST', APOLLO_ORGANIZATION_SEARCH_PATH, payload=payload)
-        organizations = self._extract_organization_items(response_payload)
+        organizations, source_key = self._extract_organization_items(response_payload)
+        pagination = self._extract_pagination(response_payload)
         return {
             'organizations': [
                 self._normalize_company_payload(item)
                 for item in organizations
                 if isinstance(item, dict)
             ],
-            'pagination': self._extract_pagination(response_payload),
+            'pagination': pagination,
+            'diagnostics': {
+                'source_key': source_key,
+                'recognized_count': len(organizations),
+                'top_level_keys': list(response_payload.keys()) if isinstance(response_payload, dict) else [],
+                'total_entries': pagination.get('total_entries') if isinstance(pagination, dict) else None,
+            },
             'raw_payload': response_payload,
         }
 
@@ -91,25 +98,25 @@ class ApolloClient:
     @staticmethod
     def _extract_organization_items(response_payload):
         if isinstance(response_payload, list):
-            return response_payload
+            return response_payload, 'root_list'
         if not isinstance(response_payload, dict):
-            return []
+            return [], None
 
         for key in ('organizations', 'accounts', 'companies', 'results'):
             value = response_payload.get(key)
             if isinstance(value, list):
-                return value
+                return value, key
 
         data = response_payload.get('data')
         if isinstance(data, dict):
             for key in ('organizations', 'accounts', 'companies', 'results'):
                 value = data.get(key)
                 if isinstance(value, list):
-                    return value
+                    return value, f'data.{key}'
         elif isinstance(data, list):
-            return data
+            return data, 'data'
 
-        return []
+        return [], None
 
     @staticmethod
     def _extract_pagination(response_payload):

@@ -110,6 +110,23 @@
           </div>
         </form>
 
+        {% if has_loaded_remote_companies %}
+          <div class="soft-empty mt-4">
+            <p class="mb-1">
+              Busca executada. Itens reconhecidos pelo Nephew CRM: <strong>{{ search_diagnostics.recognized_count|default:0 }}</strong>.
+            </p>
+            {% if search_diagnostics.total_entries %}
+              <p class="mb-1 text-body-secondary">Total informado pelo Apollo: {{ search_diagnostics.total_entries }}.</p>
+            {% endif %}
+            {% if search_diagnostics.source_key %}
+              <p class="mb-1 text-body-secondary">Lista lida em: <code>{{ search_diagnostics.source_key }}</code>.</p>
+            {% endif %}
+            {% if search_diagnostics.top_level_keys %}
+              <p class="mb-0 text-body-secondary">Chaves da resposta: {{ search_diagnostics.top_level_keys|join:', ' }}.</p>
+            {% endif %}
+          </div>
+        {% endif %}
+
         {% if has_loaded_remote_companies and remote_companies %}
           <div class="mt-4 mb-3">
             <label for="apolloRemoteCompaniesFilter" class="form-label">Filtrar resultados carregados</label>

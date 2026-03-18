@@ -147,6 +147,7 @@ class ApolloCompaniesView(ApolloAccessMixin, TemplateView):
         company_rows = []
         remote_companies = []
         pagination = {}
+        search_diagnostics = {}
         has_loaded_local_companies = self.request.GET.get('load_local') == '1'
         has_loaded_remote_companies = self._has_remote_search_request(self.request.GET)
 
@@ -161,6 +162,7 @@ class ApolloCompaniesView(ApolloAccessMixin, TemplateView):
                 )
                 remote_companies = remote_result['companies']
                 pagination = remote_result['pagination']
+                search_diagnostics = remote_result.get('diagnostics') or {}
             except (ApolloApiError, ApolloConfigurationError, ValidationError) as exc:
                 messages.error(self.request, str(exc))
 
@@ -172,6 +174,7 @@ class ApolloCompaniesView(ApolloAccessMixin, TemplateView):
                 'company_rows': company_rows,
                 'remote_companies': remote_companies,
                 'pagination': pagination,
+                'search_diagnostics': search_diagnostics,
                 'has_loaded_local_companies': has_loaded_local_companies,
                 'has_loaded_remote_companies': has_loaded_remote_companies,
                 'current_remote_query': self.request.GET.urlencode(),
