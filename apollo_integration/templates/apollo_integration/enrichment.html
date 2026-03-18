@@ -50,12 +50,13 @@
                 <th>Pessoa</th>
                 <th>Empresa</th>
                 <th>E-mail</th>
+                <th>Telefone</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody id="apolloEnrichmentTableBody">
               {% for row in enrichment_rows %}
-                <tr data-filter-item data-filter-text="{{ row.person.full_name }} {{ row.person.email|default:'' }} {{ row.person.company.name|default:'Sem empresa' }} {% if row.is_enriched %}Enriquecida{% else %}Pendente{% endif %}">
+                <tr data-filter-item data-filter-text="{{ row.person.full_name }} {{ row.person.email|default:'' }} {{ row.person.phone|default:'' }} {{ row.person.company.name|default:'Sem empresa' }} {% if row.is_enriched %}Enriquecida{% else %}Pendente{% endif %} {% if row.is_phone_enriched %}Telefone disponivel{% else %}Telefone pendente{% endif %}">
                   {% if can_manage_apollo %}
                     <td>
                       <input type="checkbox" name="person_public_ids" value="{{ row.person.public_id }}" data-checkbox-group="apollo-people-enrichment">
@@ -68,13 +69,27 @@
                   <td>{{ row.person.company.name|default:'Sem empresa' }}</td>
                   <td>{{ row.person.email|default:'-' }}</td>
                   <td>
+                    {% if row.person.phone %}
+                      {{ row.person.phone }}
+                    {% else %}
+                      <span class="text-body-secondary">Nao</span>
+                    {% endif %}
+                  </td>
+                  <td>
                     {% if row.is_enriched %}
-                      Enriquecida
+                      Nome e e-mail ok
                     {% elif row.has_email %}
                       Nome pendente
                     {% else %}
                       Nome e e-mail pendentes
                     {% endif %}
+                    <div class="small text-body-secondary">
+                      {% if row.is_phone_enriched %}
+                        Telefone ja salvo no CRM
+                      {% else %}
+                        Telefone ainda nao salvo
+                      {% endif %}
+                    </div>
                   </td>
                 </tr>
               {% endfor %}
