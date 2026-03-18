@@ -12,11 +12,11 @@
     <span>Pessoas</span>
   </a>
   <button
-    class="nav-link crm-nav-link crm-nav-dropdown-button {% if request.resolver_match.namespace == 'bot_conversa' or request.resolver_match.namespace == 'integrations' or request.resolver_match.namespace == 'gmail_integration' or request.resolver_match.namespace == 'hubspot_integration' %}active{% endif %}"
+    class="nav-link crm-nav-link crm-nav-dropdown-button {% if request.resolver_match.namespace == 'bot_conversa' or request.resolver_match.namespace == 'integrations' or request.resolver_match.namespace == 'gmail_integration' or request.resolver_match.namespace == 'hubspot_integration' or request.resolver_match.namespace == 'apollo_integration' %}active{% endif %}"
     type="button"
     data-bs-toggle="collapse"
     data-bs-target="#sidebarInstalledApps"
-    aria-expanded="{% if request.resolver_match.namespace == 'bot_conversa' or request.resolver_match.namespace == 'integrations' or request.resolver_match.namespace == 'gmail_integration' or request.resolver_match.namespace == 'hubspot_integration' %}true{% else %}false{% endif %}"
+    aria-expanded="{% if request.resolver_match.namespace == 'bot_conversa' or request.resolver_match.namespace == 'integrations' or request.resolver_match.namespace == 'gmail_integration' or request.resolver_match.namespace == 'hubspot_integration' or request.resolver_match.namespace == 'apollo_integration' %}true{% else %}false{% endif %}"
     aria-controls="sidebarInstalledApps"
   >
     <span class="d-flex align-items-center gap-3">
@@ -25,7 +25,7 @@
     </span>
     <i class="bi bi-chevron-down small"></i>
   </button>
-  <div class="collapse {% if request.resolver_match.namespace == 'bot_conversa' or request.resolver_match.namespace == 'integrations' or request.resolver_match.namespace == 'gmail_integration' or request.resolver_match.namespace == 'hubspot_integration' %}show{% endif %}" id="sidebarInstalledApps">
+  <div class="collapse {% if request.resolver_match.namespace == 'bot_conversa' or request.resolver_match.namespace == 'integrations' or request.resolver_match.namespace == 'gmail_integration' or request.resolver_match.namespace == 'hubspot_integration' or request.resolver_match.namespace == 'apollo_integration' %}show{% endif %}" id="sidebarInstalledApps">
     <div class="sidebar-subnav">
       <a href="{% url 'integrations:apps' %}" class="nav-link crm-subnav-link {% if request.resolver_match.namespace == 'integrations' and request.resolver_match.url_name == 'apps' %}active{% endif %}">
         <i class="bi bi-grid"></i>
@@ -40,7 +40,7 @@
       {% if sidebar_installed_apps %}
         {% for app_item in sidebar_installed_apps %}
           {% if app_item.is_available %}
-            <a href="{{ app_item.url }}" class="nav-link crm-subnav-link {% if request.path == app_item.url or request.resolver_match.namespace == 'hubspot_integration' and app_item.code == 'hubspot' or request.resolver_match.namespace == 'gmail_integration' and app_item.code == 'gmail' or request.resolver_match.namespace == 'bot_conversa' and app_item.code == 'bot_conversa' %}active{% endif %}">
+            <a href="{{ app_item.url }}" class="nav-link crm-subnav-link {% if request.path == app_item.url or request.resolver_match.namespace == 'hubspot_integration' and app_item.code == 'hubspot' or request.resolver_match.namespace == 'gmail_integration' and app_item.code == 'gmail' or request.resolver_match.namespace == 'bot_conversa' and app_item.code == 'bot_conversa' or request.resolver_match.namespace == 'apollo_integration' and app_item.code == 'apollo' %}active{% endif %}">
               <i class="{{ app_item.icon_class }}"></i>
               <span>{{ app_item.label }}</span>
             </a>

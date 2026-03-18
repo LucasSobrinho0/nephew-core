@@ -7,34 +7,67 @@ from companies.repositories import CompanyRepository
 class CompanyService:
     @staticmethod
     @transaction.atomic
-    def create_company(*, user, organization, name, website='', phone='', hubspot_company_id=''):
+    def create_company(
+        *,
+        user,
+        organization,
+        name,
+        website='',
+        email='',
+        phone='',
+        segment='',
+        employee_count=None,
+        apollo_company_id='',
+        hubspot_company_id='',
+    ):
         try:
             return CompanyRepository.create(
                 organization=organization,
+                apollo_company_id=(apollo_company_id or '').strip(),
                 hubspot_company_id=(hubspot_company_id or '').strip(),
                 name=name,
                 website=website,
+                email=email,
                 phone=phone,
+                segment=segment,
+                employee_count=employee_count,
                 created_by=user,
                 updated_by=user,
             )
         except IntegrityError as exc:
-            raise ValidationError('Já existe uma empresa com este ID do HubSpot na organização ativa.') from exc
+            raise ValidationError('Ja existe uma empresa com este identificador externo na organizacao ativa.') from exc
 
     @staticmethod
     @transaction.atomic
-    def update_company(*, user, organization, company, name, website='', phone='', hubspot_company_id=''):
+    def update_company(
+        *,
+        user,
+        organization,
+        company,
+        name,
+        website='',
+        email='',
+        phone='',
+        segment='',
+        employee_count=None,
+        apollo_company_id='',
+        hubspot_company_id='',
+    ):
         if company.organization_id != organization.id:
-            raise ValidationError('A empresa selecionada não pertence à organização ativa.')
+            raise ValidationError('A empresa selecionada nao pertence a organizacao ativa.')
 
         try:
             return CompanyRepository.update(
                 company,
+                apollo_company_id=(apollo_company_id or '').strip(),
                 hubspot_company_id=(hubspot_company_id or '').strip(),
                 name=name,
                 website=website,
+                email=email,
                 phone=phone,
+                segment=segment,
+                employee_count=employee_count,
                 updated_by=user,
             )
         except IntegrityError as exc:
-            raise ValidationError('Já existe uma empresa com este ID do HubSpot na organização ativa.') from exc
+            raise ValidationError('Ja existe uma empresa com este identificador externo na organizacao ativa.') from exc

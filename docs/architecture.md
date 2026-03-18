@@ -10,6 +10,7 @@
 - `companies`: tenant-scoped CRM companies.
 - `people`: tenant-scoped CRM persons and contact identity.
 - `integrations`: app catalog, tenant installations, encrypted credentials, and credential access audit.
+- `apollo_integration`: Apollo API key wiring, remote company search, usage snapshots, bulk import, and optional company sync handoff to HubSpot.
 - `bot_conversa`: Bot Conversa contact linking, flow cache, dispatching, and sync logs.
 - `hubspot_integration`: HubSpot company/contact/deal synchronization and pipeline cache.
 - `gmail_integration`: Gmail credential management, templates, and email dispatches.
@@ -26,6 +27,7 @@ NephewCRM/
 |-- companies/
 |-- people/
 |-- integrations/
+|-- apollo_integration/
 |-- bot_conversa/
 |-- hubspot_integration/
 |-- gmail_integration/
@@ -70,7 +72,7 @@ NephewCRM/
 ### `companies.Company`
 
 - Tenant-scoped CRM company table.
-- Stores `organization`, `name`, `website`, `phone`, `normalized_phone`, `hubspot_company_id`, `is_active`, and audit ownership fields.
+- Stores `organization`, `name`, `website`, `phone`, `normalized_phone`, `email`, `segment`, `employee_count`, `hubspot_company_id`, `apollo_company_id`, `is_active`, and audit ownership fields.
 - A company belongs to only one organization and is not shared globally between tenants.
 
 ### `people.Person`
@@ -133,6 +135,8 @@ NephewCRM/
   Encapsulates Bot Conversa installation resolution, remote contact sync, flow cache refresh, and dispatch processing.
 - `hubspot_integration.services.*`
   Encapsulates HubSpot installation resolution, company/contact sync, pipeline refresh, and deal creation.
+- `apollo_integration.services.*`
+  Encapsulates Apollo installation resolution, remote company search, usage snapshots, bulk import into CRM, and optional sync handoff to HubSpot.
 - `gmail_integration.services.*`
   Encapsulates Gmail credential handling, template management, email dispatch creation, and paced dispatch processing.
 
@@ -155,6 +159,7 @@ NephewCRM/
 - `/apps/bot-conversa/`
 - `/apps/hubspot/`
 - `/apps/gmail/`
+- `/apps/apollo/`
 
 ## Navigation flow
 
@@ -200,6 +205,6 @@ NephewCRM/
 3. Integration platform
    App catalog, installations, encrypted credentials, secure reveal flow, and access audit.
 4. Operational modules
-   Bot Conversa flow dispatches, HubSpot sync/deals, and Gmail templates/dispatches with configurable pacing and async audience filters for people who have not yet received sends in each channel.
+   Apollo company search/import, Bot Conversa flow dispatches, HubSpot sync/deals, and Gmail templates/dispatches with configurable pacing and async audience filters for people who have not yet received sends in each channel.
 5. Next evolution
    Stronger model-level tenant consistency guarantees, broader audit coverage, background processing options, and richer CRM workflows.

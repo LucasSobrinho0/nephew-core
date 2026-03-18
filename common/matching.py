@@ -31,12 +31,15 @@ def normalize_company_domain(*, website='', domain=''):
 
 
 def build_company_indexes(*, companies):
+    companies_by_apollo_id = {}
     companies_by_hubspot_id = {}
     companies_by_domain = {}
     companies_by_phone = {}
     companies_by_name = {}
 
     for company in companies:
+        if getattr(company, 'apollo_company_id', ''):
+            companies_by_apollo_id[company.apollo_company_id] = company
         if company.hubspot_company_id:
             companies_by_hubspot_id[company.hubspot_company_id] = company
         if company.website:
@@ -46,6 +49,7 @@ def build_company_indexes(*, companies):
         companies_by_name[normalize_text(company.name)] = company
 
     return {
+        'by_apollo_id': companies_by_apollo_id,
         'by_hubspot_id': companies_by_hubspot_id,
         'by_domain': companies_by_domain,
         'by_phone': companies_by_phone,
@@ -92,6 +96,7 @@ def build_person_indexes(*, persons):
 
 
 def match_company(*, remote_company, company_indexes):
+    remote_apollo_id = (remote_company.get('apollo_company_id') or '').strip()
     remote_hubspot_id = (remote_company.get('hubspot_company_id') or '').strip()
     remote_domain = normalize_company_domain(
         website=remote_company.get('website', ''),
@@ -106,6 +111,8 @@ def match_company(*, remote_company, company_indexes):
     remote_name = normalize_text(remote_company.get('name'))
 
     return (
+        company_indexes['by_apollo_id'].get(remote_apollo_id)
+        or
         company_indexes['by_hubspot_id'].get(remote_hubspot_id)
         or company_indexes['by_domain'].get(remote_domain)
         or company_indexes['by_phone'].get(remote_phone)

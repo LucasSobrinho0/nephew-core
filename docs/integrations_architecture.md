@@ -5,7 +5,7 @@
 - `integrations` is the bounded context for external app catalog, tenant app installations, credentials, and credential access audit.
 - `organizations` remains the source of tenant identity, memberships, and role evaluation.
 - `common` provides reusable encryption primitives, tenant-aware mixins, and shared model mixins.
-- `dashboard` and tenant-facing modules such as `bot_conversa`, `hubspot_integration`, and `gmail_integration` consume the active organization already resolved by middleware.
+- `dashboard` and tenant-facing modules such as `apollo_integration`, `bot_conversa`, `hubspot_integration`, and `gmail_integration` consume the active organization already resolved by middleware.
 
 ## Django app structure
 
@@ -98,8 +98,9 @@ integrations/
 
 ## Integration interplay
 
-- `hubspot_integration`, `bot_conversa`, and `gmail_integration` are independent operational modules. They do not need direct runtime calls into each other to work.
+- `apollo_integration`, `hubspot_integration`, `bot_conversa`, and `gmail_integration` are independent operational modules. They do not need direct runtime calls into each other to work.
 - The shared dependency is the tenant-scoped CRM core, especially `people.Person`, company relations, and the common matching helpers.
+- Apollo atualmente interage com o CRM por meio de `companies.Company`, nao de `people.Person`, porque esta primeira fase cobre apenas empresas.
 - HubSpot and Bot Conversa therefore interoperate through shared people records:
   - one contact can be imported from HubSpot and later receive a Bot Conversa flow
   - one remote Bot Conversa contact can be saved in the CRM and later be enriched with HubSpot identifiers
@@ -190,6 +191,17 @@ Templates:
 7. When a delay interval is configured, the frontend waits a randomized value between the configured min and max before the next processing step.
 8. The dispatch creation screen can asynchronously filter the audience to only show people who have not yet received a Gmail send in that tenant.
 
+### Apollo company import flow
+
+1. Owner or admin installs Apollo and saves an API key in the active organization.
+2. User opens the Apollo companies screen.
+3. Backend sends tenant-safe filters to the Apollo company search endpoint.
+4. The remote response is normalized into a common local shape.
+5. The screen shows whether each remote company already exists in the CRM and whether the linked local company is already synced with HubSpot.
+6. Owner or admin can select multiple rows and save them into the local CRM.
+7. The import service either updates a matched local company or creates a new tenant-scoped company.
+8. Every import is logged, and usage data can be snapshotted for later display.
+
 ### Bot Conversa dispatch flow
 
 1. Owner or admin opens the Bot Conversa module inside the active organization.
@@ -262,6 +274,7 @@ Templates:
 - No view trusts client-provided organization identifiers for installation or credential writes.
 - All repository methods that touch tenant data filter by organization relation.
 - Some tenant consistency guarantees also rely on service-layer validation where models reference other tenant-scoped records indirectly.
+- Apollo segue o mesmo padrao: a API key fica em `integrations`, enquanto o resultado remoto so se torna duravel depois de ser mapeado para `Company` dentro do tenant ativo.
 
 ## Security points
 

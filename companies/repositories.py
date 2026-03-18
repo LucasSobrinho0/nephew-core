@@ -22,6 +22,16 @@ class CompanyRepository:
         )
 
     @staticmethod
+    def get_for_organization_and_apollo_company_id(organization, apollo_company_id):
+        return (
+            Company.objects.active()
+            .for_organization(organization)
+            .with_related_objects()
+            .filter(apollo_company_id=apollo_company_id)
+            .first()
+        )
+
+    @staticmethod
     def get_for_organization_and_hubspot_company_id(organization, hubspot_company_id):
         return (
             Company.objects.active()
@@ -39,6 +49,15 @@ class CompanyRepository:
             .with_related_objects()
             .filter(public_id__in=public_ids)
             .order_by('name')
+        )
+
+    @staticmethod
+    def list_for_organization_and_apollo_company_ids(organization, apollo_company_ids):
+        return (
+            Company.objects.active()
+            .for_organization(organization)
+            .with_related_objects()
+            .filter(apollo_company_id__in=apollo_company_ids)
         )
 
     @staticmethod

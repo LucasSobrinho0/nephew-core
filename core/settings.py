@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     'integrations',
     'companies',
     'people',
+    'apollo_integration',
     'bot_conversa',
     'gmail_integration',
     'hubspot_integration',

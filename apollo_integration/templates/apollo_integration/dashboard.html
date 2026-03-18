@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+
+{% block title %}Apollo{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Apollo</span>
+    <h1>Empresas remotas e uso da API</h1>
+    <p class="text-body-secondary mb-0">Liste empresas no Apollo, filtre os resultados e salve as selecionadas no CRM com os dados disponiveis.</p>
+  </section>
+
+  {% include 'apollo_integration/_subnav.html' %}
+
+  <section class="row g-4 mb-4">
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><i class="bi bi-buildings-fill"></i></div>
+        <div><span class="stat-label">Empresas no CRM</span><h2>{{ summary.company_count }}</h2></div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><i class="bi bi-link-45deg"></i></div>
+        <div><span class="stat-label">Empresas com Apollo</span><h2>{{ summary.synced_company_count }}</h2></div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><i class="bi bi-lightning-charge-fill"></i></div>
+        <div>
+          <span class="stat-label">Creditos usados</span>
+          <h2>
+            {% if summary.usage.available %}
+              {% for item in summary.usage.credit_summary %}
+                {% if item.label == 'credits_used' %}{{ item.value }}{% endif %}
+              {% empty %}-{% endfor %}
+            {% else %}
+              -
+            {% endif %}
+          </h2>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><i class="bi bi-shield-check"></i></div>
+        <div>
+          <span class="stat-label">Creditos restantes</span>
+          <h2>
+            {% if summary.usage.available %}
+              {% for item in summary.usage.credit_summary %}
+                {% if item.label == 'credits_remaining' %}{{ item.value }}{% endif %}
+              {% empty %}-{% endfor %}
+            {% else %}
+              -
+            {% endif %}
+          </h2>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="row g-4">
+    <div class="col-xl-5">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Uso da API</span>
+            <h2>Creditos e rate limits</h2>
+          </div>
+          <a class="btn btn-outline-secondary btn-sm" href="{% url 'apollo_integration:companies' %}">Ver empresas</a>
+        </div>
+        {% if summary.usage.available %}
+          <div class="row g-3">
+            <div class="col-sm-6">
+              <div class="soft-empty h-100">
+                <p class="mb-1 text-body-secondary">Resposta carregada</p>
+                <strong>Sim</strong>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="soft-empty h-100">
+                <p class="mb-1 text-body-secondary">Creditos usados</p>
+                <strong>
+                  {% for item in summary.usage.credit_summary %}
+                    {% if item.label == 'credits_used' %}{{ item.value }}{% endif %}
+                  {% empty %}-{% endfor %}
+                </strong>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="soft-empty h-100">
+                <p class="mb-1 text-body-secondary">Creditos restantes</p>
+                <strong>
+                  {% for item in summary.usage.credit_summary %}
+                    {% if item.label == 'credits_remaining' %}{{ item.value }}{% endif %}
+                  {% empty %}-{% endfor %}
+                </strong>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="soft-empty h-100">
+                <p class="mb-1 text-body-secondary">Rate limits</p>
+                <strong>{{ summary.usage.rate_limits|length }}</strong>
+              </div>
+            </div>
+            {% if summary.usage.fetched_at %}
+              <div class="col-12">
+                <div class="soft-empty h-100">
+                  <p class="mb-1 text-body-secondary">Ultima coleta</p>
+                  <strong>{{ summary.usage.fetched_at|date:'d/m/Y H:i' }}{% if summary.usage.is_cached %} (cache){% endif %}</strong>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+          {% if summary.usage.message %}
+            <div class="soft-empty mt-3">
+              <p class="mb-0">{{ summary.usage.message }}</p>
+            </div>
+          {% endif %}
+        {% else %}
+          <div class="soft-empty">
+            <p class="mb-0">{{ summary.usage.message|default:'Ainda nao foi possivel carregar o consumo de creditos do Apollo.' }}</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-xl-7">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Historico</span>
+            <h2>Ultimos salvamentos</h2>
+          </div>
+        </div>
+        {% if summary.recent_sync_logs %}
+          <div class="table-responsive">
+            <table class="table table-clean align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Empresa</th>
+                  <th>Resultado</th>
+                  <th>Mensagem</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for log in summary.recent_sync_logs %}
+                  <tr>
+                    <td>{% if log.company %}{{ log.company.name }}{% else %}-{% endif %}</td>
+                    <td>{{ log.get_outcome_display }}</td>
+                    <td>{{ log.message }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="soft-empty">
+            <p class="mb-0">Ainda nao houve importacoes do Apollo nesta organizacao.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endblock %}

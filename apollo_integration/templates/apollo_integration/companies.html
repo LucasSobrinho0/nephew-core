@@ -1,0 +1,190 @@
+{% extends 'base.html' %}
+
+{% block title %}Empresas do Apollo{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Apollo</span>
+    <h1>Empresas remotas</h1>
+    <p class="text-body-secondary mb-0">Filtre empresas do Apollo, selecione em massa e salve no CRM com os dados disponiveis.</p>
+  </section>
+
+  {% include 'apollo_integration/_subnav.html' %}
+
+  <section class="row g-4">
+    <div class="col-xl-4">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">CRM local</span>
+            <h2>Empresas cadastradas</h2>
+          </div>
+          {% if has_loaded_local_companies and can_manage_apollo and company_rows %}
+            <button type="submit" form="apolloBulkCompanyHubSpotSyncForm" class="btn btn-brand">Sincronizar selecionadas</button>
+          {% elif not has_loaded_local_companies %}
+            <form method="get" action="{% url 'apollo_integration:companies' %}">
+              {{ load_local_form.load_local }}
+              <button type="submit" class="btn btn-outline-secondary">Listar empresas</button>
+            </form>
+          {% endif %}
+        </div>
+        {% if has_loaded_local_companies and company_rows %}
+          <form method="post" action="{% url 'apollo_integration:sync_companies_hubspot_bulk' %}" id="apolloBulkCompanyHubSpotSyncForm">
+            {% csrf_token %}
+            <div class="scroll-area scroll-area-table">
+              <table class="table table-clean align-middle mb-0">
+                <thead>
+                  <tr>
+                    {% if can_manage_apollo %}<th style="width: 44px;"><input type="checkbox" data-select-all="apollo-company-hubspot-sync"></th>{% endif %}
+                    <th>Empresa</th>
+                    <th>HubSpot</th>
+                    <th>Apollo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in company_rows %}
+                    <tr>
+                      {% if can_manage_apollo %}
+                        <td>
+                          <input type="checkbox" name="company_public_ids" value="{{ row.company.public_id }}" data-checkbox-group="apollo-company-hubspot-sync">
+                        </td>
+                      {% endif %}
+                      <td>{{ row.company.name }}</td>
+                      <td>{% if row.is_hubspot_synced %}Sim{% else %}Nao{% endif %}</td>
+                      <td>{% if row.is_apollo_synced %}Sim{% else %}Nao{% endif %}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </form>
+        {% elif has_loaded_local_companies %}
+          <div class="soft-empty"><p class="mb-0">Nenhuma empresa cadastrada ainda.</p></div>
+        {% else %}
+          <div class="soft-empty"><p class="mb-0">Clique em listar para carregar as empresas cadastradas no sistema.</p></div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="col-xl-8">
+      <div class="glass-card content-card h-100 scroll-card" id="apolloRemoteCompaniesCard">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Apollo remoto</span>
+            <h2>Empresas remotas</h2>
+          </div>
+          {% if has_loaded_remote_companies and can_manage_apollo and remote_companies %}
+            <button type="submit" form="apolloBulkRemoteCompanyImportForm" class="btn btn-brand">Salvar selecionadas</button>
+          {% endif %}
+        </div>
+
+        <form method="get" action="{% url 'apollo_integration:companies' %}" class="row g-3 align-items-end">
+          {{ search_form.search }}
+          {{ search_form.page }}
+          <div class="col-md-4">
+            <label for="{{ search_form.q_organization_name.id_for_label }}" class="form-label">{{ search_form.q_organization_name.label }}</label>
+            {{ search_form.q_organization_name }}
+          </div>
+          <div class="col-md-4">
+            <label for="{{ search_form.q_organization_domains.id_for_label }}" class="form-label">{{ search_form.q_organization_domains.label }}</label>
+            {{ search_form.q_organization_domains }}
+          </div>
+          <div class="col-md-4">
+            <label for="{{ search_form.organization_locations.id_for_label }}" class="form-label">{{ search_form.organization_locations.label }}</label>
+            {{ search_form.organization_locations }}
+          </div>
+          <div class="col-md-4">
+            <label for="{{ search_form.organization_industries.id_for_label }}" class="form-label">{{ search_form.organization_industries.label }}</label>
+            {{ search_form.organization_industries }}
+          </div>
+          <div class="col-md-4">
+            <label for="{{ search_form.organization_num_employees_ranges.id_for_label }}" class="form-label">{{ search_form.organization_num_employees_ranges.label }}</label>
+            {{ search_form.organization_num_employees_ranges }}
+          </div>
+          <div class="col-md-4">
+            <label for="{{ search_form.per_page.id_for_label }}" class="form-label">{{ search_form.per_page.label }}</label>
+            {{ search_form.per_page }}
+          </div>
+          <div class="col-12 d-flex justify-content-end gap-2">
+            <button type="submit" class="btn btn-outline-secondary">Buscar empresas</button>
+          </div>
+        </form>
+
+        {% if has_loaded_remote_companies and remote_companies %}
+          <div class="mt-4 mb-3">
+            <label for="apolloRemoteCompaniesFilter" class="form-label">Filtrar resultados carregados</label>
+            <input
+              id="apolloRemoteCompaniesFilter"
+              type="search"
+              class="form-control"
+              placeholder="Buscar por nome, website, segmento, email ou telefone"
+              data-filter-target="#apolloRemoteCompaniesTableBody"
+              data-filter-item="tr"
+            >
+          </div>
+
+          <form method="post" action="{% url 'apollo_integration:import_companies_bulk' %}" id="apolloBulkRemoteCompanyImportForm">
+            {% csrf_token %}
+            <input type="hidden" name="current_query" value="{{ current_remote_query }}">
+            <div class="scroll-area scroll-area-table">
+              <table class="table table-clean align-middle mb-0">
+                <thead>
+                  <tr>
+                    {% if can_manage_apollo and remote_companies %}
+                      <th style="width: 44px;"><input type="checkbox" data-select-all="apollo-company-import"></th>
+                    {% endif %}
+                    <th>Empresa</th>
+                    <th>Segmento</th>
+                    <th>Funcionarios</th>
+                    <th>Email</th>
+                    <th>Telefone</th>
+                    <th>Vinculo</th>
+                  </tr>
+                </thead>
+                <tbody id="apolloRemoteCompaniesTableBody">
+                  {% for company in remote_companies %}
+                    <tr
+                      data-filter-item
+                      data-filter-text="{{ company.name }} {{ company.website|default:'' }} {{ company.segment|default:'' }} {{ company.email|default:'' }} {{ company.phone|default:'' }}"
+                    >
+                      {% if can_manage_apollo %}
+                        <td>
+                          {% if not company.linked_company %}
+                            <input type="checkbox" name="apollo_company_ids" value="{{ company.apollo_company_id }}" data-checkbox-group="apollo-company-import">
+                          {% endif %}
+                        </td>
+                      {% endif %}
+                      <td>
+                        <strong>{{ company.name }}</strong>
+                        <div class="text-body-secondary small">{{ company.website|default:'-' }}</div>
+                      </td>
+                      <td>{{ company.segment|default:'-' }}</td>
+                      <td>{{ company.employee_count|default:'-' }}</td>
+                      <td>{{ company.email|default:'-' }}</td>
+                      <td>{{ company.phone|default:'-' }}</td>
+                      <td>
+                        {% if company.linked_company %}
+                          {{ company.linked_company.name }}
+                        {% else %}
+                          Nao salvo
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </form>
+        {% elif has_loaded_remote_companies %}
+          <div class="soft-empty mt-4">
+            <p class="mb-0">Nenhuma empresa remota encontrada com os filtros atuais.</p>
+          </div>
+        {% else %}
+          <div class="soft-empty mt-4">
+            <p class="mb-0">Use o filtro acima para carregar as empresas remotas do Apollo.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endblock %}

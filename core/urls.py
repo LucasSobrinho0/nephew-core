@@ -11,6 +11,7 @@ urlpatterns = [
     path('', include('dashboard.urls')),
     path('', include('integrations.urls')),
     path('', include('people.urls')),
+    path('', include('apollo_integration.urls')),
     path('', include('bot_conversa.urls')),
     path('', include('gmail_integration.urls')),
     path('', include('hubspot_integration.urls')),

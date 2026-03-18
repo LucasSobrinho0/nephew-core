@@ -20,15 +20,19 @@ class CompanyServiceTests(TestCase):
             created_by=self.user,
         )
 
-    def test_create_company_normalizes_phone_and_hubspot_id(self):
+    def test_create_company_normalizes_phone_and_external_ids(self):
         company = CompanyService.create_company(
             user=self.user,
             organization=self.organization,
             name='ACME',
             website='https://acme.test',
+            email=' SALES@acme.test ',
             phone='(11) 4000-0000',
+            apollo_company_id=' ap-123 ',
             hubspot_company_id=' 123 ',
         )
 
+        self.assertEqual(company.apollo_company_id, 'ap-123')
         self.assertEqual(company.hubspot_company_id, '123')
+        self.assertEqual(company.email, 'sales@acme.test')
         self.assertTrue(company.normalized_phone)

@@ -11,7 +11,7 @@ APP_NAVIGATION_ITEMS = {
     'apollo': {
         'label': 'Apollo',
         'icon_class': 'bi bi-broadcast-pin',
-        'route_name': '',
+        'route_name': 'apollo_integration:dashboard',
     },
     'hubspot': {
         'label': 'HubSpot',
