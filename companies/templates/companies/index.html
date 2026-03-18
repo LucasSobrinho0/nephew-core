@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+
+{% block title %}Empresas{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">CRM</span>
+    <h1>Empresas da organizacao</h1>
+    <p class="text-body-secondary mb-0">Cadastre e mantenha as empresas da base ativa. Campos de integracao aparecem somente quando o app correspondente estiver instalado.</p>
+  </section>
+
+  <section class="row g-4">
+    <div class="col-xl-4">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Novo cadastro</span>
+            <h2>Adicionar empresa</h2>
+          </div>
+        </div>
+        <form method="post" action="{% url 'companies:create' %}" class="row g-3">
+          {% csrf_token %}
+          {% for field in create_form %}
+            <div class="col-12 {% if field.name != 'website' and field.name != 'segment' %}col-md-6{% endif %}">
+              <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+              {{ field }}
+              {% if field.errors %}
+                <div class="text-danger small mt-1">{{ field.errors|join:', ' }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+          <div class="col-12">
+            <button type="submit" class="btn btn-brand">Salvar empresa</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div class="col-xl-8">
+      <div class="glass-card content-card h-100" id="companiesLocalListCard">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Base ativa</span>
+            <h2>Empresas cadastradas</h2>
+            <p class="text-body-secondary mb-0">Todas as empresas abaixo pertencem somente a organizacao ativa.</p>
+          </div>
+          {% if has_loaded_companies %}
+            <span class="status-badge status-available">{{ company_rows|length }} registro{{ company_rows|length|pluralize }}</span>
+          {% else %}
+            <form method="get" action="{% url 'companies:index' %}">
+              <input type="hidden" name="load" value="1">
+              <button type="submit" class="btn btn-outline-secondary">Listar empresas</button>
+            </form>
+          {% endif %}
+        </div>
+        {% if has_loaded_companies and company_rows %}
+          <div class="mb-3">
+            <label for="companiesListFilter" class="form-label">Filtrar empresas</label>
+            <input id="companiesListFilter" type="search" class="form-control" placeholder="Buscar por nome, site, email, telefone, segmento ou IDs remotos" data-filter-target="#companiesListTableBody" data-filter-item="tr">
+          </div>
+          <div class="table-responsive">
+            <table class="table table-clean align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Empresa</th>
+                  <th>Contato</th>
+                  <th>Segmento</th>
+                  <th>IDs remotos</th>
+                  <th class="text-end">Acao</th>
+                </tr>
+              </thead>
+              <tbody id="companiesListTableBody">
+                {% for company in company_rows %}
+                  <tr data-filter-item data-filter-text="{{ company.name }} {{ company.website|default:'' }} {{ company.email|default:'' }} {{ company.phone|default:'' }} {{ company.segment|default:'' }} {{ company.hubspot_company_id|default:'' }} {{ company.apollo_company_id|default:'' }}">
+                    <td>
+                      <strong>{{ company.name }}</strong>
+                      <div class="small text-body-secondary">{{ company.website|default:'-' }}</div>
+                    </td>
+                    <td>
+                      <div class="small text-body-secondary">Email: {{ company.email|default:'-' }}</div>
+                      <div class="small text-body-secondary">Telefone: {{ company.phone|default:'-' }}</div>
+                    </td>
+                    <td>{{ company.segment|default:'-' }}</td>
+                    <td>
+                      {% if show_hubspot_fields %}
+                        <div class="small text-body-secondary">HubSpot: {{ company.hubspot_company_id|default:'-' }}</div>
+                      {% endif %}
+                      {% if show_apollo_fields %}
+                        <div class="small text-body-secondary">Apollo: {{ company.apollo_company_id|default:'-' }}</div>
+                      {% endif %}
+                      {% if not show_hubspot_fields and not show_apollo_fields %}
+                        <span class="text-body-secondary">-</span>
+                      {% endif %}
+                    </td>
+                    <td class="text-end">
+                      <a href="{% url 'companies:edit' company.public_id %}" class="btn btn-outline-secondary btn-sm">Editar</a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% elif has_loaded_companies %}
+          <div class="soft-empty text-start px-0 pb-0">
+            <p class="mb-0">Nenhuma empresa cadastrada ainda para a organizacao ativa.</p>
+          </div>
+        {% else %}
+          <div class="soft-empty text-start px-0 pb-0">
+            <p class="mb-0">Clique em listar para carregar as empresas cadastradas no sistema.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endblock %}

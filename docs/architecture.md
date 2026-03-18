@@ -155,6 +155,7 @@ NephewCRM/
 - `/invites/generate/`
 - `/apps/`
 - `/api-keys/`
+- `/companies/`
 - `/people/`
 - `/apps/bot-conversa/`
 - `/apps/hubspot/`
