@@ -6,47 +6,70 @@ from django.urls import reverse
 from accounts.models import User
 from apollo_integration.client import ApolloClient
 from apollo_integration.models import ApolloCompanySyncLog
-from apollo_integration.services import ApolloCompanyService, ApolloInstallationService
+from apollo_integration.services import ApolloCompanyService, ApolloInstallationService, ApolloPersonService
 from common.constants import ACTIVE_ORGANIZATION_SESSION_KEY
 from companies.models import Company
 from integrations.models import AppCatalog, OrganizationAppInstallation
 from integrations.services import AppCredentialService
 from organizations.models import Organization, OrganizationMembership
+from people.models import Person
 
 
 class FakeApolloClient:
     def __init__(self):
         self.last_search_payload = None
+        self.last_people_payload = None
 
     def search_organizations(self, *, payload):
         self.last_search_payload = payload
         return {
             'organizations': [
                 {
-                    'id': 'apollo-1',
-                    'organization': {
-                        'id': 'apollo-1',
-                        'name': 'Apollo One',
-                        'website_url': 'https://acme.io',
-                        'industry': 'Software',
-                        'estimated_num_employees': 180,
-                        'primary_email': 'INFO@ACME.IO',
-                        'primary_phone': '+55 11 4000-0000',
-                    },
+                    'apollo_company_id': 'apollo-1',
+                    'name': 'Apollo One',
+                    'website': 'https://acme.io',
+                    'segment': 'Software',
+                    'employee_count': 180,
+                    'email': 'info@acme.io',
+                    'phone': '+55 11 4000-0000',
+                    'raw_payload': {'id': 'apollo-1'},
                 },
                 {
-                    'id': 'apollo-2',
-                    'organization': {
-                        'id': 'apollo-2',
-                        'name': 'Apollo Two',
-                        'website_url': 'https://other.example',
-                        'industry': 'Services',
-                        'estimated_num_employees': 8,
-                    },
+                    'apollo_company_id': 'apollo-2',
+                    'name': 'Apollo Two',
+                    'website': 'https://other.example',
+                    'segment': 'Services',
+                    'employee_count': 8,
+                    'email': '',
+                    'phone': '',
+                    'raw_payload': {'id': 'apollo-2'},
                 },
             ],
-            'pagination': {'total_entries': 2},
-            'raw_payload': {'total_entries': 2},
+            'pagination': {'total_entries': 2, 'total_pages': 1},
+        }
+
+    def search_people(self, *, payload):
+        self.last_people_payload = payload
+        return {
+            'people': [
+                {
+                    'apollo_person_id': 'apollo-person-1',
+                    'first_name': 'Carla',
+                    'last_name': '',
+                    'last_name_obfuscated': 'So***a',
+                    'title': 'Financial Supervisor',
+                    'has_email': True,
+                    'has_direct_phone': 'Yes',
+                    'last_refreshed_at': '2025-11-10T08:39:18.742+00:00',
+                    'organization_name': 'Apollo One',
+                    'organization_website': 'https://acme.io',
+                    'organization_apollo_company_id': 'apollo-1',
+                    'email': '',
+                    'phone': '',
+                    'raw_payload': {'id': 'apollo-person-1'},
+                }
+            ],
+            'pagination': {'total_entries': 1, 'total_pages': 1},
         }
 
     def get_usage_stats(self):
@@ -136,7 +159,7 @@ class ApolloModuleTests(TestCase):
         self.assertContains(response, '60')
 
     @patch('apollo_integration.services.ApolloInstallationService.build_client')
-    def test_remote_list_builds_apollo_payload_from_filters(self, build_client_mock):
+    def test_remote_company_list_builds_apollo_payload_from_filters(self, build_client_mock):
         fake_client = FakeApolloClient()
         build_client_mock.return_value = fake_client
 
@@ -195,7 +218,7 @@ class ApolloModuleTests(TestCase):
         )
 
     @patch('apollo_integration.services.ApolloInstallationService.build_client')
-    def test_bulk_import_view_uses_current_query_and_persists_company(self, build_client_mock):
+    def test_bulk_import_company_view_uses_current_query_and_persists_company(self, build_client_mock):
         build_client_mock.return_value = FakeApolloClient()
         self.client.force_login(self.owner)
         self.activate_organization()
@@ -211,6 +234,107 @@ class ApolloModuleTests(TestCase):
         self.assertEqual(response.status_code, 302)
         company = Company.objects.get(organization=self.organization, apollo_company_id='apollo-1')
         self.assertEqual(company.name, 'Apollo One')
+
+    @patch('apollo_integration.services.ApolloInstallationService.build_client')
+    def test_remote_people_list_builds_apollo_payload_from_company_and_person_filters(self, build_client_mock):
+        fake_client = FakeApolloClient()
+        build_client_mock.return_value = fake_client
+        company = Company.objects.create(
+            organization=self.organization,
+            name='Apollo One',
+            website='https://acme.io',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+
+        response = ApolloPersonService.list_remote_people(
+            organization=self.organization,
+            filters={
+                'company_public_id': str(company.public_id),
+                'person_titles': ['financial supervisor'],
+                'q_keywords': 'Carla',
+                'contact_email_status': 'verified',
+                'per_page': 25,
+            },
+        )
+
+        self.assertEqual(response['pagination']['total_entries'], 1)
+        self.assertEqual(len(response['people']), 1)
+        self.assertEqual(fake_client.last_people_payload['q_organization_domains_list'], ['acme.io'])
+        self.assertEqual(fake_client.last_people_payload['person_titles'], ['financial supervisor'])
+        self.assertEqual(fake_client.last_people_payload['q_keywords'], 'Carla')
+        self.assertEqual(fake_client.last_people_payload['contact_email_status'], 'verified')
+
+    def test_import_remote_people_persists_apollo_person_id_without_phone(self):
+        company = Company.objects.create(
+            organization=self.organization,
+            name='Apollo One',
+            apollo_company_id='apollo-1',
+            website='https://acme.io',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+
+        ApolloPersonService.import_remote_people(
+            user=self.owner,
+            organization=self.organization,
+            remote_people=[
+                {
+                    'apollo_person_id': 'apollo-person-1',
+                    'first_name': 'Carla',
+                    'last_name': '',
+                    'last_name_obfuscated': 'So***a',
+                    'title': 'Financial Supervisor',
+                    'organization_name': 'Apollo One',
+                    'organization_website': 'https://acme.io',
+                    'organization_apollo_company_id': 'apollo-1',
+                    'email': '',
+                    'phone': '',
+                }
+            ],
+        )
+
+        person = Person.objects.get(organization=self.organization, apollo_person_id='apollo-person-1')
+        self.assertEqual(person.first_name, 'Carla')
+        self.assertEqual(person.last_name, 'So***a')
+        self.assertEqual(person.company_id, company.id)
+        self.assertEqual(person.phone, '')
+
+    @patch('apollo_integration.services.ApolloInstallationService.build_client')
+    def test_people_page_renders_remote_people(self, build_client_mock):
+        build_client_mock.return_value = FakeApolloClient()
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.get(
+            reverse('apollo_integration:people'),
+            {
+                'q_keywords': 'Carla',
+                'per_page': '25',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Carla')
+        self.assertContains(response, 'Financial Supervisor')
+
+    @patch('apollo_integration.services.ApolloInstallationService.build_client')
+    def test_bulk_import_people_view_persists_person(self, build_client_mock):
+        build_client_mock.return_value = FakeApolloClient()
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.post(
+            reverse('apollo_integration:import_people_bulk'),
+            {
+                'apollo_person_ids': ['apollo-person-1'],
+                'current_query': 'search=1&q_keywords=Carla&per_page=25',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        person = Person.objects.get(organization=self.organization, apollo_person_id='apollo-person-1')
+        self.assertEqual(person.first_name, 'Carla')
 
     def test_user_role_cannot_save_remote_companies(self):
         self.client.force_login(self.user)
@@ -234,40 +358,23 @@ class ApolloModuleTests(TestCase):
         self.assertEqual(installation.pk, self.installation.pk)
         self.assertEqual(api_key, 'apollo-private-token')
 
-    @patch('apollo_integration.services.ApolloInstallationService.build_client')
-    def test_companies_page_loads_remote_results_when_query_has_filters_without_search_flag(self, build_client_mock):
-        build_client_mock.return_value = FakeApolloClient()
-        self.client.force_login(self.owner)
-        self.activate_organization()
-
-        response = self.client.get(
-            reverse('apollo_integration:companies'),
+    def test_client_normalizes_person_payload(self):
+        normalized = ApolloClient._normalize_person_payload(
             {
-                'q_organization_name': 'Apollo',
-                'per_page': '25',
-            },
+                'id': 'apollo-person-9',
+                'first_name': 'Joao',
+                'last_name_obfuscated': 'Si***a',
+                'title': 'IT Manager',
+                'has_email': True,
+                'has_direct_phone': 'Yes',
+                'organization': {
+                    'id': 'apollo-company-9',
+                    'name': 'Tech Co',
+                    'website_url': 'https://tech.example',
+                },
+            }
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Apollo One')
-
-    def test_client_extracts_companies_key_shape(self):
-        response_payload = {
-            'companies': [
-                {
-                    'id': 'apollo-3',
-                    'name': 'Apollo Three',
-                    'website_url': 'https://third.example',
-                    'industry': 'Energy',
-                    'estimated_num_employees': 24,
-                }
-            ],
-            'pagination': {'total_entries': 1},
-        }
-
-        extracted = ApolloClient._extract_organization_items(response_payload)
-        normalized = ApolloClient._normalize_company_payload(extracted[0])
-
-        self.assertEqual(len(extracted), 1)
-        self.assertEqual(normalized['name'], 'Apollo Three')
-        self.assertEqual(ApolloClient._extract_pagination(response_payload)['total_entries'], 1)
+        self.assertEqual(normalized['apollo_person_id'], 'apollo-person-9')
+        self.assertEqual(normalized['organization_apollo_company_id'], 'apollo-company-9')
+        self.assertEqual(normalized['organization_name'], 'Tech Co')

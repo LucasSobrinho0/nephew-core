@@ -100,7 +100,8 @@ integrations/
 
 - `apollo_integration`, `hubspot_integration`, `bot_conversa`, and `gmail_integration` are independent operational modules. They do not need direct runtime calls into each other to work.
 - The shared dependency is the tenant-scoped CRM core, especially `people.Person`, company relations, and the common matching helpers.
-- Apollo atualmente interage com o CRM por meio de `companies.Company`, nao de `people.Person`, porque esta primeira fase cobre apenas empresas.
+- Apollo agora interage com o CRM por meio de `companies.Company` e `people.Person`.
+- A busca de pessoas do Apollo salva resultados censurados no CRM por `apollo_person_id`, sem depender de enrichment nesta fase.
 - HubSpot and Bot Conversa therefore interoperate through shared people records:
   - one contact can be imported from HubSpot and later receive a Bot Conversa flow
   - one remote Bot Conversa contact can be saved in the CRM and later be enriched with HubSpot identifiers
@@ -202,6 +203,16 @@ Templates:
 7. The import service either updates a matched local company or creates a new tenant-scoped company.
 8. Every import is logged, and usage data can be snapshotted for later display.
 
+### Apollo people search flow
+
+1. Owner or admin opens the Apollo people screen inside the active organization.
+2. User can search by empresa local opcional, nome ou dominio de empresa, cargos e palavras-chave.
+3. Backend calls `mixed_people/api_search`.
+4. Apollo returns censored person records such as `last_name_obfuscated`, `has_email`, and `has_direct_phone`.
+5. The screen shows those results and whether each person is already linked to a local `Person`.
+6. Owner or admin can save one or more results into the tenant-scoped CRM.
+7. The saved local person keeps `apollo_person_id` and can remain without phone until a later enrichment or reconciliation step.
+
 ### Bot Conversa dispatch flow
 
 1. Owner or admin opens the Bot Conversa module inside the active organization.
@@ -274,7 +285,7 @@ Templates:
 - No view trusts client-provided organization identifiers for installation or credential writes.
 - All repository methods that touch tenant data filter by organization relation.
 - Some tenant consistency guarantees also rely on service-layer validation where models reference other tenant-scoped records indirectly.
-- Apollo segue o mesmo padrao: a API key fica em `integrations`, enquanto o resultado remoto so se torna duravel depois de ser mapeado para `Company` dentro do tenant ativo.
+- Apollo segue o mesmo padrao: a API key fica em `integrations`, enquanto o resultado remoto so se torna duravel depois de ser mapeado para `Company` ou `Person` dentro do tenant ativo.
 
 ## Security points
 

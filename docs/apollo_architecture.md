@@ -2,16 +2,17 @@
 
 ## Scope atual
 
-- O app `apollo_integration` cobre apenas empresas nesta primeira fase.
+- O app `apollo_integration` cobre empresas e busca remota de pessoas.
 - O modulo permite:
   - consultar empresas remotas no Apollo com filtros
   - visualizar website, segmento, quantidade de funcionarios, email e telefone quando a API retornar
   - selecionar empresas em massa
   - salvar as selecionadas no CRM local
   - sincronizar empresas locais selecionadas com o HubSpot
+  - consultar pessoas remotas no Apollo com filtros por empresa opcional, cargo e palavras-chave
+  - salvar pessoas remotas no CRM com `apollo_person_id`, mesmo quando a busca retorna dados censurados
   - visualizar um resumo de uso da API do Apollo
 - O modulo ainda nao cobre:
-  - busca de pessoas
   - enrichment de pessoas
   - enrichment de empresas
   - automacoes em background
@@ -35,6 +36,8 @@
 
 - `POST /api/v1/mixed_companies/search`
   Usado para listar empresas remotas com filtros.
+- `POST /api/v1/mixed_people/api_search`
+  Usado para buscar pessoas remotas com dados censurados e filtros de cargo, empresa e palavras-chave.
 - `POST /api/v1/usage_stats/api_usage_stats`
   Usado para montar o resumo de uso exibido no dashboard.
 
@@ -54,6 +57,13 @@
   - `phone`
   - `normalized_phone`
 - Existe unicidade por tenant em `(organization, apollo_company_id)` quando o valor estiver preenchido.
+
+### `people.Person`
+
+- Continua sendo o hub local de identidade de contatos.
+- Agora tambem pode armazenar `apollo_person_id`.
+- Para suportar importacao de buscas censuradas do Apollo, `phone` pode permanecer vazio nesses registros especificos.
+- O cadastro manual de pessoas continua exigindo telefone pela interface do CRM.
 
 ### `apollo_integration.ApolloCompanySyncLog`
 
@@ -87,6 +97,27 @@
    - vincula a empresa remota a uma empresa local existente quando houver match seguro
    - ou cria uma nova empresa local quando ainda nao houver correspondente
 10. O sistema registra `ApolloCompanySyncLog` para auditoria.
+
+## Fluxo de busca de pessoas
+
+1. O usuario abre `Apps > Apollo > Pessoas`.
+2. Pode informar:
+   - uma empresa local do CRM como filtro opcional
+   - nome ou dominio de empresa
+   - cargos
+   - nome ou palavra-chave da pessoa
+   - status de email
+3. O backend usa `mixed_people/api_search`.
+4. A resposta retorna pessoas com dados censurados, como `last_name_obfuscated`, `has_email` e `has_direct_phone`.
+5. A tela mostra o que esta disponivel sem enrichment.
+6. O usuario pode salvar essas pessoas no CRM.
+7. O registro local guarda `apollo_person_id` e tenta vincular a empresa local correspondente quando houver match por `apollo_company_id`, dominio ou nome.
+
+## Decisao sobre dados censurados
+
+- O search de pessoas do Apollo nao garante email e telefone reais.
+- Mesmo assim, o CRM pode salvar o contato com `apollo_person_id`, nome e empresa, deixando `phone` vazio quando o dado nao vier.
+- Isso prepara o registro para enriquecimento ou reconciliacao futura sem exigir `people/bulk_match` nesta fase.
 
 ## Matching e reutilizacao do CRM
 
@@ -122,6 +153,5 @@
 
 ## Decisoes intencionais desta fase
 
-- Pessoas do Apollo ainda nao entram no escopo para evitar misturar busca, match e enrichment cedo demais.
 - Enrichment fica para uma fase posterior, porque muda bastante custo, UX e regra de negocio.
 - A sincronizacao com HubSpot permanece opcional e parte das empresas locais, nao como dependencia de runtime do Apollo.

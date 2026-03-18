@@ -11,13 +11,16 @@ from apollo_integration.exceptions import ApolloApiError, ApolloConfigurationErr
 from apollo_integration.forms import (
     ApolloBulkCompanyHubSpotSyncForm,
     ApolloBulkRemoteCompanyImportForm,
+    ApolloBulkRemotePersonImportForm,
     ApolloLocalCompanyListForm,
     ApolloOrganizationSearchForm,
+    ApolloPeopleSearchForm,
 )
 from apollo_integration.services import (
     ApolloCompanyService,
     ApolloDashboardService,
     ApolloInstallationService,
+    ApolloPersonService,
 )
 from companies.repositories import CompanyRepository
 
@@ -65,6 +68,7 @@ class ApolloAccessMixin(LoginRequiredMixin):
             'apollo_tabs': [
                 {'label': 'Visao geral', 'url': 'apollo_integration:dashboard', 'key': 'dashboard'},
                 {'label': 'Empresas', 'url': 'apollo_integration:companies', 'key': 'companies'},
+                {'label': 'Pessoas', 'url': 'apollo_integration:people', 'key': 'people'},
             ],
             'apollo_active_tab': active_tab,
             'can_manage_apollo': self.active_membership.can_manage_integrations,
@@ -76,6 +80,44 @@ class ApolloAccessMixin(LoginRequiredMixin):
         if not query_string:
             return base_url
         return f'{base_url}?{query_string}'
+
+    def build_pagination_links(self, *, route_name, current_page, total_pages):
+        if total_pages <= 1:
+            return {}
+
+        def build_query_for_page(page_number):
+            query = self.request.GET.copy()
+            query['search'] = '1'
+            query['page'] = str(page_number)
+            return query.urlencode()
+
+        page_numbers = []
+        start_page = max(1, current_page - 2)
+        end_page = min(total_pages, current_page + 2)
+        for page_number in range(start_page, end_page + 1):
+            page_numbers.append(
+                {
+                    'number': page_number,
+                    'is_current': page_number == current_page,
+                    'url': self.build_url_with_query(route_name, build_query_for_page(page_number)),
+                }
+            )
+
+        return {
+            'current_page': current_page,
+            'total_pages': total_pages,
+            'previous_url': (
+                self.build_url_with_query(route_name, build_query_for_page(current_page - 1))
+                if current_page > 1
+                else ''
+            ),
+            'next_url': (
+                self.build_url_with_query(route_name, build_query_for_page(current_page + 1))
+                if current_page < total_pages
+                else ''
+            ),
+            'page_numbers': page_numbers,
+        }
 
 
 class ApolloOperatorRequiredMixin(ApolloAccessMixin):
@@ -147,7 +189,7 @@ class ApolloCompaniesView(ApolloAccessMixin, TemplateView):
         company_rows = []
         remote_companies = []
         pagination = {}
-        search_diagnostics = {}
+        pagination_links = {}
         has_loaded_local_companies = self.request.GET.get('load_local') == '1'
         has_loaded_remote_companies = self._has_remote_search_request(self.request.GET)
 
@@ -162,7 +204,13 @@ class ApolloCompaniesView(ApolloAccessMixin, TemplateView):
                 )
                 remote_companies = remote_result['companies']
                 pagination = remote_result['pagination']
-                search_diagnostics = remote_result.get('diagnostics') or {}
+                current_page = int(search_form.cleaned_data.get('page') or 1)
+                total_pages = int((pagination.get('total_pages') or current_page) or current_page)
+                pagination_links = self.build_pagination_links(
+                    route_name='apollo_integration:companies',
+                    current_page=current_page,
+                    total_pages=total_pages,
+                )
             except (ApolloApiError, ApolloConfigurationError, ValidationError) as exc:
                 messages.error(self.request, str(exc))
 
@@ -174,9 +222,73 @@ class ApolloCompaniesView(ApolloAccessMixin, TemplateView):
                 'company_rows': company_rows,
                 'remote_companies': remote_companies,
                 'pagination': pagination,
-                'search_diagnostics': search_diagnostics,
+                'pagination_links': pagination_links,
                 'has_loaded_local_companies': has_loaded_local_companies,
                 'has_loaded_remote_companies': has_loaded_remote_companies,
+                'current_remote_query': self.request.GET.urlencode(),
+            }
+        )
+        return context
+
+
+class ApolloPeopleView(ApolloAccessMixin, TemplateView):
+    template_name = 'apollo_integration/people.html'
+
+    @staticmethod
+    def _has_remote_search_request(query_dict):
+        if query_dict.get('search') == '1':
+            return True
+        filter_keys = (
+            'company_public_id',
+            'q_organization_name',
+            'q_organization_domains',
+            'person_titles',
+            'q_keywords',
+            'contact_email_status',
+            'page',
+            'per_page',
+        )
+        return any(query_dict.get(key) for key in filter_keys)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        search_form = kwargs.get('search_form') or ApolloPeopleSearchForm(
+            self.request.GET or None,
+            company_choices=ApolloPersonService.build_company_filter_choices(organization=self.active_organization),
+        )
+        person_rows = ApolloPersonService.build_person_rows(organization=self.active_organization)
+        remote_people = []
+        pagination = {}
+        pagination_links = {}
+        has_loaded_remote_people = self._has_remote_search_request(self.request.GET)
+
+        if has_loaded_remote_people and search_form.is_valid():
+            try:
+                remote_result = ApolloPersonService.list_remote_people(
+                    organization=self.active_organization,
+                    filters=search_form.cleaned_data,
+                )
+                remote_people = remote_result['people']
+                pagination = remote_result['pagination']
+                current_page = int(search_form.cleaned_data.get('page') or 1)
+                total_pages = int((pagination.get('total_pages') or current_page) or current_page)
+                pagination_links = self.build_pagination_links(
+                    route_name='apollo_integration:people',
+                    current_page=current_page,
+                    total_pages=total_pages,
+                )
+            except (ApolloApiError, ApolloConfigurationError, ValidationError) as exc:
+                messages.error(self.request, str(exc))
+
+        context.update(self.build_base_context(active_tab='people'))
+        context.update(
+            {
+                'search_form': search_form,
+                'person_rows': person_rows,
+                'remote_people': remote_people,
+                'pagination': pagination,
+                'pagination_links': pagination_links,
+                'has_loaded_remote_people': has_loaded_remote_people,
                 'current_remote_query': self.request.GET.urlencode(),
             }
         )
@@ -219,6 +331,53 @@ class ApolloBulkRemoteCompanyImportView(ApolloOperatorRequiredMixin, View):
 
         messages.success(request, f'{len(selected_companies)} empresas do Apollo foram salvas no CRM.')
         return redirect(self.build_url_with_query('apollo_integration:companies', current_query))
+
+
+class ApolloBulkRemotePersonImportView(ApolloOperatorRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        current_query = request.POST.get('current_query', '')
+        search_data = QueryDict(current_query) if current_query else request.POST
+        search_form = ApolloPeopleSearchForm(
+            search_data,
+            company_choices=ApolloPersonService.build_company_filter_choices(organization=self.active_organization),
+        )
+        search_form.is_valid()
+        remote_result = ApolloPersonService.list_remote_people(
+            organization=self.active_organization,
+            filters=search_form.cleaned_data if search_form.cleaned_data else {},
+        )
+        choices = [
+            (
+                person['apollo_person_id'],
+                person['first_name'] or person['apollo_person_id'],
+            )
+            for person in remote_result['people']
+        ]
+        form = ApolloBulkRemotePersonImportForm(request.POST, person_choices=choices)
+
+        if not form.is_valid():
+            messages.error(request, form.errors.get('apollo_person_ids', ['Selecione pessoas remotas validas.'])[0])
+            return redirect(self.build_url_with_query('apollo_integration:people', current_query))
+
+        selected_ids = set(form.cleaned_data['apollo_person_ids'])
+        selected_people = [
+            person
+            for person in remote_result['people']
+            if person['apollo_person_id'] in selected_ids
+        ]
+
+        try:
+            ApolloPersonService.import_remote_people(
+                user=request.user,
+                organization=self.active_organization,
+                remote_people=selected_people,
+            )
+        except (ApolloApiError, ApolloConfigurationError, PermissionDenied, ValidationError) as exc:
+            messages.error(request, str(exc))
+            return redirect(self.build_url_with_query('apollo_integration:people', current_query))
+
+        messages.success(request, f'{len(selected_people)} pessoas do Apollo foram salvas no CRM.')
+        return redirect(self.build_url_with_query('apollo_integration:people', current_query))
 
 
 class ApolloBulkCompanyHubSpotSyncView(ApolloAccessMixin, View):

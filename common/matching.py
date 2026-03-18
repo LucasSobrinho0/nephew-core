@@ -58,6 +58,7 @@ def build_company_indexes(*, companies):
 
 
 def build_person_indexes(*, persons):
+    persons_by_apollo_id = {}
     persons_by_hubspot_id = {}
     persons_by_bot_conversa_id = {}
     persons_by_email_lookup = {}
@@ -67,6 +68,8 @@ def build_person_indexes(*, persons):
     persons_by_name = {}
 
     for person in persons:
+        if getattr(person, 'apollo_person_id', ''):
+            persons_by_apollo_id[person.apollo_person_id] = person
         if person.hubspot_contact_id:
             persons_by_hubspot_id[person.hubspot_contact_id] = person
         if person.bot_conversa_id:
@@ -85,6 +88,7 @@ def build_person_indexes(*, persons):
                 persons_by_name_phone[(normalized_name, person.normalized_phone)] = person
 
     return {
+        'by_apollo_id': persons_by_apollo_id,
         'by_hubspot_id': persons_by_hubspot_id,
         'by_bot_conversa_id': persons_by_bot_conversa_id,
         'by_email_lookup': persons_by_email_lookup,
@@ -121,11 +125,12 @@ def match_company(*, remote_company, company_indexes):
 
 
 def match_person(*, remote_contact, person_indexes, integration_key='hubspot'):
-    remote_id = (
-        (remote_contact.get('hubspot_contact_id') or '').strip()
-        if integration_key == 'hubspot'
-        else (remote_contact.get('external_subscriber_id') or '').strip()
-    )
+    if integration_key == 'hubspot':
+        remote_id = (remote_contact.get('hubspot_contact_id') or '').strip()
+    elif integration_key == 'bot_conversa':
+        remote_id = (remote_contact.get('external_subscriber_id') or '').strip()
+    else:
+        remote_id = (remote_contact.get('apollo_person_id') or '').strip()
     remote_email = normalize_email_address(remote_contact.get('email', '')) if remote_contact.get('email') else ''
     remote_email_lookup = build_email_lookup(remote_email) if remote_email else ''
     remote_phone = ''
@@ -146,6 +151,10 @@ def match_person(*, remote_contact, person_indexes, integration_key='hubspot'):
             return person
     if integration_key == 'bot_conversa' and remote_id:
         person = person_indexes['by_bot_conversa_id'].get(remote_id)
+        if person is not None:
+            return person
+    if integration_key == 'apollo' and remote_id:
+        person = person_indexes['by_apollo_id'].get(remote_id)
         if person is not None:
             return person
 

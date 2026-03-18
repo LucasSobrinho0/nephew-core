@@ -78,9 +78,9 @@ NephewCRM/
 ### `people.Person`
 
 - Tenant-scoped CRM person table.
-- Stores `organization`, optional `company`, `phone`, `normalized_phone`, `email`, `email_lookup`, `first_name`, `last_name`, integration identifiers, active flag, and audit ownership fields.
+- Stores `organization`, optional `company`, `phone`, `normalized_phone`, `email`, `email_lookup`, `first_name`, `last_name`, `apollo_person_id`, `hubspot_contact_id`, `bot_conversa_id`, active flag, and audit ownership fields.
 - Uses normalized phone and deterministic email lookup for uniqueness and matching.
-- Acts as the shared identity hub for HubSpot and Bot Conversa, so the integrations stay operationally independent while still converging into one tenant-scoped person when matching succeeds.
+- Acts as the shared identity hub for Apollo, HubSpot, and Bot Conversa, so the integrations stay operationally independent while still converging into one tenant-scoped person when matching succeeds.
 
 ## Roles and permissions
 

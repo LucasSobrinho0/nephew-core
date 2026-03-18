@@ -1,0 +1,193 @@
+{% extends 'base.html' %}
+
+{% block title %}Pessoas do Apollo{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Apollo</span>
+    <h1>Pessoas remotas</h1>
+    <p class="text-body-secondary mb-0">Busque pessoas no Apollo por empresa opcional, nome e cargo. Os dados ficam censurados nesta etapa e podem ser salvos no CRM com o ID do Apollo.</p>
+  </section>
+
+  {% include 'apollo_integration/_subnav.html' %}
+
+  <section class="row g-4">
+    <div class="col-xl-4">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">CRM local</span>
+            <h2>Pessoas salvas</h2>
+          </div>
+          <span class="status-badge status-available">{{ person_rows|length }} registro{{ person_rows|length|pluralize }}</span>
+        </div>
+        {% if person_rows %}
+          <div class="scroll-area scroll-area-table">
+            <table class="table table-clean align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Apollo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in person_rows %}
+                  <tr>
+                    <td>{{ row.person.full_name }}</td>
+                    <td>{% if row.is_apollo_synced %}Sim{% else %}Nao{% endif %}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="soft-empty"><p class="mb-0">Nenhuma pessoa salva ainda no CRM para esta organizacao.</p></div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="col-xl-8">
+      <div class="glass-card content-card h-100 scroll-card">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Apollo remoto</span>
+            <h2>Pessoas encontradas</h2>
+          </div>
+          {% if has_loaded_remote_people and can_manage_apollo and remote_people %}
+            <button type="submit" form="apolloBulkRemotePersonImportForm" class="btn btn-brand">Salvar selecionadas</button>
+          {% endif %}
+        </div>
+
+        <form method="get" action="{% url 'apollo_integration:people' %}" class="row g-3 align-items-end">
+          {{ search_form.search }}
+          {{ search_form.page }}
+          <div class="col-md-4">
+            <label for="{{ search_form.company_public_id.id_for_label }}" class="form-label">{{ search_form.company_public_id.label }}</label>
+            {{ search_form.company_public_id }}
+          </div>
+          <div class="col-md-4">
+            <label for="{{ search_form.q_organization_name.id_for_label }}" class="form-label">{{ search_form.q_organization_name.label }}</label>
+            {{ search_form.q_organization_name }}
+          </div>
+          <div class="col-md-4">
+            <label for="{{ search_form.q_organization_domains.id_for_label }}" class="form-label">{{ search_form.q_organization_domains.label }}</label>
+            {{ search_form.q_organization_domains }}
+          </div>
+          <div class="col-md-4">
+            <label for="{{ search_form.person_titles.id_for_label }}" class="form-label">{{ search_form.person_titles.label }}</label>
+            {{ search_form.person_titles }}
+          </div>
+          <div class="col-md-4">
+            <label for="{{ search_form.q_keywords.id_for_label }}" class="form-label">{{ search_form.q_keywords.label }}</label>
+            {{ search_form.q_keywords }}
+          </div>
+          <div class="col-md-2">
+            <label for="{{ search_form.contact_email_status.id_for_label }}" class="form-label">{{ search_form.contact_email_status.label }}</label>
+            {{ search_form.contact_email_status }}
+          </div>
+          <div class="col-md-2">
+            <label for="{{ search_form.per_page.id_for_label }}" class="form-label">{{ search_form.per_page.label }}</label>
+            {{ search_form.per_page }}
+          </div>
+          <div class="col-12 d-flex justify-content-end gap-2">
+            <button type="submit" class="btn btn-outline-secondary">Buscar pessoas</button>
+          </div>
+        </form>
+
+        {% if has_loaded_remote_people and remote_people %}
+          <form method="post" action="{% url 'apollo_integration:import_people_bulk' %}" id="apolloBulkRemotePersonImportForm" class="mt-4">
+            {% csrf_token %}
+            <input type="hidden" name="current_query" value="{{ current_remote_query }}">
+            <div class="scroll-area scroll-area-table">
+              <table class="table table-clean align-middle mb-0">
+                <thead>
+                  <tr>
+                    {% if can_manage_apollo %}<th style="width: 44px;"><input type="checkbox" data-select-all="apollo-person-import"></th>{% endif %}
+                    <th>Pessoa</th>
+                    <th>Empresa</th>
+                    <th>Email</th>
+                    <th>Telefone</th>
+                    <th>Vinculo</th>
+                    {% if can_manage_apollo %}<th class="text-end">Acao</th>{% endif %}
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for person in remote_people %}
+                    <tr>
+                      {% if can_manage_apollo %}
+                        <td>
+                          {% if not person.linked_person %}
+                            <input type="checkbox" name="apollo_person_ids" value="{{ person.apollo_person_id }}" data-checkbox-group="apollo-person-import">
+                          {% endif %}
+                        </td>
+                      {% endif %}
+                      <td>
+                        <strong>{{ person.first_name }} {{ person.last_name_obfuscated|default:person.last_name }}</strong>
+                        <div class="small text-body-secondary">{{ person.title|default:'-' }}</div>
+                      </td>
+                      <td>
+                        {{ person.organization_name|default:'-' }}
+                        <div class="small text-body-secondary">{{ person.organization_website|default:'-' }}</div>
+                      </td>
+                      <td>{% if person.has_email %}Disponivel{% else %}Nao{% endif %}</td>
+                      <td>{% if person.has_direct_phone %}{{ person.has_direct_phone }}{% else %}Nao{% endif %}</td>
+                      <td>
+                        {% if person.linked_person %}
+                          {{ person.linked_person.full_name }}
+                        {% else %}
+                          Nao salvo
+                        {% endif %}
+                      </td>
+                      {% if can_manage_apollo %}
+                        <td class="text-end">
+                          {% if not person.linked_person %}
+                            <button type="submit" name="apollo_person_ids" value="{{ person.apollo_person_id }}" class="btn btn-outline-secondary btn-sm">
+                              Salvar no CRM
+                            </button>
+                          {% else %}
+                            <span class="text-body-secondary small">Ja salvo</span>
+                          {% endif %}
+                        </td>
+                      {% endif %}
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </form>
+          {% if pagination_links.total_pages %}
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mt-3">
+              <p class="text-body-secondary mb-0">
+                Pagina {{ pagination_links.current_page }} de {{ pagination_links.total_pages }}
+                {% if pagination.total_entries %}| {{ pagination.total_entries }} resultados informados pelo Apollo{% endif %}
+              </p>
+              <div class="d-flex flex-wrap gap-2">
+                {% if pagination_links.previous_url %}
+                  <a href="{{ pagination_links.previous_url }}" class="btn btn-outline-secondary btn-sm">Anterior</a>
+                {% endif %}
+                {% for page_item in pagination_links.page_numbers %}
+                  {% if page_item.is_current %}
+                    <span class="btn btn-brand btn-sm disabled">{{ page_item.number }}</span>
+                  {% else %}
+                    <a href="{{ page_item.url }}" class="btn btn-outline-secondary btn-sm">{{ page_item.number }}</a>
+                  {% endif %}
+                {% endfor %}
+                {% if pagination_links.next_url %}
+                  <a href="{{ pagination_links.next_url }}" class="btn btn-outline-secondary btn-sm">Proxima</a>
+                {% endif %}
+              </div>
+            </div>
+          {% endif %}
+        {% elif has_loaded_remote_people %}
+          <div class="soft-empty mt-4">
+            <p class="mb-0">Nenhuma pessoa remota encontrada com os filtros atuais.</p>
+          </div>
+        {% else %}
+          <div class="soft-empty mt-4">
+            <p class="mb-0">Use os filtros acima para carregar pessoas do Apollo.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endblock %}

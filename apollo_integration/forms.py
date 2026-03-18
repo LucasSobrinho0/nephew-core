@@ -92,3 +92,90 @@ class ApolloBulkCompanyHubSpotSyncForm(BootstrapFormMixin, forms.Form):
         if not company_public_ids:
             raise forms.ValidationError('Selecione pelo menos uma empresa para sincronizar com o HubSpot.')
         return company_public_ids
+
+
+class ApolloPeopleSearchForm(BootstrapFormMixin, forms.Form):
+    search = forms.CharField(required=False, widget=forms.HiddenInput(), initial='1')
+    company_public_id = forms.ChoiceField(
+        label='Empresa do CRM',
+        required=False,
+        choices=(),
+        widget=forms.Select(),
+    )
+    q_organization_name = forms.CharField(
+        label='Nome da empresa',
+        required=False,
+        widget=forms.TextInput(attrs={'placeholder': 'Buscar por nome da empresa'}),
+    )
+    q_organization_domains = forms.CharField(
+        label='Dominios da empresa',
+        required=False,
+        widget=forms.TextInput(attrs={'placeholder': 'empresa.com, outra.com'}),
+    )
+    person_titles = forms.CharField(
+        label='Cargos',
+        required=False,
+        widget=forms.TextInput(attrs={'placeholder': 'financial supervisor, it manager'}),
+    )
+    q_keywords = forms.CharField(
+        label='Nome ou palavra-chave',
+        required=False,
+        widget=forms.TextInput(attrs={'placeholder': 'Joao, Maria, FP&A'}),
+    )
+    contact_email_status = forms.ChoiceField(
+        label='Status do email',
+        required=False,
+        choices=(
+            ('', 'Qualquer status'),
+            ('verified', 'Somente email verificado'),
+        ),
+    )
+    page = forms.IntegerField(required=False, min_value=1, initial=1, widget=forms.HiddenInput())
+    per_page = forms.ChoiceField(
+        label='Resultados por pagina',
+        required=False,
+        choices=(('10', '10'), ('25', '25'), ('50', '50'), ('100', '100')),
+        initial='25',
+    )
+
+    def __init__(self, *args, company_choices=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['company_public_id'].choices = [('', 'Qualquer empresa')] + list(company_choices)
+
+    def clean_company_public_id(self):
+        return (self.cleaned_data.get('company_public_id') or '').strip()
+
+    def clean_q_organization_name(self):
+        return (self.cleaned_data.get('q_organization_name') or '').strip()
+
+    def clean_q_organization_domains(self):
+        return self._split_csv_values(self.cleaned_data.get('q_organization_domains', ''))
+
+    def clean_person_titles(self):
+        return self._split_csv_values(self.cleaned_data.get('person_titles', ''))
+
+    def clean_q_keywords(self):
+        return (self.cleaned_data.get('q_keywords') or '').strip()
+
+    def clean_per_page(self):
+        return int(self.cleaned_data.get('per_page') or 25)
+
+    @staticmethod
+    def _split_csv_values(value):
+        normalized = (value or '').replace(';', ',').replace('\n', ',').replace('\r', ',')
+        return [item.strip() for item in normalized.split(',') if item.strip()]
+
+
+class ApolloBulkRemotePersonImportForm(BootstrapFormMixin, forms.Form):
+    apollo_person_ids = forms.MultipleChoiceField(required=False, widget=forms.MultipleHiddenInput())
+    current_query = forms.CharField(required=False, widget=forms.HiddenInput())
+
+    def __init__(self, *args, person_choices=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['apollo_person_ids'].choices = person_choices
+
+    def clean_apollo_person_ids(self):
+        apollo_person_ids = self.cleaned_data.get('apollo_person_ids') or []
+        if not apollo_person_ids:
+            raise forms.ValidationError('Selecione pelo menos uma pessoa remota para salvar.')
+        return apollo_person_ids

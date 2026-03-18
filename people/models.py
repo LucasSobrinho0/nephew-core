@@ -17,7 +17,7 @@ class PersonQuerySet(models.QuerySet):
         return self.filter(organization=organization)
 
     def with_related_objects(self):
-        return self.select_related('organization', 'created_by', 'updated_by')
+        return self.select_related('organization', 'company', 'created_by', 'updated_by')
 
 
 class Person(PublicIdentifierMixin, TimeStampedModel):
@@ -26,6 +26,7 @@ class Person(PublicIdentifierMixin, TimeStampedModel):
         related_name='persons',
         on_delete=models.CASCADE,
     )
+    apollo_person_id = models.CharField(max_length=128, blank=True, default='', db_index=True)
     bot_conversa_id = models.CharField(max_length=128, null=True, blank=True, db_index=True)
     hubspot_contact_id = models.CharField(max_length=128, blank=True, default='', db_index=True)
     company = models.ForeignKey(
@@ -35,8 +36,8 @@ class Person(PublicIdentifierMixin, TimeStampedModel):
         null=True,
         blank=True,
     )
-    phone = models.CharField(max_length=32)
-    normalized_phone = models.CharField(max_length=16, editable=False, db_index=True)
+    phone = models.CharField(max_length=32, blank=True, default='')
+    normalized_phone = models.CharField(max_length=16, editable=False, db_index=True, blank=True, default='')
     email = EncryptedTextField(blank=True, default='')
     email_lookup = models.CharField(max_length=64, blank=True, default='', db_index=True)
     first_name = models.CharField(max_length=120)
@@ -64,7 +65,13 @@ class Person(PublicIdentifierMixin, TimeStampedModel):
         constraints = [
             models.UniqueConstraint(
                 fields=('organization', 'normalized_phone'),
+                condition=~models.Q(normalized_phone=''),
                 name='unique_person_phone_per_organization',
+            ),
+            models.UniqueConstraint(
+                fields=('organization', 'apollo_person_id'),
+                condition=~models.Q(apollo_person_id=''),
+                name='unique_person_apollo_person_id_per_organization',
             ),
             models.UniqueConstraint(
                 fields=('organization', 'email_lookup'),
@@ -84,10 +91,15 @@ class Person(PublicIdentifierMixin, TimeStampedModel):
         ]
 
     def save(self, *args, **kwargs):
+        self.apollo_person_id = (self.apollo_person_id or '').strip()
         self.bot_conversa_id = (self.bot_conversa_id or '').strip() or None
         self.hubspot_contact_id = (self.hubspot_contact_id or '').strip()
-        self.normalized_phone = normalize_phone(self.phone)
-        self.phone = format_phone_display(self.normalized_phone)
+        if self.phone:
+            self.normalized_phone = normalize_phone(self.phone)
+            self.phone = format_phone_display(self.normalized_phone)
+        else:
+            self.normalized_phone = ''
+            self.phone = ''
         normalized_email = normalize_email_address(self.email) if self.email else ''
         self.email = normalized_email
         self.email_lookup = build_email_lookup(normalized_email) if normalized_email else ''
@@ -96,7 +108,7 @@ class Person(PublicIdentifierMixin, TimeStampedModel):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f'{self.full_name} ({self.phone})'
+        return f'{self.full_name} ({self.phone})' if self.phone else self.full_name
 
     @property
     def full_name(self):

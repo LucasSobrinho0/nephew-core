@@ -7,6 +7,7 @@ from apollo_integration.constants import (
     APOLLO_HTTP_USER_AGENT,
     APOLLO_MAX_RESULTS_PER_PAGE,
     APOLLO_ORGANIZATION_SEARCH_PATH,
+    APOLLO_PEOPLE_SEARCH_PATH,
     APOLLO_USAGE_STATS_PATH,
 )
 from apollo_integration.exceptions import ApolloApiError
@@ -43,6 +44,20 @@ class ApolloClient:
         page = max(1, int(page or 1))
         per_page = max(1, min(int(per_page or 25), APOLLO_MAX_RESULTS_PER_PAGE))
         return self.search_organizations(payload={'page': page, 'per_page': per_page})
+
+    def search_people(self, *, payload):
+        response_payload = self._request('POST', APOLLO_PEOPLE_SEARCH_PATH, payload=payload)
+        people = response_payload.get('people', []) or []
+        pagination = self._extract_people_pagination(response_payload=response_payload, payload=payload)
+        return {
+            'people': [
+                self._normalize_person_payload(item)
+                for item in people
+                if isinstance(item, dict)
+            ],
+            'pagination': pagination,
+            'raw_payload': response_payload,
+        }
 
     def get_usage_stats(self):
         return self._request('POST', APOLLO_USAGE_STATS_PATH, payload={})
@@ -131,6 +146,33 @@ class ApolloClient:
         return {}
 
     @staticmethod
+    def _extract_people_pagination(*, response_payload, payload):
+        if not isinstance(response_payload, dict):
+            return {}
+        pagination = response_payload.get('pagination')
+        if isinstance(pagination, dict):
+            return pagination
+
+        current_page = int(payload.get('page') or 1)
+        per_page = int(payload.get('per_page') or 25)
+        total_entries = response_payload.get('total_entries')
+        try:
+            total_entries = int(total_entries)
+        except (TypeError, ValueError):
+            total_entries = None
+
+        total_pages = None
+        if total_entries is not None and per_page > 0:
+            total_pages = max(1, (total_entries + per_page - 1) // per_page)
+
+        return {
+            'page': current_page,
+            'per_page': per_page,
+            'total_entries': total_entries,
+            'total_pages': total_pages,
+        }
+
+    @staticmethod
     def _strip_bearer(value):
         token = (value or '').strip()
         return token[7:].strip() if token.lower().startswith('bearer ') else token
@@ -152,6 +194,40 @@ class ApolloClient:
         if isinstance(industries, dict):
             return industries.get('name') or industries.get('label') or industries.get('value') or ''
         return str(industries)
+
+    @staticmethod
+    def _resolve_email(*values):
+        for value in values:
+            if isinstance(value, str) and value.strip():
+                return value.strip().lower()
+            if isinstance(value, dict):
+                for key in ('email', 'value', 'address'):
+                    nested_value = value.get(key)
+                    if isinstance(nested_value, str) and nested_value.strip():
+                        return nested_value.strip().lower()
+            if isinstance(value, list):
+                for item in value:
+                    resolved = ApolloClient._resolve_email(item)
+                    if resolved:
+                        return resolved
+        return ''
+
+    @staticmethod
+    def _resolve_phone(*values):
+        for value in values:
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+            if isinstance(value, dict):
+                for key in ('sanitized_number', 'raw_number', 'number', 'value'):
+                    nested_value = value.get(key)
+                    if isinstance(nested_value, str) and nested_value.strip():
+                        return nested_value.strip()
+            if isinstance(value, list):
+                for item in value:
+                    resolved = ApolloClient._resolve_phone(item)
+                    if resolved:
+                        return resolved
+        return ''
 
     @staticmethod
     def _normalize_company_payload(payload):
@@ -181,10 +257,45 @@ class ApolloClient:
             'name': source.get('name') or payload.get('name') or 'Empresa sem nome',
             'website': source.get('website_url') or source.get('website') or '',
             'linkedin_url': source.get('linkedin_url') or '',
-            'email': source.get('primary_email') or source.get('email') or '',
-            'phone': source.get('primary_phone') or source.get('phone') or '',
+            'email': ApolloClient._resolve_email(
+                source.get('primary_email'),
+                source.get('email'),
+                source.get('emails'),
+            ),
+            'phone': ApolloClient._resolve_phone(
+                source.get('primary_phone'),
+                source.get('phone'),
+                source.get('phone_numbers'),
+                source.get('phones'),
+            ),
             'segment': segment or '',
             'employee_count': employee_count,
+            'raw_payload': payload,
+        }
+
+    @staticmethod
+    def _normalize_person_payload(payload):
+        organization = payload.get('organization') if isinstance(payload.get('organization'), dict) else {}
+        return {
+            'apollo_person_id': str(payload.get('id') or ''),
+            'first_name': (payload.get('first_name') or '').strip(),
+            'last_name': (payload.get('last_name') or '').strip(),
+            'last_name_obfuscated': (payload.get('last_name_obfuscated') or '').strip(),
+            'title': (payload.get('title') or '').strip(),
+            'has_email': payload.get('has_email'),
+            'has_direct_phone': payload.get('has_direct_phone'),
+            'last_refreshed_at': payload.get('last_refreshed_at'),
+            'email': ApolloClient._resolve_email(payload.get('email'), payload.get('work_email')),
+            'phone': ApolloClient._resolve_phone(
+                payload.get('phone'),
+                payload.get('direct_phone'),
+                payload.get('mobile_phone'),
+                payload.get('phone_numbers'),
+                payload.get('phones'),
+            ),
+            'organization_name': (organization.get('name') or '').strip(),
+            'organization_website': (organization.get('website_url') or organization.get('website') or '').strip(),
+            'organization_apollo_company_id': str(organization.get('id') or ''),
             'raw_payload': payload,
         }
 

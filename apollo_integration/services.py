@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
@@ -7,13 +9,16 @@ from apollo_integration.constants import APOLLO_APP_CODE
 from apollo_integration.exceptions import ApolloApiError, ApolloConfigurationError
 from apollo_integration.models import ApolloCompanySyncLog
 from apollo_integration.repositories import ApolloCompanySyncLogRepository, ApolloUsageSnapshotRepository
-from common.matching import build_company_indexes, match_company
+from common.encryption import normalize_email_address
+from common.matching import build_company_indexes, build_person_indexes, match_company, match_person
 from common.phone import format_phone_display, normalize_phone
 from companies.models import Company
 from companies.repositories import CompanyRepository
 from hubspot_integration.services import HubSpotCompanyService
 from integrations.repositories import AppCatalogRepository, AppCredentialRepository, AppInstallationRepository
 from organizations.repositories import MembershipRepository
+from people.models import Person
+from people.repositories import PersonRepository
 
 
 class ApolloAuthorizationService:
@@ -71,6 +76,24 @@ class ApolloBulkPreparationService:
         company.normalized_phone = normalized_phone
         company.phone = format_phone_display(normalized_phone) if normalized_phone else ''
         return company
+
+    @staticmethod
+    def prepare_person(person):
+        person.apollo_person_id = (person.apollo_person_id or '').strip()
+        person.hubspot_contact_id = (person.hubspot_contact_id or '').strip()
+        person.bot_conversa_id = (person.bot_conversa_id or '').strip() or None
+        person.first_name = (person.first_name or '').strip()
+        person.last_name = (person.last_name or '').strip()
+        normalized_email = normalize_email_address(person.email) if person.email else ''
+        person.email = normalized_email
+        if person.phone:
+            normalized_phone = normalize_phone(person.phone)
+            person.normalized_phone = normalized_phone
+            person.phone = format_phone_display(normalized_phone)
+        else:
+            person.normalized_phone = ''
+            person.phone = ''
+        return person
 
 
 class ApolloDashboardService:
@@ -251,7 +274,6 @@ class ApolloCompanyService:
         return {
             'companies': remote_companies,
             'pagination': search_result.get('pagination') or {},
-            'diagnostics': search_result.get('diagnostics') or {},
             'payload': payload,
         }
 
@@ -272,7 +294,6 @@ class ApolloCompanyService:
 
         for remote_company in remote_companies:
             matched_company = match_company(remote_company=remote_company, company_indexes=company_indexes)
-            message = 'Empresa importada do Apollo para o CRM.'
             if matched_company is not None:
                 changed = False
                 if not matched_company.apollo_company_id and remote_company['apollo_company_id']:
@@ -300,7 +321,6 @@ class ApolloCompanyService:
                     matched_company.updated_at = synced_at
                     companies_to_update.append(matched_company)
                 persisted_companies.append(matched_company)
-                message = 'Empresa do Apollo vinculada ao CRM existente.'
                 sync_logs.append(
                     ApolloCompanySyncLog(
                         organization=organization,
@@ -309,7 +329,7 @@ class ApolloCompanyService:
                         actor=user,
                         action=ApolloCompanySyncLog.Action.IMPORT,
                         outcome=ApolloCompanySyncLog.Outcome.SUCCESS,
-                        message=message,
+                        message='Empresa do Apollo vinculada ao CRM existente.',
                         remote_payload=remote_company.get('raw_payload', {}),
                     )
                 )
@@ -384,3 +404,176 @@ class ApolloCompanyService:
             ]
         )
         return synced_companies
+
+
+class ApolloPersonService:
+    @staticmethod
+    def build_person_rows(*, organization):
+        persons = list(PersonRepository.list_for_organization(organization))
+        return [
+            {
+                'person': person,
+                'is_apollo_synced': bool(person.apollo_person_id),
+            }
+            for person in persons
+        ]
+
+    @staticmethod
+    def build_company_filter_choices(*, organization):
+        labels = []
+        for company in CompanyRepository.list_for_organization(organization):
+            labels.append((str(company.public_id), company.name))
+        return labels
+
+    @staticmethod
+    def build_search_payload(*, organization, filters):
+        payload = {
+            'page': filters.get('page') or 1,
+            'per_page': filters.get('per_page') or 25,
+        }
+
+        company = None
+        company_public_id = filters.get('company_public_id')
+        if company_public_id:
+            company = CompanyRepository.get_for_organization_and_public_id(organization, company_public_id)
+
+        company_domain = ''
+        if company and company.website:
+            parsed = urlparse(company.website if '://' in company.website else f'https://{company.website}')
+            company_domain = (parsed.netloc or parsed.path or '').lower()
+            if company_domain.startswith('www.'):
+                company_domain = company_domain[4:]
+
+        if company_domain:
+            payload['q_organization_domains_list'] = [company_domain]
+        elif company and company.name:
+            payload['q_organization_name'] = company.name
+        elif filters.get('q_organization_domains'):
+            payload['q_organization_domains_list'] = filters['q_organization_domains']
+        elif filters.get('q_organization_name'):
+            payload['q_organization_name'] = filters['q_organization_name']
+
+        if filters.get('person_titles'):
+            payload['person_titles'] = filters['person_titles']
+        if filters.get('q_keywords'):
+            payload['q_keywords'] = filters['q_keywords']
+        if filters.get('contact_email_status'):
+            payload['contact_email_status'] = filters['contact_email_status']
+        return payload
+
+    @staticmethod
+    def list_remote_people(*, organization, filters):
+        client = ApolloInstallationService.build_client(organization=organization)
+        local_persons = list(PersonRepository.list_for_organization(organization))
+        local_companies = list(CompanyRepository.list_for_organization(organization))
+        person_indexes = build_person_indexes(persons=local_persons)
+        company_indexes = build_company_indexes(companies=local_companies)
+        payload = ApolloPersonService.build_search_payload(organization=organization, filters=filters)
+        search_result = client.search_people(payload=payload)
+
+        remote_people = []
+        for remote_person in search_result['people']:
+            linked_person = match_person(
+                remote_contact=remote_person,
+                person_indexes=person_indexes,
+                integration_key='apollo',
+            )
+            linked_company = match_company(
+                remote_company={
+                    'apollo_company_id': remote_person.get('organization_apollo_company_id', ''),
+                    'name': remote_person.get('organization_name', ''),
+                    'website': remote_person.get('organization_website', ''),
+                },
+                company_indexes=company_indexes,
+            )
+            remote_people.append(
+                {
+                    **remote_person,
+                    'linked_person': linked_person,
+                    'linked_company': linked_company,
+                    'is_saved_in_crm': linked_person is not None,
+                }
+            )
+
+        return {
+            'people': remote_people,
+            'pagination': search_result.get('pagination') or {},
+            'payload': payload,
+        }
+
+    @staticmethod
+    @transaction.atomic
+    def import_remote_people(*, user, organization, remote_people):
+        ApolloAuthorizationService.ensure_operator_access(user=user, organization=organization)
+        local_persons = list(PersonRepository.list_for_organization(organization))
+        local_companies = list(CompanyRepository.list_for_organization(organization))
+        person_indexes = build_person_indexes(persons=local_persons)
+        company_indexes = build_company_indexes(companies=local_companies)
+        synced_at = timezone.now()
+
+        persons_to_create = []
+        persons_to_update = []
+        persisted_people = []
+
+        for remote_person in remote_people:
+            matched_person = match_person(
+                remote_contact=remote_person,
+                person_indexes=person_indexes,
+                integration_key='apollo',
+            )
+            linked_company = match_company(
+                remote_company={
+                    'apollo_company_id': remote_person.get('organization_apollo_company_id', ''),
+                    'name': remote_person.get('organization_name', ''),
+                    'website': remote_person.get('organization_website', ''),
+                },
+                company_indexes=company_indexes,
+            )
+            first_name = (remote_person.get('first_name') or '').strip() or 'Sem nome'
+            last_name = (
+                remote_person.get('last_name')
+                or remote_person.get('last_name_obfuscated')
+                or ''
+            ).strip()
+
+            if matched_person is not None:
+                changed = False
+                if not matched_person.apollo_person_id and remote_person.get('apollo_person_id'):
+                    matched_person.apollo_person_id = remote_person['apollo_person_id']
+                    changed = True
+                if not matched_person.company and linked_company is not None:
+                    matched_person.company = linked_company
+                    changed = True
+                if changed:
+                    matched_person.updated_by = user
+                    matched_person.updated_at = synced_at
+                    ApolloBulkPreparationService.prepare_person(matched_person)
+                    persons_to_update.append(matched_person)
+                persisted_people.append(matched_person)
+                continue
+
+            person = Person(
+                organization=organization,
+                apollo_person_id=remote_person.get('apollo_person_id', ''),
+                company=linked_company,
+                phone='',
+                email='',
+                first_name=first_name,
+                last_name=last_name,
+                created_by=user,
+                updated_by=user,
+            )
+            ApolloBulkPreparationService.prepare_person(person)
+            persons_to_create.append(person)
+            local_persons.append(person)
+            person_indexes = build_person_indexes(persons=local_persons)
+            persisted_people.append(person)
+
+        if persons_to_create:
+            PersonRepository.bulk_create(persons_to_create)
+        if persons_to_update:
+            PersonRepository.bulk_update(
+                persons_to_update,
+                ['apollo_person_id', 'company', 'updated_by', 'updated_at'],
+            )
+        return persisted_people

@@ -26,6 +26,16 @@ class PersonRepository:
         )
 
     @staticmethod
+    def get_for_organization_and_apollo_person_id(organization, apollo_person_id):
+        return (
+            Person.objects.active()
+            .for_organization(organization)
+            .with_related_objects()
+            .filter(apollo_person_id=apollo_person_id)
+            .first()
+        )
+
+    @staticmethod
     def get_for_organization_and_normalized_phone(organization, normalized_phone):
         return (
             Person.objects.active()
@@ -91,6 +101,15 @@ class PersonRepository:
             .for_organization(organization)
             .with_related_objects()
             .filter(hubspot_contact_id__in=hubspot_contact_ids)
+        )
+
+    @staticmethod
+    def list_for_organization_and_apollo_person_ids(organization, apollo_person_ids):
+        return (
+            Person.objects.active()
+            .for_organization(organization)
+            .with_related_objects()
+            .filter(apollo_person_id__in=apollo_person_ids)
         )
 
     @staticmethod
