@@ -12,7 +12,9 @@ from bot_conversa.models import (
     BotConversaFlowCache,
     BotConversaFlowDispatch,
     BotConversaFlowDispatchItem,
+    BotConversaPersonTag,
     BotConversaSyncLog,
+    BotConversaTag,
 )
 from bot_conversa.services import BotConversaInstallationService, BotConversaRemoteContactService
 from common.constants import ACTIVE_ORGANIZATION_SESSION_KEY
@@ -27,9 +29,24 @@ class FakeBotConversaClient:
     def __init__(self):
         self.sent_payloads = []
         self.created_payloads = []
+        self.assigned_tag_payloads = []
 
     def list_contacts(self, search=''):
         return []
+
+    def list_tags(self):
+        return [
+            {
+                'external_tag_id': 'tag-1',
+                'name': 'VIP',
+                'raw_payload': {'id': 'tag-1', 'name': 'VIP'},
+            },
+            {
+                'external_tag_id': 'tag-2',
+                'name': 'Reativacao',
+                'raw_payload': {'id': 'tag-2', 'name': 'Reativacao'},
+            },
+        ]
 
     def search_contact_by_phone(self, *, phone):
         return None
@@ -56,6 +73,13 @@ class FakeBotConversaClient:
             'status': 'accepted',
             'message_id': 'message-001',
             'raw_payload': {'id': 'message-001'},
+        }
+
+    def add_tag_to_subscriber(self, *, subscriber_id, tag_id):
+        self.assigned_tag_payloads.append({'subscriber_id': subscriber_id, 'tag_id': tag_id})
+        return {
+            'status': 'created',
+            'raw_payload': {'subscriber_id': subscriber_id, 'tag_id': tag_id},
         }
 
 
@@ -375,6 +399,95 @@ class BotConversaModuleTests(TestCase):
         self.assertEqual(payload['success_items'], 1)
         self.assertTrue(payload['is_finished'])
         self.assertEqual(fake_client.sent_payloads[0]['flow_id'], '8325072')
+
+    @patch('bot_conversa.services.BotConversaInstallationService.build_client')
+    def test_refresh_tags_persists_remote_cache(self, build_client_mock):
+        fake_client = FakeBotConversaClient()
+        build_client_mock.return_value = fake_client
+        self.client.force_login(self.owner)
+        self.activate_organization(self.organization)
+
+        response = self.client.post(reverse('bot_conversa:refresh_tags'))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            BotConversaTag.objects.filter(
+                organization=self.organization,
+                external_tag_id='tag-1',
+                name='VIP',
+            ).exists()
+        )
+
+    @patch('bot_conversa.services.BotConversaInstallationService.build_client')
+    def test_assign_tag_to_people_creates_local_link(self, build_client_mock):
+        fake_client = FakeBotConversaClient()
+        build_client_mock.return_value = fake_client
+        tag = BotConversaTag.objects.create(
+            organization=self.organization,
+            installation=self.installation,
+            external_tag_id='tag-1',
+            name='VIP',
+            last_synced_at=self.installation.created_at,
+            raw_payload={'id': 'tag-1', 'name': 'VIP'},
+        )
+        self.client.force_login(self.owner)
+        self.activate_organization(self.organization)
+
+        response = self.client.post(
+            reverse('bot_conversa:assign_tag'),
+            {
+                'tag_public_id': tag.public_id,
+                'person_public_ids': [str(self.person.public_id)],
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        person_tag = BotConversaPersonTag.objects.get(person=self.person, tag=tag)
+        self.assertEqual(person_tag.external_subscriber_id, 'subscriber-001')
+        self.assertEqual(fake_client.assigned_tag_payloads[0]['tag_id'], 'tag-1')
+
+    def test_dispatch_can_be_created_from_tagged_people(self):
+        tag = BotConversaTag.objects.create(
+            organization=self.organization,
+            installation=self.installation,
+            external_tag_id='tag-1',
+            name='VIP',
+            last_synced_at=self.installation.created_at,
+            raw_payload={'id': 'tag-1', 'name': 'VIP'},
+        )
+        BotConversaPersonTag.objects.create(
+            organization=self.organization,
+            installation=self.installation,
+            person=self.person,
+            tag=tag,
+            external_subscriber_id='subscriber-001',
+            sync_status=BotConversaPersonTag.SyncStatus.SYNCED,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        self.client.force_login(self.owner)
+        self.activate_organization(self.organization)
+
+        response = self.client.post(
+            reverse('bot_conversa:create_dispatch'),
+            {
+                'flow_public_id': self.flow_cache.public_id,
+                'tag_public_ids': [str(tag.public_id)],
+                'person_public_ids': [],
+                'min_delay_seconds': 0,
+                'max_delay_seconds': 0,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        dispatch = BotConversaFlowDispatch.objects.get(flow=self.flow_cache)
+        self.assertEqual(dispatch.total_items, 1)
+        self.assertTrue(
+            BotConversaFlowDispatchItem.objects.filter(
+                dispatch=dispatch,
+                person=self.person,
+            ).exists()
+        )
 
     def test_dispatch_audience_endpoint_filters_people_already_sent_on_whatsapp(self):
         dispatch = BotConversaFlowDispatch.objects.create(

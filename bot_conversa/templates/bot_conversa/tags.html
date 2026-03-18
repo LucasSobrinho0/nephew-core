@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+
+{% block title %}Etiquetas do Bot Conversa{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Bot Conversa</span>
+    <h1>Etiquetas</h1>
+    <p class="text-body-secondary mb-0">Sincronize as etiquetas remotas do Bot Conversa, vincule pessoas do CRM e use essas etiquetas como publico para disparos de fluxos.</p>
+  </section>
+
+  {% include 'bot_conversa/_subnav.html' %}
+
+  <section class="glass-card content-card mb-4">
+    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+      <div>
+        <span class="section-kicker">Sincronizacao</span>
+        <h2 class="mb-1">Atualizar etiquetas remotas</h2>
+        <p class="text-body-secondary mb-0">O CRM armazena um cache tenant-scoped das etiquetas existentes no Bot Conversa para evitar dependencias diretas da API a cada render.</p>
+      </div>
+      {% if can_manage_bot_conversa %}
+        <form method="post" action="{% url 'bot_conversa:refresh_tags' %}">
+          {% csrf_token %}
+          {{ refresh_form.next }}
+          <input type="hidden" name="next" value="{% url 'bot_conversa:tags' %}">
+          <button type="submit" class="btn btn-brand">Atualizar etiquetas</button>
+        </form>
+      {% else %}
+        <span class="status-badge status-pending">Somente visualizacao</span>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="row g-4">
+    <div class="col-xl-5">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Cache local</span>
+            <h2>Etiquetas sincronizadas</h2>
+          </div>
+        </div>
+        {% if tag_rows %}
+          <div class="vstack gap-3">
+            {% for row in tag_rows %}
+              <article class="bot-activity-card">
+                <div>
+                  <strong>{{ row.tag.name }}</strong>
+                  <div class="text-body-secondary small">{{ row.tag.external_tag_id }}</div>
+                </div>
+                <div class="d-flex flex-column align-items-end gap-2">
+                  <span class="status-badge status-used">{{ row.person_count }} pessoa{{ row.person_count|pluralize }}</span>
+                  <a href="{% url 'bot_conversa:dispatches' %}?tag_public_ids={{ row.tag.public_id }}" class="btn btn-outline-secondary btn-sm">Usar em disparo</a>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="soft-empty">
+            <p class="mb-0">Nenhuma etiqueta em cache ainda. Atualize as etiquetas para carregar o catalogo remoto.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="col-xl-7">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Vinculo em massa</span>
+            <h2>Associar pessoas a uma etiqueta</h2>
+          </div>
+          {% if not has_loaded_people %}
+            <form method="get" action="{% url 'bot_conversa:tags' %}">
+              {{ list_form.load }}
+              <button type="submit" class="btn btn-outline-secondary btn-sm">Carregar pessoas</button>
+            </form>
+          {% endif %}
+        </div>
+        {% if can_manage_bot_conversa %}
+          <form method="post" action="{% url 'bot_conversa:assign_tag' %}" class="row g-3">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% url 'bot_conversa:tags' %}">
+            <div class="col-12">
+              <label for="{{ assign_form.tag_public_id.id_for_label }}" class="form-label">Etiqueta</label>
+              {{ assign_form.tag_public_id }}
+              {% for error in assign_form.tag_public_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12">
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                <label class="form-label mb-0">Pessoas</label>
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                  <label class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 mb-0">
+                    <input type="checkbox" class="form-check-input m-0" data-select-all="bot-tag-assignment">
+                    Selecionar todas
+                  </label>
+                  <button
+                    type="button"
+                    class="btn btn-outline-secondary btn-sm"
+                    data-checkbox-selection-action="clear"
+                    data-checkbox-selection-target="#botTagAssignmentList"
+                    data-checkbox-selection-name="person_public_ids"
+                    data-checkbox-selection-group="bot-tag-assignment"
+                  >
+                    Limpar seleção
+                  </button>
+                </div>
+              </div>
+              {% if has_loaded_people and person_rows %}
+                <input type="search" class="form-control mb-3" placeholder="Buscar pessoa por nome, telefone ou empresa" data-filter-target="#botTagAssignmentList" data-filter-item="label">
+                <div class="bot-checkbox-shell">
+                  <div class="bot-selection-list" id="botTagAssignmentList">
+                    {% for row in person_rows %}
+                      <label class="bot-selection-card" data-filter-item data-filter-text="{{ row.person.full_name }} {{ row.person.phone }} {{ row.person.company.name|default:'' }}">
+                        <input type="checkbox" name="person_public_ids" value="{{ row.person.public_id }}" class="bot-selection-checkbox" data-checkbox-group="bot-tag-assignment">
+                        <span class="bot-selection-text">
+                          {{ row.person.full_name }} - {{ row.person.phone }}
+                          {% if row.tags %}
+                            <span class="d-block small text-body-secondary">Etiquetas atuais: {% for tag in row.tags %}{{ tag.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>
+                          {% endif %}
+                        </span>
+                      </label>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% elif has_loaded_people %}
+                <div class="soft-empty text-start p-0">
+                  <p class="mb-0">Nenhuma pessoa cadastrada no CRM esta disponivel para vincular etiquetas.</p>
+                </div>
+              {% else %}
+                <div class="soft-empty text-start p-0">
+                  <p class="mb-0">Carregue as pessoas do CRM para escolher quem deve receber a etiqueta.</p>
+                </div>
+              {% endif %}
+              {% for error in assign_form.person_public_ids.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12">
+              <button type="submit" class="btn btn-brand" {% if not has_loaded_people %}disabled{% endif %}>Vincular etiqueta</button>
+            </div>
+          </form>
+        {% else %}
+          <div class="soft-empty">
+            <p class="mb-0">Somente proprietarios e administradores podem vincular etiquetas do Bot Conversa.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endblock %}

@@ -256,11 +256,15 @@ class ApolloPeopleView(ApolloAccessMixin, TemplateView):
             self.request.GET or None,
             company_choices=ApolloPersonService.build_company_filter_choices(organization=self.active_organization),
         )
-        person_rows = ApolloPersonService.build_person_rows(organization=self.active_organization)
+        person_rows = []
         remote_people = []
         pagination = {}
         pagination_links = {}
+        has_loaded_local_people = self.request.GET.get('load_local') == '1'
         has_loaded_remote_people = self._has_remote_search_request(self.request.GET)
+
+        if has_loaded_local_people:
+            person_rows = ApolloPersonService.build_person_rows(organization=self.active_organization)
 
         if has_loaded_remote_people and search_form.is_valid():
             try:
@@ -288,6 +292,7 @@ class ApolloPeopleView(ApolloAccessMixin, TemplateView):
                 'remote_people': remote_people,
                 'pagination': pagination,
                 'pagination_links': pagination_links,
+                'has_loaded_local_people': has_loaded_local_people,
                 'has_loaded_remote_people': has_loaded_remote_people,
                 'current_remote_query': self.request.GET.urlencode(),
             }

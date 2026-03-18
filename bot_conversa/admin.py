@@ -5,7 +5,9 @@ from bot_conversa.models import (
     BotConversaFlowCache,
     BotConversaFlowDispatch,
     BotConversaFlowDispatchItem,
+    BotConversaPersonTag,
     BotConversaSyncLog,
+    BotConversaTag,
 )
 
 
@@ -21,6 +23,20 @@ class BotConversaFlowCacheAdmin(admin.ModelAdmin):
     list_display = ('name', 'organization', 'status', 'last_synced_at')
     list_filter = ('organization', 'status')
     search_fields = ('name', 'external_flow_id')
+
+
+@admin.register(BotConversaTag)
+class BotConversaTagAdmin(admin.ModelAdmin):
+    list_display = ('name', 'organization', 'external_tag_id', 'last_synced_at')
+    list_filter = ('organization',)
+    search_fields = ('name', 'external_tag_id')
+
+
+@admin.register(BotConversaPersonTag)
+class BotConversaPersonTagAdmin(admin.ModelAdmin):
+    list_display = ('person', 'tag', 'organization', 'sync_status', 'last_synced_at')
+    list_filter = ('organization', 'sync_status', 'tag')
+    search_fields = ('person__first_name', 'person__last_name', 'tag__name', 'external_subscriber_id')
 
 
 @admin.register(BotConversaFlowDispatch)

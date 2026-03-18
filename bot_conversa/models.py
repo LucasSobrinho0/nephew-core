@@ -34,6 +34,16 @@ class BotConversaFlowCacheQuerySet(OrganizationScopedQuerySet):
         )
 
 
+class BotConversaTagQuerySet(OrganizationScopedQuerySet):
+    def with_related_objects(self):
+        return self.select_related('organization', 'installation')
+
+
+class BotConversaPersonTagQuerySet(OrganizationScopedQuerySet):
+    def with_related_objects(self):
+        return self.select_related('organization', 'installation', 'person', 'tag', 'contact_link', 'created_by', 'updated_by')
+
+
 class BotConversaFlowDispatchQuerySet(OrganizationScopedQuerySet):
     def with_related_objects(self):
         return self.select_related('organization', 'installation', 'flow', 'created_by', 'updated_by')
@@ -154,6 +164,108 @@ class BotConversaFlowCache(PublicIdentifierMixin, TimeStampedModel):
 
     def __str__(self):
         return self.name
+
+
+class BotConversaTag(PublicIdentifierMixin, TimeStampedModel):
+    organization = models.ForeignKey(
+        Organization,
+        related_name='bot_conversa_tags',
+        on_delete=models.CASCADE,
+    )
+    installation = models.ForeignKey(
+        OrganizationAppInstallation,
+        related_name='bot_conversa_tags',
+        on_delete=models.CASCADE,
+    )
+    external_tag_id = models.CharField(max_length=128)
+    name = models.CharField(max_length=255)
+    last_synced_at = models.DateTimeField()
+    raw_payload = models.JSONField(default=dict, blank=True)
+
+    objects = BotConversaTagQuerySet.as_manager()
+
+    class Meta:
+        ordering = ('name',)
+        constraints = [
+            models.UniqueConstraint(
+                fields=('organization', 'installation', 'external_tag_id'),
+                name='unique_bot_conversa_tag_per_installation',
+            ),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+class BotConversaPersonTag(PublicIdentifierMixin, TimeStampedModel):
+    class SyncStatus(models.TextChoices):
+        SYNCED = 'synced', 'Sincronizado'
+        ERROR = 'error', 'Erro'
+
+    organization = models.ForeignKey(
+        Organization,
+        related_name='bot_conversa_person_tags',
+        on_delete=models.CASCADE,
+    )
+    installation = models.ForeignKey(
+        OrganizationAppInstallation,
+        related_name='bot_conversa_person_tags',
+        on_delete=models.CASCADE,
+    )
+    person = models.ForeignKey(
+        Person,
+        related_name='bot_conversa_person_tags',
+        on_delete=models.CASCADE,
+    )
+    tag = models.ForeignKey(
+        BotConversaTag,
+        related_name='person_links',
+        on_delete=models.CASCADE,
+    )
+    contact_link = models.ForeignKey(
+        BotConversaContact,
+        related_name='tag_links',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    external_subscriber_id = models.CharField(max_length=128, blank=True)
+    sync_status = models.CharField(max_length=16, choices=SyncStatus.choices, default=SyncStatus.SYNCED)
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+    last_error_message = models.CharField(max_length=255, blank=True)
+    remote_payload = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name='created_bot_conversa_person_tags',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name='updated_bot_conversa_person_tags',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+
+    objects = BotConversaPersonTagQuerySet.as_manager()
+
+    class Meta:
+        ordering = ('tag__name', 'person__first_name', 'person__last_name')
+        constraints = [
+            models.UniqueConstraint(
+                fields=('organization', 'person', 'tag'),
+                name='unique_bot_conversa_tag_per_person',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=('organization', 'tag')),
+            models.Index(fields=('organization', 'person')),
+        ]
+
+    def __str__(self):
+        return f'{self.person.full_name} - {self.tag.name}'
 
 
 class BotConversaSyncLog(TimeStampedModel):

@@ -16,6 +16,9 @@ from bot_conversa.views import (
     BotConversaPersonCreateView,
     BotConversaPersonSyncView,
     BotConversaRemoteContactSaveView,
+    BotConversaTagAssignView,
+    BotConversaTagRefreshView,
+    BotConversaTagsView,
 )
 
 app_name = 'bot_conversa'
@@ -29,6 +32,9 @@ urlpatterns = [
     path('apps/bot-conversa/contacts/', BotConversaContactsView.as_view(), name='contacts'),
     path('apps/bot-conversa/contacts/save/', BotConversaRemoteContactSaveView.as_view(), name='save_remote_contact'),
     path('apps/bot-conversa/contacts/save/bulk/', BotConversaBulkRemoteContactSaveView.as_view(), name='save_remote_contacts_bulk'),
+    path('apps/bot-conversa/tags/', BotConversaTagsView.as_view(), name='tags'),
+    path('apps/bot-conversa/tags/refresh/', BotConversaTagRefreshView.as_view(), name='refresh_tags'),
+    path('apps/bot-conversa/tags/assign/', BotConversaTagAssignView.as_view(), name='assign_tag'),
     path('apps/bot-conversa/flows/', BotConversaFlowsView.as_view(), name='flows'),
     path('apps/bot-conversa/flows/refresh/', BotConversaFlowRefreshView.as_view(), name='refresh_flows'),
     path('apps/bot-conversa/dispatches/', BotConversaDispatchesView.as_view(), name='dispatches'),

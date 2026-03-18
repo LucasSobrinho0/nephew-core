@@ -31,8 +31,26 @@
             <div class="col-12">
               <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                 <label class="form-label mb-0">Selecionar pessoas</label>
-                <div class="d-flex align-items-center gap-2">
+                <div class="d-flex flex-wrap align-items-center gap-2">
                   <span class="small text-body-secondary" id="gmailAudienceCount">{{ initial_gmail_audience_count }} disponiveis</span>
+                  <label class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 mb-0">
+                    <input
+                      type="checkbox"
+                      class="form-check-input m-0"
+                      data-select-all="gmail-dispatch-selection"
+                    >
+                    Selecionar todas
+                  </label>
+                  <button
+                    type="button"
+                    class="btn btn-outline-secondary btn-sm"
+                    data-checkbox-selection-action="clear"
+                    data-checkbox-selection-target="#gmailDispatchSelectionList"
+                    data-checkbox-selection-name="person_public_ids"
+                    data-checkbox-selection-group="gmail-dispatch-selection"
+                  >
+                    Limpar seleção
+                  </button>
                   <button
                     type="button"
                     class="btn btn-outline-secondary btn-sm"
@@ -103,12 +121,7 @@
             </div>
           </form>
           <hr>
-          <p class="mb-1"><strong>Variaveis disponiveis</strong></p>
-          <div class="d-flex flex-wrap gap-2">
-            {% for variable_name in available_variables %}
-              <span class="code-pill">{{ variable_name }}</span>
-            {% endfor %}
-          </div>
+          {% include 'gmail_integration/_template_variables.html' %}
         {% else %}
           <div class="soft-empty text-start p-0">
             <p class="mb-0">Somente proprietarios e administradores podem criar disparos do Gmail.</p>

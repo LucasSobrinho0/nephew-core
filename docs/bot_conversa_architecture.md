@@ -3,7 +3,7 @@
 ## Suggested architecture
 
 - `people` stores internal CRM persons scoped to one organization.
-- `bot_conversa` owns the external integration domain: contact links, flow cache, sync logs, and dispatch jobs.
+- `bot_conversa` owns the external integration domain: contact links, tag cache, flow cache, sync logs, and dispatch jobs.
 - `integrations` remains the source of installed apps and encrypted API credentials.
 - `organizations` continues to resolve the active tenant and role context.
 
@@ -87,6 +87,34 @@ bot_conversa/
   - `raw_payload`
 - Avoids live dependency on every render of the flow select.
 
+### `bot_conversa.BotConversaTag`
+
+- Local cache of remote Bot Conversa tags.
+- Stores:
+  - `organization`
+  - `installation`
+  - `external_tag_id`
+  - `name`
+  - `last_synced_at`
+  - `raw_payload`
+- Allows the CRM to reuse remote tag audiences without querying the API on every screen render.
+
+### `bot_conversa.BotConversaPersonTag`
+
+- Local link between one internal `Person`, one remote Bot Conversa tag, and the resolved subscriber used in that association.
+- Stores:
+  - `organization`
+  - `installation`
+  - `person`
+  - `tag`
+  - `contact_link`
+  - `external_subscriber_id`
+  - `sync_status`
+  - `last_synced_at`
+  - `last_error_message`
+  - `remote_payload`
+- Prevents duplicate tag assignments for the same person inside one tenant.
+
 ### `bot_conversa.BotConversaSyncLog`
 
 - Audit trail for contact verification, creation, CRM import, and linking.
@@ -109,8 +137,11 @@ bot_conversa/
 - `Person 1:N BotConversaContact`
 - `OrganizationAppInstallation 1:N BotConversaContact`
 - `OrganizationAppInstallation 1:N BotConversaFlowCache`
+- `OrganizationAppInstallation 1:N BotConversaTag`
 - `BotConversaFlowCache 1:N BotConversaFlowDispatch`
 - `BotConversaFlowDispatch 1:N BotConversaFlowDispatchItem`
+- `BotConversaTag 1:N BotConversaPersonTag`
+- `Person 1:N BotConversaPersonTag`
 
 ## Permissions
 
@@ -133,14 +164,18 @@ bot_conversa/
   Loads live remote contacts, enriches them with local link information, and saves selected contacts into the local CRM.
 - `BotConversaFlowService`
   Refreshes the local flow cache.
+- `BotConversaTagService`
+  Refreshes remote tags, builds local tag summaries, and assigns selected persons to remote subscribers under one tenant.
 - `BotConversaDispatchService`
-  Creates dispatch jobs and processes pending items while respecting terminal item counters and configured pacing.
+  Creates dispatch jobs and processes pending items while respecting terminal item counters, configured pacing, and optional tag-based audiences.
 
 ## Repositories
 
 - `PersonRepository`
 - `BotConversaContactRepository`
 - `BotConversaFlowCacheRepository`
+- `BotConversaTagRepository`
+- `BotConversaPersonTagRepository`
 - `BotConversaSyncLogRepository`
 - `BotConversaFlowDispatchRepository`
 - `BotConversaFlowDispatchItemRepository`
@@ -162,8 +197,24 @@ bot_conversa/
    - Dashboard
    - People
    - Contacts
+   - Tags
    - Flows
    - Dispatches
+
+## Tag synchronization flow
+
+1. Owner or admin opens the tags page.
+2. Backend loads the active organization Bot Conversa credential.
+3. Backend calls `GET /tags/` and refreshes the tenant-scoped local cache.
+4. The page shows each cached tag with the current count of linked internal people.
+
+## Tag assignment flow
+
+1. Owner or admin selects one cached tag and one or more internal people.
+2. Backend validates tenant and operator role.
+3. For each person, backend ensures the remote subscriber exists.
+4. Backend calls `POST /subscriber/{subscriber_id}/tags/{tag_id}/`.
+5. Backend stores or updates the local `BotConversaPersonTag` link for future filtering and dispatch use.
 
 ## Contact synchronization flow
 
@@ -197,9 +248,9 @@ bot_conversa/
 ## Flow dispatch flow
 
 1. Owner or admin selects a cached flow.
-2. Owner or admin selects one or more internal persons.
+2. Owner or admin selects one or more internal persons and can also choose one or more synchronized Bot Conversa tags.
 3. Owner or admin optionally defines a min/max delay interval in seconds.
-4. Backend creates one dispatch job and one item per person.
+4. Backend creates one dispatch job and one item per resolved person.
 5. The dispatch detail page polls a backend endpoint.
 6. When a delay interval is configured, the frontend waits a randomized value between the configured min and max before requesting the next processing step.
 7. Each processing cycle:
@@ -208,7 +259,7 @@ bot_conversa/
    - sends the flow
    - persists success or failure per item
 8. Progress is computed from terminal item status counters only; `running` items do not count as completed.
-9. The dispatch creation screen can asynchronously filter the audience to only show people who have not yet received a successful WhatsApp send in the active tenant.
+9. The dispatch creation screen can asynchronously filter the audience to only show people who have not yet received a successful WhatsApp send in the active tenant and can narrow the candidate list by selected Bot Conversa tags.
 
 ## Status update strategy
 

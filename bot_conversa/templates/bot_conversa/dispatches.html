@@ -30,9 +30,58 @@
             </div>
             <div class="col-12">
               <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                <label class="form-label mb-0">Etiquetas</label>
+                <label class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 mb-0">
+                  <input
+                    type="checkbox"
+                    class="form-check-input m-0"
+                    data-select-all="bot-tag-dispatch-selection"
+                  >
+                  Selecionar todas
+                </label>
+              </div>
+              <div class="bot-checkbox-shell" id="botDispatchTagSelectionList">
+                {% if dispatch_form.tag_public_ids %}
+                  <div class="bot-selection-list">
+                    {% for option in dispatch_form.tag_public_ids %}
+                      <label class="bot-selection-card" data-filter-item data-filter-text="{{ option.choice_label }}">
+                        {{ option.tag }}
+                        <span class="bot-selection-text">{{ option.choice_label }}</span>
+                      </label>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <div class="soft-empty text-start p-0">
+                    <p class="mb-0">Nenhuma etiqueta sincronizada ainda. Atualize as etiquetas para usar esse filtro.</p>
+                  </div>
+                {% endif %}
+              </div>
+              <div class="form-text">Se voce marcar etiquetas, o disparo inclui automaticamente as pessoas vinculadas a elas.</div>
+              {% for error in dispatch_form.tag_public_ids.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12">
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                 <label class="form-label mb-0">Selecionar pessoas</label>
-                <div class="d-flex align-items-center gap-2">
+                <div class="d-flex flex-wrap align-items-center gap-2">
                   <span class="small text-body-secondary" id="botConversaAudienceCount">{{ initial_bot_conversa_audience_count }} disponiveis</span>
+                  <label class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 mb-0">
+                    <input
+                      type="checkbox"
+                      class="form-check-input m-0"
+                      data-select-all="bot-dispatch-selection"
+                    >
+                    Selecionar todas
+                  </label>
+                  <button
+                    type="button"
+                    class="btn btn-outline-secondary btn-sm"
+                    data-checkbox-selection-action="clear"
+                    data-checkbox-selection-target="#botDispatchSelectionList"
+                    data-checkbox-selection-name="person_public_ids"
+                    data-checkbox-selection-group="bot-dispatch-selection"
+                  >
+                    Limpar seleção
+                  </button>
                   <button
                     type="button"
                     class="btn btn-outline-secondary btn-sm"
@@ -42,6 +91,7 @@
                     data-count-target="#botConversaAudienceCount"
                     data-channel-label="WhatsApp"
                     data-only-unsent="false"
+                    data-tag-field="#botDispatchTagSelectionList"
                   >
                     Mostrar apenas nao enviados
                   </button>

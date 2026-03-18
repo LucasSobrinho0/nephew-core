@@ -5,8 +5,8 @@
 {% block content %}
   <section class="page-header mb-4">
     <span class="section-kicker">Apollo</span>
-    <h1>Empresas remotas e uso da API</h1>
-    <p class="text-body-secondary mb-0">Liste empresas no Apollo, filtre os resultados e salve as selecionadas no CRM com os dados disponiveis.</p>
+    <h1>Integracao com empresas e pessoas do Apollo</h1>
+    <p class="text-body-secondary mb-0">Acompanhe o uso da API, revise os salvamentos recentes e navegue rapidamente para as bases de empresas e pessoas do Apollo.</p>
   </section>
 
   {% include 'apollo_integration/_subnav.html' %}
@@ -132,6 +132,7 @@
             <span class="section-kicker">Historico</span>
             <h2>Ultimos salvamentos</h2>
           </div>
+          <a class="btn btn-outline-secondary btn-sm" href="{% url 'apollo_integration:people' %}">Ver pessoas</a>
         </div>
         {% if summary.recent_sync_logs %}
           <div class="table-responsive">

@@ -3,7 +3,9 @@ from bot_conversa.models import (
     BotConversaFlowCache,
     BotConversaFlowDispatch,
     BotConversaFlowDispatchItem,
+    BotConversaPersonTag,
     BotConversaSyncLog,
+    BotConversaTag,
 )
 
 
@@ -110,6 +112,107 @@ class BotConversaFlowCacheRepository:
     @staticmethod
     def create(**kwargs):
         return BotConversaFlowCache.objects.create(**kwargs)
+
+
+class BotConversaTagRepository:
+    @staticmethod
+    def list_for_organization(organization):
+        return (
+            BotConversaTag.objects.for_organization(organization)
+            .with_related_objects()
+            .order_by('name')
+        )
+
+    @staticmethod
+    def get_for_organization_and_public_id(organization, public_id):
+        return (
+            BotConversaTag.objects.for_organization(organization)
+            .with_related_objects()
+            .filter(public_id=public_id)
+            .first()
+        )
+
+    @staticmethod
+    def get_for_organization_and_external_id(organization, external_tag_id):
+        return (
+            BotConversaTag.objects.for_organization(organization)
+            .with_related_objects()
+            .filter(external_tag_id=external_tag_id)
+            .first()
+        )
+
+    @staticmethod
+    def list_for_organization_and_public_ids(organization, public_ids):
+        return (
+            BotConversaTag.objects.for_organization(organization)
+            .with_related_objects()
+            .filter(public_id__in=public_ids)
+            .order_by('name')
+        )
+
+    @staticmethod
+    def create(**kwargs):
+        return BotConversaTag.objects.create(**kwargs)
+
+
+class BotConversaPersonTagRepository:
+    @staticmethod
+    def list_for_organization(organization):
+        return (
+            BotConversaPersonTag.objects.for_organization(organization)
+            .with_related_objects()
+            .order_by('tag__name', 'person__first_name', 'person__last_name')
+        )
+
+    @staticmethod
+    def list_for_organization_and_tag(tag):
+        return (
+            BotConversaPersonTag.objects.for_organization(tag.organization)
+            .with_related_objects()
+            .filter(tag=tag)
+            .order_by('person__first_name', 'person__last_name')
+        )
+
+    @staticmethod
+    def list_for_organization_and_person(person):
+        return (
+            BotConversaPersonTag.objects.for_organization(person.organization)
+            .with_related_objects()
+            .filter(person=person)
+            .order_by('tag__name')
+        )
+
+    @staticmethod
+    def get_for_organization_and_person_and_tag(organization, person, tag):
+        return (
+            BotConversaPersonTag.objects.for_organization(organization)
+            .with_related_objects()
+            .filter(person=person, tag=tag)
+            .first()
+        )
+
+    @staticmethod
+    def list_person_ids_for_organization_and_tag_ids(organization, tag_ids):
+        return (
+            BotConversaPersonTag.objects.for_organization(organization)
+            .filter(tag_id__in=tag_ids)
+            .values_list('person_id', flat=True)
+            .distinct()
+        )
+
+    @staticmethod
+    def create(**kwargs):
+        return BotConversaPersonTag.objects.create(**kwargs)
+
+    @staticmethod
+    def bulk_create(person_tags, **kwargs):
+        return BotConversaPersonTag.objects.bulk_create(person_tags, **kwargs)
+
+    @staticmethod
+    def bulk_update(person_tags, fields, **kwargs):
+        if not person_tags:
+            return 0
+        return BotConversaPersonTag.objects.bulk_update(person_tags, fields, **kwargs)
 
 
 class BotConversaSyncLogRepository:

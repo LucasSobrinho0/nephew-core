@@ -88,6 +88,29 @@ class GmailAccessMixin(LoginRequiredMixin):
             for template in GmailTemplateRepository.list_active_for_organization(self.active_organization)
         ]
 
+    @staticmethod
+    def build_template_variables():
+        return [
+            {
+                'token': '${nome}',
+                'label': 'Nome',
+                'description': 'Primeiro nome da pessoa.',
+                'example': 'Ola ${nome}, tudo bem?',
+            },
+            {
+                'token': '${sobrenome}',
+                'label': 'Sobrenome',
+                'description': 'Sobrenome da pessoa.',
+                'example': 'Equipe ${sobrenome}',
+            },
+            {
+                'token': '${email}',
+                'label': 'E-mail',
+                'description': 'E-mail cadastrado no CRM.',
+                'example': 'Estamos escrevendo para ${email}.',
+            },
+        ]
+
     def build_dispatch_form(self, *args, **kwargs):
         return GmailDispatchCreateForm(
             *args,
@@ -110,6 +133,7 @@ class GmailAccessMixin(LoginRequiredMixin):
             'gmail_tabs': self.get_module_tabs(),
             'gmail_active_tab': active_tab,
             'can_manage_gmail': self.active_membership.can_manage_integrations,
+            'gmail_template_variables': self.build_template_variables(),
         }
 
 
@@ -313,7 +337,7 @@ class GmailDispatchesView(GmailAccessMixin, TemplateView):
             {
                 'dispatches': GmailDispatchRepository.list_for_organization(self.active_organization),
                 'dispatch_form': kwargs.get('dispatch_form') or self.build_dispatch_form(),
-                'available_variables': ['${nome}', '${sobrenome}', '${email}'],
+                'available_variables': [variable['token'] for variable in self.build_template_variables()],
                 'initial_gmail_audience_count': len(self.build_person_choices()),
             }
         )

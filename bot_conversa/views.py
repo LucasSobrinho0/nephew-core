@@ -15,11 +15,18 @@ from bot_conversa.forms import (
     BotConversaDispatchCreateForm,
     BotConversaFlowRefreshForm,
     BotConversaListForm,
+    BotConversaPersonTagAssignForm,
     BotConversaPersonSyncForm,
     BotConversaRemoteContactSearchForm,
     BotConversaRemoteContactSaveForm,
+    BotConversaTagRefreshForm,
 )
-from bot_conversa.repositories import BotConversaFlowCacheRepository, BotConversaFlowDispatchRepository
+from bot_conversa.repositories import (
+    BotConversaFlowCacheRepository,
+    BotConversaFlowDispatchItemRepository,
+    BotConversaFlowDispatchRepository,
+    BotConversaTagRepository,
+)
 from bot_conversa.services import (
     BotConversaAuthorizationService,
     BotConversaContactSyncService,
@@ -29,6 +36,7 @@ from bot_conversa.services import (
     BotConversaInstallationService,
     BotConversaPeopleService,
     BotConversaRemoteContactService,
+    BotConversaTagService,
 )
 from people.forms import PersonCreateForm
 from people.repositories import PersonRepository
@@ -76,12 +84,32 @@ class BotConversaAccessMixin(LoginRequiredMixin):
             {'label': 'Visao geral', 'url': 'bot_conversa:dashboard', 'key': 'dashboard'},
             {'label': 'Pessoas', 'url': 'bot_conversa:people', 'key': 'people'},
             {'label': 'Contatos', 'url': 'bot_conversa:contacts', 'key': 'contacts'},
+            {'label': 'Etiquetas', 'url': 'bot_conversa:tags', 'key': 'tags'},
             {'label': 'Fluxos', 'url': 'bot_conversa:flows', 'key': 'flows'},
             {'label': 'Disparos', 'url': 'bot_conversa:dispatches', 'key': 'dispatches'},
         ]
 
-    def build_person_choices(self, *, only_unsent=False):
+    def build_person_choices(self, *, only_unsent=False, tag_public_ids=None):
         persons = list(PersonRepository.list_for_organization(self.active_organization))
+        selected_tag_ids = []
+
+        if tag_public_ids:
+            selected_tag_ids = [
+                tag.id
+                for tag in BotConversaTagRepository.list_for_organization_and_public_ids(
+                    self.active_organization,
+                    tag_public_ids,
+                )
+            ]
+
+        if selected_tag_ids:
+            tagged_person_ids = set(
+                BotConversaTagService.list_person_ids_for_tags(
+                    organization=self.active_organization,
+                    tag_ids=selected_tag_ids,
+                )
+            )
+            persons = [person for person in persons if person.id in tagged_person_ids]
 
         if only_unsent:
             successful_person_ids = set(
@@ -102,11 +130,19 @@ class BotConversaAccessMixin(LoginRequiredMixin):
             for flow in BotConversaFlowCacheRepository.list_selectable_for_organization(self.active_organization)
         ]
 
+    def build_tag_choices(self):
+        return BotConversaTagService.build_tag_choice_rows(organization=self.active_organization)
+
     def build_dispatch_form(self, *args, **kwargs):
+        person_choices = self.build_person_choices(
+            tag_public_ids=kwargs.get('selected_tag_public_ids'),
+        )
+        kwargs.pop('selected_tag_public_ids', None)
         return BotConversaDispatchCreateForm(
             *args,
             flow_choices=self.build_flow_choices(),
-            person_choices=self.build_person_choices(),
+            person_choices=person_choices,
+            tag_choices=self.build_tag_choices(),
             **kwargs,
         )
 
@@ -408,17 +444,127 @@ class BotConversaDispatchesView(BotConversaAccessMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        selected_tag_public_ids = kwargs.get('selected_tag_public_ids') or self.request.GET.getlist('tag_public_ids')
         context.update(self.build_base_context(active_tab='dispatches'))
         context.update(
             {
-                'dispatch_form': kwargs.get('dispatch_form') or self.build_dispatch_form(),
+                'dispatch_form': kwargs.get('dispatch_form')
+                or self.build_dispatch_form(
+                    initial={'tag_public_ids': selected_tag_public_ids},
+                    selected_tag_public_ids=selected_tag_public_ids,
+                ),
                 'recent_dispatches': BotConversaFlowDispatchRepository.list_recent_for_organization(
                     self.active_organization,
                 ),
-                'initial_bot_conversa_audience_count': len(self.build_person_choices()),
+                'initial_bot_conversa_audience_count': len(
+                    self.build_person_choices(tag_public_ids=selected_tag_public_ids)
+                ),
             }
         )
         return context
+
+
+class BotConversaTagsView(BotConversaAccessMixin, TemplateView):
+    template_name = 'bot_conversa/tags.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        list_form = BotConversaListForm(self.request.GET or None)
+        has_loaded_people = False
+        person_rows = []
+
+        if self.request.GET.get('load') == '1' and list_form.is_valid():
+            has_loaded_people = True
+            person_rows = BotConversaPeopleService.build_person_rows(
+                organization=self.active_organization,
+            )
+
+        context.update(self.build_base_context(active_tab='tags'))
+        context.update(
+            {
+                'tag_rows': BotConversaTagService.build_tag_rows(organization=self.active_organization),
+                'refresh_form': BotConversaTagRefreshForm(),
+                'assign_form': kwargs.get('assign_form') or BotConversaPersonTagAssignForm(
+                    tag_choices=self.build_tag_choices(),
+                    person_choices=self.build_person_choices(),
+                    initial={'next': 'bot_conversa:tags'},
+                ),
+                'person_rows': person_rows,
+                'has_loaded_people': has_loaded_people,
+                'list_form': list_form,
+            }
+        )
+        return context
+
+
+class BotConversaTagRefreshView(BotConversaOperatorRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        form = BotConversaTagRefreshForm(request.POST)
+        next_url = request.POST.get('next') or 'bot_conversa:tags'
+
+        if not form.is_valid():
+            messages.error(request, 'A solicitacao de atualizacao de etiquetas e invalida.')
+            return redirect(next_url)
+
+        try:
+            refreshed_tags = BotConversaTagService.refresh_tags(
+                user=request.user,
+                organization=self.active_organization,
+            )
+        except (BotConversaApiError, BotConversaConfigurationError, PermissionDenied, ValidationError) as exc:
+            messages.error(request, str(exc))
+            return redirect(next_url)
+
+        messages.success(request, f'{len(refreshed_tags)} etiquetas do Bot Conversa foram atualizadas.')
+        return redirect(next_url)
+
+
+class BotConversaTagAssignView(BotConversaOperatorRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        form = BotConversaPersonTagAssignForm(
+            request.POST,
+            tag_choices=self.build_tag_choices(),
+            person_choices=self.build_person_choices(),
+        )
+        next_url = request.POST.get('next') or 'bot_conversa:tags'
+
+        if not form.is_valid():
+            view = BotConversaTagsView()
+            view.request = request
+            view.args = args
+            view.kwargs = kwargs
+            view.installation = self.installation
+            view.active_organization = self.active_organization
+            view.active_membership = self.active_membership
+            return view.render_to_response(view.get_context_data(assign_form=form))
+
+        tag = BotConversaTagRepository.get_for_organization_and_public_id(
+            self.active_organization,
+            form.cleaned_data['tag_public_id'],
+        )
+        if tag is None:
+            messages.error(request, 'Selecione uma etiqueta valida do Bot Conversa.')
+            return redirect(next_url)
+
+        persons = list(
+            PersonRepository.list_for_organization_and_public_ids(
+                self.active_organization,
+                form.cleaned_data['person_public_ids'],
+            )
+        )
+        try:
+            linked_persons = BotConversaTagService.assign_tag_to_people(
+                user=request.user,
+                organization=self.active_organization,
+                tag=tag,
+                persons=persons,
+            )
+        except (BotConversaApiError, BotConversaConfigurationError, PermissionDenied, ValidationError) as exc:
+            messages.error(request, str(exc))
+            return redirect(next_url)
+
+        messages.success(request, f'{len(linked_persons)} pessoas foram vinculadas a etiqueta {tag.name}.')
+        return redirect(next_url)
 
 
 class BotConversaDispatchCreateView(BotConversaOperatorRequiredMixin, View):
@@ -433,7 +579,10 @@ class BotConversaDispatchCreateView(BotConversaOperatorRequiredMixin, View):
             view.active_organization = self.active_organization
             view.active_membership = self.active_membership
             return view.render_to_response(
-                view.get_context_data(dispatch_form=form),
+                view.get_context_data(
+                    dispatch_form=form,
+                    selected_tag_public_ids=request.POST.getlist('tag_public_ids'),
+                ),
             )
 
         flow_cache = BotConversaFlowCacheRepository.get_for_organization_and_public_id(
@@ -450,6 +599,12 @@ class BotConversaDispatchCreateView(BotConversaOperatorRequiredMixin, View):
                 form.cleaned_data['person_public_ids'],
             )
         )
+        tags = list(
+            BotConversaTagRepository.list_for_organization_and_public_ids(
+                self.active_organization,
+                form.cleaned_data['tag_public_ids'],
+            )
+        )
 
         try:
             dispatch = BotConversaDispatchService.create_dispatch(
@@ -457,6 +612,7 @@ class BotConversaDispatchCreateView(BotConversaOperatorRequiredMixin, View):
                 organization=self.active_organization,
                 flow_cache=flow_cache,
                 persons=persons,
+                tags=tags,
                 min_delay_seconds=form.cleaned_data['min_delay_seconds'],
                 max_delay_seconds=form.cleaned_data['max_delay_seconds'],
             )
@@ -491,7 +647,11 @@ class BotConversaDispatchAudienceView(BotConversaAccessMixin, View):
 
     def get(self, request, *args, **kwargs):
         only_unsent = request.GET.get('only_unsent') == '1'
-        person_choices = self.build_person_choices(only_unsent=only_unsent)
+        tag_public_ids = request.GET.getlist('tag_public_ids')
+        person_choices = self.build_person_choices(
+            only_unsent=only_unsent,
+            tag_public_ids=tag_public_ids,
+        )
         response = JsonResponse(
             {
                 'items': [

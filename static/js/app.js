@@ -101,6 +101,37 @@
     });
   }
 
+  function initCheckboxSelectionButtons() {
+    document.querySelectorAll('[data-checkbox-selection-action]').forEach(function (trigger) {
+      if (trigger.dataset.checkboxSelectionBound === 'true') {
+        return;
+      }
+
+      trigger.dataset.checkboxSelectionBound = 'true';
+      trigger.addEventListener('click', function () {
+        var action = trigger.getAttribute('data-checkbox-selection-action');
+        var targetSelector = trigger.getAttribute('data-checkbox-selection-target');
+        var inputName = trigger.getAttribute('data-checkbox-selection-name') || 'person_public_ids';
+        var groupName = trigger.getAttribute('data-checkbox-selection-group') || '';
+        var target = targetSelector ? document.querySelector(targetSelector) : null;
+        var selectAllToggle = groupName ? document.querySelector('[data-select-all="' + groupName + '"]') : null;
+
+        if (!target) {
+          return;
+        }
+
+        if (action === 'clear') {
+          target.querySelectorAll('input[name="' + inputName + '"]').forEach(function (checkbox) {
+            checkbox.checked = false;
+          });
+          if (selectAllToggle) {
+            selectAllToggle.checked = false;
+          }
+        }
+      });
+    });
+  }
+
   function initAsyncListForms() {
     document.querySelectorAll('form[data-async-list-form]').forEach(function (form) {
       if (form.dataset.asyncListBound === 'true') {
@@ -786,36 +817,46 @@
       }
 
       trigger.dataset.audienceBound = 'true';
-      trigger.addEventListener('click', function () {
-        var audienceUrl = trigger.getAttribute('data-audience-url');
-        var targetSelector = trigger.getAttribute('data-audience-target');
-        var emptySelector = trigger.getAttribute('data-empty-target');
-        var countSelector = trigger.getAttribute('data-count-target');
-        var channelLabel = trigger.getAttribute('data-channel-label') || 'canal';
-        var onlyUnsent = trigger.getAttribute('data-only-unsent') === 'true' ? '0' : '1';
-        var target = targetSelector ? document.querySelector(targetSelector) : null;
-        var emptyState = emptySelector ? document.querySelector(emptySelector) : null;
-        var emptyMessage = emptyState ? emptyState.querySelector('p') : null;
-        var countTarget = countSelector ? document.querySelector(countSelector) : null;
-        var selectedValues = [];
-        var originalText = trigger.textContent;
+        trigger.addEventListener('click', function () {
+          var audienceUrl = trigger.getAttribute('data-audience-url');
+          var targetSelector = trigger.getAttribute('data-audience-target');
+          var emptySelector = trigger.getAttribute('data-empty-target');
+          var countSelector = trigger.getAttribute('data-count-target');
+          var tagFieldSelector = trigger.getAttribute('data-tag-field');
+          var channelLabel = trigger.getAttribute('data-channel-label') || 'canal';
+          var onlyUnsent = trigger.getAttribute('data-only-unsent') === 'true' ? '0' : '1';
+          var target = targetSelector ? document.querySelector(targetSelector) : null;
+          var emptyState = emptySelector ? document.querySelector(emptySelector) : null;
+          var emptyMessage = emptyState ? emptyState.querySelector('p') : null;
+          var countTarget = countSelector ? document.querySelector(countSelector) : null;
+          var tagField = tagFieldSelector ? document.querySelector(tagFieldSelector) : null;
+          var selectedValues = [];
+          var originalText = trigger.textContent;
+          var query = new URLSearchParams();
 
-        if (!audienceUrl || !target || trigger.disabled) {
-          return;
-        }
+          if (!audienceUrl || !target || trigger.disabled) {
+            return;
+          }
 
         target.querySelectorAll('input[name="person_public_ids"]:checked').forEach(function (input) {
           selectedValues.push(input.value);
         });
 
-        trigger.disabled = true;
-        trigger.textContent = 'Atualizando...';
+          trigger.disabled = true;
+          trigger.textContent = 'Atualizando...';
 
-        fetch(audienceUrl + '?only_unsent=' + onlyUnsent, {
-          method: 'GET',
-          credentials: 'same-origin',
-          cache: 'no-store',
-          headers: {
+          query.set('only_unsent', onlyUnsent);
+          if (tagField) {
+            tagField.querySelectorAll('input[name="tag_public_ids"]:checked').forEach(function (input) {
+              query.append('tag_public_ids', input.value);
+            });
+          }
+
+          fetch(audienceUrl + '?' + query.toString(), {
+            method: 'GET',
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: {
             'X-Requested-With': 'XMLHttpRequest'
           }
         })
@@ -918,6 +959,7 @@
   botConversaDispatchPoller = initBotConversaDispatchPoller();
   gmailDispatchPoller = initGmailDispatchPoller();
   initSelectAllCheckboxes();
+  initCheckboxSelectionButtons();
   initLoadingForms();
   initListFilters();
   initAsyncListForms();

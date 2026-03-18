@@ -11,7 +11,7 @@
 - `people`: tenant-scoped CRM persons and contact identity.
 - `integrations`: app catalog, tenant installations, encrypted credentials, and credential access audit.
 - `apollo_integration`: Apollo API key wiring, remote company search, usage snapshots, bulk import, and optional company sync handoff to HubSpot.
-- `bot_conversa`: Bot Conversa contact linking, flow cache, dispatching, and sync logs.
+- `bot_conversa`: Bot Conversa contact linking, tag cache, flow cache, dispatching, and sync logs.
 - `hubspot_integration`: HubSpot company/contact/deal synchronization and pipeline cache.
 - `gmail_integration`: Gmail credential management, templates, and email dispatches.
 
@@ -132,7 +132,7 @@ NephewCRM/
 - `people.services.PersonService`
   Creates and updates tenant-scoped persons with normalized contact data.
 - `bot_conversa.services.*`
-  Encapsulates Bot Conversa installation resolution, remote contact sync, flow cache refresh, and dispatch processing.
+  Encapsulates Bot Conversa installation resolution, remote contact sync, tag cache refresh, tag assignment, flow cache refresh, and dispatch processing.
 - `hubspot_integration.services.*`
   Encapsulates HubSpot installation resolution, company/contact sync, pipeline refresh, and deal creation.
 - `apollo_integration.services.*`
@@ -206,6 +206,6 @@ NephewCRM/
 3. Integration platform
    App catalog, installations, encrypted credentials, secure reveal flow, and access audit.
 4. Operational modules
-   Apollo company search/import, Bot Conversa flow dispatches, HubSpot sync/deals, and Gmail templates/dispatches with configurable pacing and async audience filters for people who have not yet received sends in each channel.
+   Apollo company search/import, Bot Conversa tag synchronization/assignment and flow dispatches, HubSpot sync/deals, and Gmail templates/dispatches with configurable pacing and async audience filters for people who have not yet received sends in each channel.
 5. Next evolution
    Stronger model-level tenant consistency guarantees, broader audit coverage, background processing options, and richer CRM workflows.

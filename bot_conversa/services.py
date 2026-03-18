@@ -12,14 +12,18 @@ from bot_conversa.models import (
     BotConversaFlowCache,
     BotConversaFlowDispatch,
     BotConversaFlowDispatchItem,
+    BotConversaPersonTag,
     BotConversaSyncLog,
+    BotConversaTag,
 )
 from bot_conversa.repositories import (
     BotConversaContactRepository,
     BotConversaFlowCacheRepository,
     BotConversaFlowDispatchItemRepository,
     BotConversaFlowDispatchRepository,
+    BotConversaPersonTagRepository,
     BotConversaSyncLogRepository,
+    BotConversaTagRepository,
 )
 from common.matching import build_person_indexes, match_person
 from common.phone import format_phone_display, normalize_phone
@@ -86,6 +90,7 @@ class BotConversaDashboardService:
             'person_count': PersonRepository.count_for_organization(organization),
             'synced_contact_count': BotConversaContactRepository.list_for_organization(organization).count(),
             'flow_count': BotConversaFlowCacheRepository.list_selectable_for_organization(organization).count(),
+            'tag_count': BotConversaTagRepository.list_for_organization(organization).count(),
             'recent_dispatches': recent_dispatches,
             'recent_sync_logs': recent_sync_logs,
         }
@@ -108,7 +113,11 @@ class BotConversaPeopleService:
     def build_person_rows(*, organization):
         persons = list(PersonRepository.list_for_organization(organization))
         synced_contacts = list(BotConversaContactRepository.list_for_organization(organization))
+        person_tag_links = list(BotConversaPersonTagRepository.list_for_organization(organization))
         contact_by_person_id = {contact.person_id: contact for contact in synced_contacts}
+        tags_by_person_id = {}
+        for person_tag_link in person_tag_links:
+            tags_by_person_id.setdefault(person_tag_link.person_id, []).append(person_tag_link.tag)
 
         person_rows = []
         for person in persons:
@@ -117,6 +126,7 @@ class BotConversaPeopleService:
                 {
                     'person': person,
                     'contact_link': contact_link,
+                    'tags': tags_by_person_id.get(person.id, []),
                     'is_synced': bool(contact_link and contact_link.sync_status == BotConversaContact.SyncStatus.SYNCED),
                 }
             )
@@ -133,6 +143,165 @@ class BotConversaBulkPreparationService:
         contact_link.external_subscriber_id = (contact_link.external_subscriber_id or '').strip()
         contact_link.external_name = (contact_link.external_name or '').strip()
         return contact_link
+
+
+class BotConversaTagService:
+    @staticmethod
+    @transaction.atomic
+    def refresh_tags(*, user, organization):
+        installation = BotConversaInstallationService.get_installation(organization=organization)
+        BotConversaAuthorizationService.ensure_operator_access(user=user, organization=organization)
+        client = BotConversaInstallationService.build_client(organization=organization)
+
+        synced_at = timezone.now()
+        refreshed_tags = []
+
+        for remote_tag in client.list_tags():
+            tag = BotConversaTagRepository.get_for_organization_and_external_id(
+                organization,
+                remote_tag['external_tag_id'],
+            )
+            if tag is None:
+                tag = BotConversaTagRepository.create(
+                    organization=organization,
+                    installation=installation,
+                    external_tag_id=remote_tag['external_tag_id'],
+                    name=remote_tag['name'],
+                    last_synced_at=synced_at,
+                    raw_payload=remote_tag['raw_payload'],
+                )
+            else:
+                tag.name = remote_tag['name']
+                tag.last_synced_at = synced_at
+                tag.raw_payload = remote_tag['raw_payload']
+                tag.save(update_fields=['name', 'last_synced_at', 'raw_payload', 'updated_at'])
+            refreshed_tags.append(tag)
+
+        return refreshed_tags
+
+    @staticmethod
+    def build_tag_rows(*, organization):
+        person_tag_links = list(BotConversaPersonTagRepository.list_for_organization(organization))
+        counts_by_tag_id = {}
+        for person_tag_link in person_tag_links:
+            counts_by_tag_id[person_tag_link.tag_id] = counts_by_tag_id.get(person_tag_link.tag_id, 0) + 1
+
+        return [
+            {
+                'tag': tag,
+                'person_count': counts_by_tag_id.get(tag.id, 0),
+            }
+            for tag in BotConversaTagRepository.list_for_organization(organization)
+        ]
+
+    @staticmethod
+    def build_tag_choice_rows(*, organization):
+        return [(str(tag.public_id), tag.name) for tag in BotConversaTagRepository.list_for_organization(organization)]
+
+    @staticmethod
+    def list_person_ids_for_tags(*, organization, tag_ids):
+        if not tag_ids:
+            return []
+        return BotConversaPersonTagRepository.list_person_ids_for_organization_and_tag_ids(
+            organization,
+            tag_ids,
+        )
+
+    @staticmethod
+    def ensure_tag_access(*, organization, tag):
+        if tag.organization_id != organization.id:
+            raise PermissionDenied('A etiqueta selecionada nao pertence a organizacao ativa.')
+
+    @staticmethod
+    @transaction.atomic
+    def assign_tag_to_people(*, user, organization, tag, persons):
+        installation = BotConversaInstallationService.get_installation(organization=organization)
+        BotConversaAuthorizationService.ensure_operator_access(user=user, organization=organization)
+        BotConversaTagService.ensure_tag_access(organization=organization, tag=tag)
+        client = BotConversaInstallationService.build_client(organization=organization)
+        synced_at = timezone.now()
+
+        unique_persons = []
+        seen_person_ids = set()
+        for person in persons:
+            if person.organization_id != organization.id:
+                raise ValidationError('Uma ou mais pessoas selecionadas nao pertencem a organizacao ativa.')
+            if person.id in seen_person_ids:
+                continue
+            unique_persons.append(person)
+            seen_person_ids.add(person.id)
+
+        if not unique_persons:
+            raise ValidationError('Selecione pelo menos uma pessoa para vincular a etiqueta.')
+
+        person_tags_to_create = []
+        person_tags_to_update = []
+
+        for person in unique_persons:
+            person_tag_link = BotConversaPersonTagRepository.get_for_organization_and_person_and_tag(
+                organization,
+                person,
+                tag,
+            )
+            contact_link = BotConversaContactSyncService.ensure_remote_contact(
+                user=user,
+                organization=organization,
+                person=person,
+            )
+            response_payload = {'raw_payload': person_tag_link.remote_payload if person_tag_link else {}}
+            if (
+                person_tag_link is None
+                or person_tag_link.external_subscriber_id != contact_link.external_subscriber_id
+                or person_tag_link.sync_status != BotConversaPersonTag.SyncStatus.SYNCED
+            ):
+                response_payload = client.add_tag_to_subscriber(
+                    subscriber_id=contact_link.external_subscriber_id,
+                    tag_id=tag.external_tag_id,
+                )
+            if person_tag_link is None:
+                person_tag_link = BotConversaPersonTag(
+                    organization=organization,
+                    installation=installation,
+                    person=person,
+                    tag=tag,
+                    contact_link=contact_link,
+                    external_subscriber_id=contact_link.external_subscriber_id,
+                    sync_status=BotConversaPersonTag.SyncStatus.SYNCED,
+                    last_synced_at=synced_at,
+                    remote_payload=response_payload['raw_payload'],
+                    created_by=user,
+                    updated_by=user,
+                )
+                person_tags_to_create.append(person_tag_link)
+            else:
+                person_tag_link.contact_link = contact_link
+                person_tag_link.external_subscriber_id = contact_link.external_subscriber_id
+                person_tag_link.sync_status = BotConversaPersonTag.SyncStatus.SYNCED
+                person_tag_link.last_synced_at = synced_at
+                person_tag_link.last_error_message = ''
+                person_tag_link.remote_payload = response_payload['raw_payload']
+                person_tag_link.updated_by = user
+                person_tag_link.updated_at = synced_at
+                person_tags_to_update.append(person_tag_link)
+
+        if person_tags_to_create:
+            BotConversaPersonTagRepository.bulk_create(person_tags_to_create)
+        if person_tags_to_update:
+            BotConversaPersonTagRepository.bulk_update(
+                person_tags_to_update,
+                [
+                    'contact_link',
+                    'external_subscriber_id',
+                    'sync_status',
+                    'last_synced_at',
+                    'last_error_message',
+                    'remote_payload',
+                    'updated_by',
+                    'updated_at',
+                ],
+            )
+
+        return unique_persons
 
 
 class BotConversaFlowService:
@@ -656,10 +825,31 @@ class BotConversaRemoteContactService:
 class BotConversaDispatchService:
     @staticmethod
     @transaction.atomic
-    def create_dispatch(*, user, organization, flow_cache, persons, min_delay_seconds=0, max_delay_seconds=0):
+    def create_dispatch(
+        *,
+        user,
+        organization,
+        flow_cache,
+        persons,
+        tags=None,
+        min_delay_seconds=0,
+        max_delay_seconds=0,
+    ):
         installation = BotConversaInstallationService.get_installation(organization=organization)
         BotConversaAuthorizationService.ensure_operator_access(user=user, organization=organization)
         BotConversaDispatchService.ensure_flow_access(organization=organization, flow_cache=flow_cache)
+
+        resolved_tags = list(tags or [])
+        tag_person_ids = set()
+        if resolved_tags:
+            for tag in resolved_tags:
+                BotConversaTagService.ensure_tag_access(organization=organization, tag=tag)
+            tag_person_ids = set(
+                BotConversaPersonTagRepository.list_person_ids_for_organization_and_tag_ids(
+                    organization,
+                    [tag.id for tag in resolved_tags],
+                )
+            )
 
         unique_persons = []
         seen_person_ids = set()
@@ -670,8 +860,17 @@ class BotConversaDispatchService:
                 unique_persons.append(person)
                 seen_person_ids.add(person.id)
 
+        if tag_person_ids:
+            tagged_persons = list(
+                PersonRepository.list_for_organization(organization).filter(id__in=tag_person_ids)
+            )
+            for person in tagged_persons:
+                if person.id not in seen_person_ids:
+                    unique_persons.append(person)
+                    seen_person_ids.add(person.id)
+
         if not unique_persons:
-            raise ValidationError('Selecione pelo menos uma pessoa para o disparo.')
+            raise ValidationError('Selecione pelo menos uma pessoa ou uma etiqueta para o disparo.')
 
         if min_delay_seconds < 0 or max_delay_seconds < 0:
             raise ValidationError('Os delays do disparo nao podem ser negativos.')

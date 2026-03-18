@@ -46,12 +46,13 @@
                     <th>Pessoa</th>
                     <th>Telefone</th>
                     <th>Status</th>
+                    <th>Etiquetas</th>
                     <th>Subscriber</th>
                   </tr>
                 </thead>
                 <tbody id="botPeopleTableBody">
                   {% for row in person_rows %}
-                    <tr data-filter-item data-filter-text="{{ row.person.full_name }} {{ row.person.phone }} {{ row.person.bot_conversa_id|default:'' }} {% if row.contact_link %}{{ row.contact_link.external_subscriber_id }} {{ row.contact_link.get_sync_status_display }}{% endif %}">
+                    <tr data-filter-item data-filter-text="{{ row.person.full_name }} {{ row.person.phone }} {{ row.person.bot_conversa_id|default:'' }} {% if row.contact_link %}{{ row.contact_link.external_subscriber_id }} {{ row.contact_link.get_sync_status_display }}{% endif %} {% for tag in row.tags %}{{ tag.name }} {% endfor %}">
                       {% if can_manage_bot_conversa %}
                         <td><input type="checkbox" name="person_public_ids" value="{{ row.person.public_id }}" data-checkbox-group="bot-person-sync"></td>
                       {% endif %}
@@ -64,6 +65,15 @@
                           </span>
                         {% else %}
                           <span class="status-badge status-pending">Não sincronizado</span>
+                        {% endif %}
+                      </td>
+                      <td class="small">
+                        {% if row.tags %}
+                          {% for tag in row.tags %}
+                            <span class="status-badge status-used mb-1">{{ tag.name }}</span>
+                          {% endfor %}
+                        {% else %}
+                          <span class="text-body-secondary">Sem etiquetas</span>
                         {% endif %}
                       </td>
                       <td class="small text-body-secondary">

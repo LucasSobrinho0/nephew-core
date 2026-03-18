@@ -159,6 +159,19 @@ class ApolloModuleTests(TestCase):
         self.assertContains(response, '60')
 
     @patch('apollo_integration.services.ApolloInstallationService.build_client')
+    def test_dashboard_uses_standard_subnav_and_heading(self, build_client_mock):
+        build_client_mock.return_value = FakeApolloClient()
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.get(reverse('apollo_integration:dashboard'))
+
+        self.assertContains(response, 'Integracao com empresas e pessoas do Apollo')
+        self.assertContains(response, 'Visao geral')
+        self.assertContains(response, 'Empresas')
+        self.assertContains(response, 'Pessoas')
+
+    @patch('apollo_integration.services.ApolloInstallationService.build_client')
     def test_remote_company_list_builds_apollo_payload_from_filters(self, build_client_mock):
         fake_client = FakeApolloClient()
         build_client_mock.return_value = fake_client
@@ -236,6 +249,38 @@ class ApolloModuleTests(TestCase):
         self.assertEqual(company.name, 'Apollo One')
 
     @patch('apollo_integration.services.ApolloInstallationService.build_client')
+    def test_companies_page_matches_module_navigation_pattern(self, build_client_mock):
+        build_client_mock.return_value = FakeApolloClient()
+        Company.objects.create(
+            organization=self.organization,
+            name='Local Apollo Co',
+            website='https://local.example',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        initial_response = self.client.get(reverse('apollo_integration:companies'))
+        self.assertContains(initial_response, '<h1>Empresas</h1>', html=True)
+        self.assertContains(initial_response, 'Listar empresas')
+
+        response = self.client.get(
+            reverse('apollo_integration:companies'),
+            {
+                'load_local': '1',
+                'search': '1',
+                'q_organization_name': 'Apollo',
+                'per_page': '25',
+            },
+        )
+
+        self.assertContains(response, 'Filtrar empresas locais')
+        self.assertContains(response, 'Filtrar empresas remotas')
+        self.assertContains(response, 'Salvar selecionadas')
+        self.assertNotContains(response, 'Salvar no CRM')
+
+    @patch('apollo_integration.services.ApolloInstallationService.build_client')
     def test_remote_people_list_builds_apollo_payload_from_company_and_person_filters(self, build_client_mock):
         fake_client = FakeApolloClient()
         build_client_mock.return_value = fake_client
@@ -299,6 +344,38 @@ class ApolloModuleTests(TestCase):
         self.assertEqual(person.last_name, 'So***a')
         self.assertEqual(person.company_id, company.id)
         self.assertEqual(person.phone, '')
+
+    @patch('apollo_integration.services.ApolloInstallationService.build_client')
+    def test_people_page_matches_module_navigation_pattern(self, build_client_mock):
+        build_client_mock.return_value = FakeApolloClient()
+        Person.objects.create(
+            organization=self.organization,
+            first_name='Pessoa',
+            last_name='Local',
+            email='pessoa.local@example.com',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        initial_response = self.client.get(reverse('apollo_integration:people'))
+        self.assertContains(initial_response, '<h1>Pessoas</h1>', html=True)
+        self.assertContains(initial_response, 'Listar pessoas')
+
+        response = self.client.get(
+            reverse('apollo_integration:people'),
+            {
+                'load_local': '1',
+                'q_keywords': 'Carla',
+                'per_page': '25',
+            },
+        )
+
+        self.assertContains(response, 'Filtrar pessoas locais')
+        self.assertContains(response, 'Filtrar pessoas remotas')
+        self.assertContains(response, 'Salvar selecionadas')
+        self.assertNotContains(response, 'Salvar no CRM')
 
     @patch('apollo_integration.services.ApolloInstallationService.build_client')
     def test_people_page_renders_remote_people(self, build_client_mock):

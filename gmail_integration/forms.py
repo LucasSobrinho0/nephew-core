@@ -66,6 +66,7 @@ class GmailDispatchCreateForm(BootstrapFormMixin, forms.Form):
         self.fields['template_public_id'].choices = list(template_choices)
         self.fields['person_public_ids'].choices = person_choices
         self.fields['person_public_ids'].widget.attrs['class'] = 'bot-selection-checkbox'
+        self.fields['person_public_ids'].widget.attrs['data-checkbox-group'] = 'gmail-dispatch-selection'
 
     def clean_person_public_ids(self):
         person_public_ids = self.cleaned_data.get('person_public_ids') or []

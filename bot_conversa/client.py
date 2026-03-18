@@ -8,6 +8,8 @@ from bot_conversa.constants import (
     BOT_CONVERSA_CONTACTS_PATH,
     BOT_CONVERSA_CONTACTS_LIST_PATH,
     BOT_CONVERSA_FLOWS_PATH,
+    BOT_CONVERSA_SUBSCRIBER_TAG_PATH_TEMPLATE,
+    BOT_CONVERSA_TAGS_PATH,
     BOT_CONVERSA_SEND_MESSAGE_PATH_TEMPLATE,
     BOT_CONVERSA_SEND_FLOW_PATH_TEMPLATE,
     DEFAULT_REMOTE_CONTACT_MAX_PAGES,
@@ -41,6 +43,24 @@ class BotConversaClient:
             )
 
         return [flow for flow in normalized_flows if flow['external_flow_id']]
+
+    def list_tags(self):
+        payload = self._request('GET', BOT_CONVERSA_TAGS_PATH)
+        tag_items = self._extract_collection(payload, fallback_keys=('results', 'tags', 'data'))
+
+        normalized_tags = []
+        for tag in tag_items:
+            if not isinstance(tag, dict):
+                continue
+            normalized_tags.append(
+                {
+                    'external_tag_id': str(tag.get('id') or tag.get('tag_id') or tag.get('uuid') or ''),
+                    'name': (tag.get('name') or tag.get('title') or '').strip(),
+                    'raw_payload': tag,
+                }
+            )
+
+        return [tag for tag in normalized_tags if tag['external_tag_id'] and tag['name']]
 
     def list_contacts(self, *, search='', page=1, max_pages=DEFAULT_REMOTE_CONTACT_MAX_PAGES):
         contacts = []
@@ -110,6 +130,28 @@ class BotConversaClient:
         return {
             'status': payload.get('status') or payload.get('result') or 'accepted',
             'message_id': str(payload.get('id') or payload.get('message_id') or ''),
+            'raw_payload': payload,
+        }
+
+    def add_tag_to_subscriber(self, *, subscriber_id, tag_id):
+        path = BOT_CONVERSA_SUBSCRIBER_TAG_PATH_TEMPLATE.format(
+            subscriber_id=subscriber_id,
+            tag_id=tag_id,
+        )
+        payload = self._request('POST', path, payload={})
+        return {
+            'status': payload.get('status') or payload.get('result') or 'created',
+            'raw_payload': payload,
+        }
+
+    def remove_tag_from_subscriber(self, *, subscriber_id, tag_id):
+        path = BOT_CONVERSA_SUBSCRIBER_TAG_PATH_TEMPLATE.format(
+            subscriber_id=subscriber_id,
+            tag_id=tag_id,
+        )
+        payload = self._request('DELETE', path, payload={})
+        return {
+            'status': payload.get('status') or payload.get('result') or 'deleted',
             'raw_payload': payload,
         }
 
@@ -226,6 +268,8 @@ class BotConversaClient:
             'phone': payload.get('phone') or payload.get('mobile') or '',
             'email': payload.get('email') or '',
             'status': (payload.get('status') or 'active').lower(),
+            'tags_label': (payload.get('tags') or '').strip(),
+            'tag_names': BotConversaClient._normalize_tag_names(payload.get('tags')),
             'raw_payload': payload,
         }
 
@@ -235,3 +279,11 @@ class BotConversaClient:
         if raw_phone.startswith('+'):
             return '+' + ''.join(character for character in raw_phone[1:] if character.isdigit())
         return ''.join(character for character in raw_phone if character.isdigit())
+
+    @staticmethod
+    def _normalize_tag_names(raw_tags):
+        if isinstance(raw_tags, list):
+            return [str(tag).strip() for tag in raw_tags if str(tag).strip()]
+        if isinstance(raw_tags, str):
+            return [part.strip() for part in raw_tags.split(',') if part.strip()]
+        return []

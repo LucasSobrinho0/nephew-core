@@ -1,7 +1,9 @@
-<nav class="module-subnav mb-4">
-  {% for tab in apollo_tabs %}
-    <a href="{% url tab.url %}" class="module-subnav-link {% if apollo_active_tab == tab.key %}active{% endif %}">
-      {{ tab.label }}
-    </a>
-  {% endfor %}
-</nav>
+<section class="mb-4">
+  <div class="d-flex flex-wrap gap-2">
+    {% for tab in apollo_tabs %}
+      <a href="{% url tab.url %}" class="btn {% if apollo_active_tab == tab.key %}btn-brand{% else %}btn-outline-secondary{% endif %}">
+        {{ tab.label }}
+      </a>
+    {% endfor %}
+  </div>
+</section>
