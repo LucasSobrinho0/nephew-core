@@ -535,6 +535,38 @@ class BotConversaModuleTests(TestCase):
         self.assertEqual(person_tag.external_subscriber_id, 'subscriber-001')
         self.assertEqual(fake_client.assigned_tag_payloads[0]['tag_id'], 'tag-1')
 
+    @patch('bot_conversa.services.BotConversaInstallationService.build_client')
+    def test_create_person_can_assign_selected_tags_during_creation(self, build_client_mock):
+        fake_client = FakeBotConversaClient()
+        build_client_mock.return_value = fake_client
+        tag = BotConversaTag.objects.create(
+            organization=self.organization,
+            installation=self.installation,
+            external_tag_id='tag-1',
+            name='VIP',
+            last_synced_at=self.installation.created_at,
+            raw_payload={'id': 'tag-1', 'name': 'VIP'},
+        )
+        self.client.force_login(self.owner)
+        self.activate_organization(self.organization)
+
+        response = self.client.post(
+            reverse('bot_conversa:create_person'),
+            {
+                'first_name': 'Marina',
+                'last_name': 'Silva',
+                'email': 'marina@example.com',
+                'phone': '+55 11 97777-1000',
+                'tag_public_ids': [str(tag.public_id)],
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        person = Person.objects.get(organization=self.organization, email='marina@example.com')
+        self.assertTrue(BotConversaContact.objects.filter(person=person, external_subscriber_id='subscriber-001').exists())
+        self.assertTrue(BotConversaPersonTag.objects.filter(person=person, tag=tag).exists())
+        self.assertEqual(fake_client.assigned_tag_payloads[0]['tag_id'], 'tag-1')
+
     def test_dispatch_can_be_created_from_tagged_people(self):
         tag = BotConversaTag.objects.create(
             organization=self.organization,

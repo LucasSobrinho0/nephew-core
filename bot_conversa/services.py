@@ -110,6 +110,36 @@ class BotConversaPeopleService:
         )
 
     @staticmethod
+    @transaction.atomic
+    def create_person_with_tags(*, user, organization, first_name, last_name, phone, email='', tags=None):
+        person = BotConversaPeopleService.create_person(
+            user=user,
+            organization=organization,
+            first_name=first_name,
+            last_name=last_name,
+            phone=phone,
+            email=email,
+        )
+        resolved_tags = list(tags or [])
+        if resolved_tags:
+            for tag in resolved_tags:
+                BotConversaTagService.ensure_tag_access(organization=organization, tag=tag)
+            BotConversaTagService.assign_tag_to_people(
+                user=user,
+                organization=organization,
+                tag=resolved_tags[0],
+                persons=[person],
+            )
+            for tag in resolved_tags[1:]:
+                BotConversaTagService.assign_tag_to_people(
+                    user=user,
+                    organization=organization,
+                    tag=tag,
+                    persons=[person],
+                )
+        return person
+
+    @staticmethod
     def build_person_rows(*, organization):
         persons = list(PersonRepository.list_for_organization(organization))
         synced_contacts = list(BotConversaContactRepository.list_for_organization(organization))

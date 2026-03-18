@@ -126,6 +126,23 @@
               <label for="{{ create_form.phone.id_for_label }}" class="form-label">Telefone</label>
               {{ create_form.phone }}
             </div>
+            {% if create_form.tag_public_ids.field.choices %}
+              <div class="col-12">
+                <label class="form-label">{{ create_form.tag_public_ids.label }}</label>
+                <div class="bot-checkbox-shell">
+                  <div class="bot-selection-list">
+                    {% for option in create_form.tag_public_ids %}
+                      <label class="bot-selection-card">
+                        {{ option.tag }}
+                        <span class="bot-selection-text">{{ option.choice_label }}</span>
+                      </label>
+                    {% endfor %}
+                  </div>
+                </div>
+                <div class="form-text">As etiquetas escolhidas ja serao vinculadas no Bot Conversa durante o cadastro.</div>
+                {% for error in create_form.tag_public_ids.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+              </div>
+            {% endif %}
             <div class="col-12"><button type="submit" class="btn btn-brand w-100">Criar pessoa</button></div>
           </form>
         {% else %}

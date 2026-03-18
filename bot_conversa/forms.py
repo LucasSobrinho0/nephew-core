@@ -1,6 +1,7 @@
 from django import forms
 
 from common.forms import BootstrapFormMixin
+from people.forms import PersonCreateForm
 
 
 class BotConversaPersonSyncForm(BootstrapFormMixin, forms.Form):
@@ -131,3 +132,21 @@ class BotConversaPersonTagAssignForm(BootstrapFormMixin, forms.Form):
         if not person_public_ids:
             raise forms.ValidationError('Selecione pelo menos uma pessoa para vincular a etiqueta.')
         return person_public_ids
+
+
+class BotConversaPersonCreateForm(PersonCreateForm):
+    tag_public_ids = forms.MultipleChoiceField(
+        label='Etiquetas do Bot Conversa',
+        choices=(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple(),
+    )
+
+    def __init__(self, *args, tag_choices=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['tag_public_ids'].choices = list(tag_choices)
+        self.fields['tag_public_ids'].widget.attrs['class'] = 'bot-selection-checkbox'
+        self.fields['tag_public_ids'].widget.attrs['data-checkbox-group'] = 'bot-person-create-tags'
+
+    def clean_tag_public_ids(self):
+        return self.cleaned_data.get('tag_public_ids') or []

@@ -11,6 +11,7 @@ from django.views.generic import TemplateView
 from bot_conversa.exceptions import BotConversaApiError, BotConversaConfigurationError
 from bot_conversa.forms import (
     BotConversaBulkPersonSyncForm,
+    BotConversaPersonCreateForm,
     BotConversaBulkRemoteContactSaveForm,
     BotConversaDispatchCreateForm,
     BotConversaFlowRefreshForm,
@@ -38,7 +39,6 @@ from bot_conversa.services import (
     BotConversaRemoteContactService,
     BotConversaTagService,
 )
-from people.forms import PersonCreateForm
 from people.repositories import PersonRepository
 
 
@@ -133,6 +133,13 @@ class BotConversaAccessMixin(LoginRequiredMixin):
     def build_tag_choices(self):
         return BotConversaTagService.build_tag_choice_rows(organization=self.active_organization)
 
+    def build_person_create_form(self, *args, **kwargs):
+        return BotConversaPersonCreateForm(
+            *args,
+            tag_choices=self.build_tag_choices(),
+            **kwargs,
+        )
+
     def build_dispatch_form(self, *args, **kwargs):
         person_choices = self.build_person_choices(
             tag_public_ids=kwargs.get('selected_tag_public_ids'),
@@ -201,7 +208,7 @@ class BotConversaPeopleView(BotConversaAccessMixin, TemplateView):
                 'person_rows': person_rows,
                 'has_loaded_people': has_loaded_people,
                 'list_form': list_form,
-                'create_form': kwargs.get('create_form') or PersonCreateForm(),
+                'create_form': kwargs.get('create_form') or self.build_person_create_form(),
             }
         )
         return context
@@ -209,7 +216,7 @@ class BotConversaPeopleView(BotConversaAccessMixin, TemplateView):
 
 class BotConversaPersonCreateView(BotConversaOperatorRequiredMixin, View):
     def post(self, request, *args, **kwargs):
-        form = PersonCreateForm(request.POST)
+        form = self.build_person_create_form(request.POST)
         if not form.is_valid():
             view = BotConversaPeopleView()
             view.request = request
@@ -223,19 +230,29 @@ class BotConversaPersonCreateView(BotConversaOperatorRequiredMixin, View):
             )
 
         try:
-            BotConversaPeopleService.create_person(
+            tags = list(
+                BotConversaTagRepository.list_for_organization_and_public_ids(
+                    self.active_organization,
+                    form.cleaned_data['tag_public_ids'],
+                )
+            )
+            BotConversaPeopleService.create_person_with_tags(
                 user=request.user,
                 organization=self.active_organization,
                 first_name=form.cleaned_data['first_name'],
                 last_name=form.cleaned_data['last_name'],
                 phone=form.cleaned_data['phone'],
                 email=form.cleaned_data['email'],
+                tags=tags,
             )
         except (PermissionDenied, ValidationError) as exc:
             messages.error(request, str(exc))
             return redirect('bot_conversa:people')
 
-        messages.success(request, 'Pessoa criada com sucesso.')
+        if form.cleaned_data['tag_public_ids']:
+            messages.success(request, 'Pessoa criada com sucesso e vinculada as etiquetas selecionadas.')
+        else:
+            messages.success(request, 'Pessoa criada com sucesso.')
         return redirect('bot_conversa:people')
 
 
