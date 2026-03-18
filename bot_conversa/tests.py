@@ -88,6 +88,22 @@ class BotConversaClientUnitTests(TestCase):
         self.assertEqual(BotConversaClient._normalize_api_phone('+55 (11) 91234-5678'), '+5511912345678')
         self.assertEqual(BotConversaClient._normalize_api_phone('(11) 91234-5678'), '11912345678')
 
+    def test_normalize_contact_payload_accepts_tags_as_list(self):
+        payload = {
+            'id': 12,
+            'full_name': 'Ana Costa',
+            'phone': '5511912345678',
+            'tags': [
+                {'name': 'VIP'},
+                'Reativacao',
+            ],
+        }
+
+        normalized = BotConversaClient._normalize_contact_payload(payload)
+
+        self.assertEqual(normalized['tag_names'], ['VIP', 'Reativacao'])
+        self.assertEqual(normalized['tags_label'], 'VIP, Reativacao')
+
     @patch.object(BotConversaClient, '_request')
     def test_list_contacts_uses_subscribers_endpoint_and_follows_pagination(self, request_mock):
         request_mock.side_effect = [

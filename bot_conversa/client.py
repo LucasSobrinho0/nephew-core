@@ -259,6 +259,7 @@ class BotConversaClient:
             or payload.get('full_name')
             or ' '.join(part for part in [first_name, last_name] if part)
         )
+        tag_names = BotConversaClient._normalize_tag_names(payload.get('tags'))
 
         return {
             'external_subscriber_id': str(payload.get('id') or payload.get('subscriber_id') or payload.get('uuid') or ''),
@@ -268,8 +269,8 @@ class BotConversaClient:
             'phone': payload.get('phone') or payload.get('mobile') or '',
             'email': payload.get('email') or '',
             'status': (payload.get('status') or 'active').lower(),
-            'tags_label': (payload.get('tags') or '').strip(),
-            'tag_names': BotConversaClient._normalize_tag_names(payload.get('tags')),
+            'tags_label': ', '.join(tag_names),
+            'tag_names': tag_names,
             'raw_payload': payload,
         }
 
@@ -283,7 +284,16 @@ class BotConversaClient:
     @staticmethod
     def _normalize_tag_names(raw_tags):
         if isinstance(raw_tags, list):
-            return [str(tag).strip() for tag in raw_tags if str(tag).strip()]
+            normalized_tags = []
+            for tag in raw_tags:
+                if isinstance(tag, dict):
+                    tag_name = tag.get('name') or tag.get('title') or tag.get('label') or ''
+                else:
+                    tag_name = str(tag)
+                tag_name = str(tag_name).strip()
+                if tag_name:
+                    normalized_tags.append(tag_name)
+            return normalized_tags
         if isinstance(raw_tags, str):
             return [part.strip() for part in raw_tags.split(',') if part.strip()]
         return []
