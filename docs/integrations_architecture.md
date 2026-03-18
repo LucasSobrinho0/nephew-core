@@ -216,13 +216,13 @@ Templates:
 ### Bot Conversa dispatch flow
 
 1. Owner or admin opens the Bot Conversa module inside the active organization.
-2. User selects a cached flow and one or more tenant-scoped persons, optionally combining that with synchronized Bot Conversa tags.
+2. User selects a cached flow and one or more tenant-scoped persons.
 3. User can define a configurable min/max delay interval for pacing the sends.
-4. Backend creates one dispatch record and one item record per resolved person, including people brought in by selected tags.
+4. Backend creates one dispatch record and one item record per selected person.
 5. The dispatch detail page polls a backend endpoint.
 6. Each processing cycle claims a safe batch of pending items, ensures a remote subscriber exists, and triggers the flow.
 7. `running` items are not counted as complete, which avoids premature dispatch completion under concurrent polling.
-8. The dispatch creation screen can asynchronously filter the audience to only show people who have not yet received a successful WhatsApp send in that tenant and can narrow that audience by synchronized Bot Conversa tags.
+8. The dispatch creation screen can asynchronously filter the audience to only show people who have not yet received a successful WhatsApp send in that tenant.
 
 ### Bot Conversa tags flow
 

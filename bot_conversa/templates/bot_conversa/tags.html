@@ -50,7 +50,7 @@
                 </div>
                 <div class="d-flex flex-column align-items-end gap-2">
                   <span class="status-badge status-used">{{ row.person_count }} pessoa{{ row.person_count|pluralize }}</span>
-                  <a href="{% url 'bot_conversa:dispatches' %}?tag_public_ids={{ row.tag.public_id }}" class="btn btn-outline-secondary btn-sm">Usar em disparo</a>
+                  <a href="{% url 'bot_conversa:dispatches' %}" class="btn btn-outline-secondary btn-sm">Abrir disparos</a>
                 </div>
               </article>
             {% endfor %}

@@ -167,7 +167,7 @@ bot_conversa/
 - `BotConversaTagService`
   Refreshes remote tags, builds local tag summaries, and assigns selected persons to remote subscribers under one tenant.
 - `BotConversaDispatchService`
-  Creates dispatch jobs and processes pending items while respecting terminal item counters, configured pacing, and optional tag-based audiences.
+  Creates dispatch jobs and processes pending items while respecting terminal item counters and configured pacing.
 
 ## Repositories
 
@@ -248,7 +248,7 @@ bot_conversa/
 ## Flow dispatch flow
 
 1. Owner or admin selects a cached flow.
-2. Owner or admin selects one or more internal persons and can also choose one or more synchronized Bot Conversa tags.
+2. Owner or admin selects one or more internal persons on the dispatch screen.
 3. Owner or admin optionally defines a min/max delay interval in seconds.
 4. Backend creates one dispatch job and one item per resolved person.
 5. The dispatch detail page polls a backend endpoint.
@@ -259,7 +259,7 @@ bot_conversa/
    - sends the flow
    - persists success or failure per item
 8. Progress is computed from terminal item status counters only; `running` items do not count as completed.
-9. The dispatch creation screen can asynchronously filter the audience to only show people who have not yet received a successful WhatsApp send in the active tenant and can narrow the candidate list by selected Bot Conversa tags.
+9. The dispatch creation screen can asynchronously filter the audience to only show people who have not yet received a successful WhatsApp send in the active tenant.
 
 ## Status update strategy
 
