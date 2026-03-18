@@ -1,11 +1,11 @@
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from accounts.models import User
 from apollo_integration.client import ApolloClient
-from apollo_integration.models import ApolloCompanySyncLog
+from apollo_integration.models import ApolloCompanySyncLog, ApolloPeopleEnrichmentJob
 from apollo_integration.services import ApolloCompanyService, ApolloInstallationService, ApolloPersonService
 from common.constants import ACTIVE_ORGANIZATION_SESSION_KEY
 from companies.models import Company
@@ -84,7 +84,14 @@ class FakeApolloClient:
             },
         }
 
-    def enrich_people(self, *, details, reveal_personal_emails=True):
+    def enrich_people(
+        self,
+        *,
+        details,
+        reveal_personal_emails=True,
+        reveal_phone_number=False,
+        webhook_url='',
+    ):
         self.last_enrichment_details = details
         return {
             'people': [
@@ -378,7 +385,7 @@ class ApolloModuleTests(TestCase):
 
         initial_response = self.client.get(reverse('apollo_integration:people'))
         self.assertContains(initial_response, '<h1>Pessoas</h1>', html=True)
-        self.assertContains(initial_response, 'Listar pessoas')
+        self.assertContains(initial_response, 'Listar sincronizadas')
 
         response = self.client.get(
             reverse('apollo_integration:people'),
@@ -488,6 +495,30 @@ class ApolloModuleTests(TestCase):
         person.refresh_from_db()
         self.assertEqual(person.last_name, 'Souza')
         self.assertEqual(person.email, 'carla.souza@example.com')
+
+    @override_settings(APP_BASE_URL='https://crm.alow.com.br')
+    @patch('apollo_integration.services.ApolloInstallationService.build_client')
+    def test_enrichment_with_phone_creates_webhook_pending_job(self, build_client_mock):
+        build_client_mock.return_value = FakeApolloClient()
+        person = Person.objects.create(
+            organization=self.organization,
+            first_name='Carla',
+            last_name='So***a',
+            apollo_person_id='apollo-person-1',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+
+        result = ApolloPersonService.enrich_people(
+            user=self.owner,
+            organization=self.organization,
+            people=[person],
+            fetch_phone=True,
+        )
+
+        self.assertTrue(result['fetch_phone'])
+        self.assertIsNotNone(result['enrichment_job'])
+        self.assertEqual(result['enrichment_job'].status, ApolloPeopleEnrichmentJob.Status.WEBHOOK_PENDING)
 
     @patch('apollo_integration.services.ApolloInstallationService.build_client')
     def test_people_page_renders_remote_people(self, build_client_mock):

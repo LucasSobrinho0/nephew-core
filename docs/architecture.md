@@ -10,7 +10,7 @@
 - `companies`: tenant-scoped CRM companies.
 - `people`: tenant-scoped CRM persons and contact identity.
 - `integrations`: app catalog, tenant installations, encrypted credentials, and credential access audit.
-- `apollo_integration`: Apollo API key wiring, remote company search, person search, person enrichment, usage snapshots, bulk import, and optional company sync handoff to HubSpot.
+- `apollo_integration`: Apollo API key wiring, remote company search, person search, synchronous person enrichment, webhook-backed phone reveal jobs, usage snapshots, bulk import, and optional company sync handoff to HubSpot.
 - `bot_conversa`: Bot Conversa contact linking, tag cache, flow cache, dispatching, and sync logs.
 - `hubspot_integration`: HubSpot company/contact/deal synchronization and pipeline cache.
 - `gmail_integration`: Gmail credential management, templates, and email dispatches.

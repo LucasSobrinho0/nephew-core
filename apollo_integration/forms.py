@@ -183,6 +183,12 @@ class ApolloBulkRemotePersonImportForm(BootstrapFormMixin, forms.Form):
 
 class ApolloPeopleEnrichmentForm(BootstrapFormMixin, forms.Form):
     person_public_ids = forms.MultipleChoiceField(required=False, widget=forms.MultipleHiddenInput())
+    fetch_phone = forms.BooleanField(
+        required=False,
+        initial=False,
+        label='Pegar telefone',
+        help_text='Ativa o webhook do Apollo para tentar revelar telefone por callback HTTPS.',
+    )
 
     def __init__(self, *args, person_choices=(), **kwargs):
         super().__init__(*args, **kwargs)

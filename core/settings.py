@@ -147,6 +147,7 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = '/var/www/html/nephew-core/staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+APP_BASE_URL = env('APP_BASE_URL', '').strip().rstrip('/')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

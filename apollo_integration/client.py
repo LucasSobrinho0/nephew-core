@@ -60,14 +60,27 @@ class ApolloClient:
             'raw_payload': response_payload,
         }
 
-    def enrich_people(self, *, details, reveal_personal_emails=True):
+    def enrich_people(
+        self,
+        *,
+        details,
+        reveal_personal_emails=True,
+        reveal_phone_number=False,
+        webhook_url='',
+    ):
+        query = {
+            'reveal_personal_emails': 'true' if reveal_personal_emails else 'false',
+        }
+        if reveal_phone_number:
+            query['reveal_phone_number'] = 'true'
+        if webhook_url:
+            query['webhook_url'] = webhook_url
+
         response_payload = self._request(
             'POST',
             APOLLO_BULK_PEOPLE_ENRICH_PATH,
             payload={'details': details},
-            query={
-                'reveal_personal_emails': 'true' if reveal_personal_emails else 'false',
-            },
+            query=query,
         )
         people = self._extract_person_items(response_payload)
         return {

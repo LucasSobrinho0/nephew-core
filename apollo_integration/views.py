@@ -1,10 +1,14 @@
+import json
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.http import QueryDict
+from django.http import Http404, JsonResponse, QueryDict
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import TemplateView
 
 from apollo_integration.exceptions import ApolloApiError, ApolloConfigurationError
@@ -23,6 +27,7 @@ from apollo_integration.services import (
     ApolloInstallationService,
     ApolloPersonService,
 )
+from apollo_integration.repositories import ApolloPeopleEnrichmentJobRepository
 from companies.repositories import CompanyRepository
 from people.repositories import PersonRepository
 
@@ -316,6 +321,9 @@ class ApolloPeopleEnrichmentView(ApolloAccessMixin, TemplateView):
                 'enrichment_form': kwargs.get('enrichment_form') or ApolloPeopleEnrichmentForm(
                     person_choices=[(str(row['person'].public_id), row['person'].full_name) for row in enrichment_rows]
                 ),
+                'recent_enrichment_jobs': ApolloPersonService.build_recent_enrichment_jobs(
+                    organization=self.active_organization
+                ),
             }
         )
         return context
@@ -451,19 +459,56 @@ class ApolloBulkPeopleEnrichmentView(ApolloOperatorRequiredMixin, View):
                 user=request.user,
                 organization=self.active_organization,
                 people=people,
+                fetch_phone=form.cleaned_data['fetch_phone'],
+                request=request,
             )
         except (ApolloApiError, ApolloConfigurationError, PermissionDenied, ValidationError) as exc:
             messages.error(request, str(exc))
             return redirect('apollo_integration:enrichment')
 
-        messages.success(
-            request,
-            (
-                f"{result['enriched_count']} pessoa(s) foram atualizadas com nome completo e e-mail "
-                f'a partir do Apollo.'
-            ),
-        )
+        if result['fetch_phone']:
+            messages.success(
+                request,
+                (
+                    f"{result['enriched_count']} pessoa(s) foram atualizadas agora e o job de telefone "
+                    'ficou aguardando webhook do Apollo.'
+                ),
+            )
+        else:
+            messages.success(
+                request,
+                (
+                    f"{result['enriched_count']} pessoa(s) foram atualizadas com nome completo e e-mail "
+                    f'a partir do Apollo.'
+                ),
+            )
         return redirect('apollo_integration:enrichment')
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ApolloPeopleEnrichmentWebhookView(View):
+    http_method_names = ['post']
+
+    def post(self, request, *args, **kwargs):
+        job = ApolloPeopleEnrichmentJobRepository.get_for_public_id(kwargs['job_public_id'])
+        if job is None:
+            raise Http404('Job de enrichment nao encontrado.')
+
+        token = (request.GET.get('token') or '').strip()
+        if not token or token != job.webhook_token:
+            return JsonResponse({'detail': 'Webhook token invalido.'}, status=403)
+
+        try:
+            payload = json.loads(request.body.decode('utf-8') or '{}')
+        except (TypeError, ValueError):
+            return JsonResponse({'detail': 'Payload JSON invalido.'}, status=400)
+
+        try:
+            ApolloPersonService.process_enrichment_webhook(job=job, payload=payload)
+        except ValidationError as exc:
+            return JsonResponse({'detail': str(exc)}, status=400)
+
+        return JsonResponse({'detail': 'Webhook processado.'}, status=200)
 
 
 class ApolloBulkCompanyHubSpotSyncView(ApolloAccessMixin, View):

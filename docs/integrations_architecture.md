@@ -103,6 +103,7 @@ integrations/
 - Apollo agora interage com o CRM por meio de `companies.Company` e `people.Person`.
 - A busca de pessoas do Apollo salva resultados censurados no CRM por `apollo_person_id`, sem depender de enrichment nesta fase.
 - O enrichment de pessoas do Apollo opera sobre `people.Person` ja sincronizadas e atualiza nome completo e email no proprio registro local.
+- Quando o operador marca `Pegar telefone`, o Apollo passa a responder pelo webhook HTTPS do proprio Nephew CRM.
 - HubSpot and Bot Conversa therefore interoperate through shared people records:
   - one contact can be imported from HubSpot and later receive a Bot Conversa flow
   - one remote Bot Conversa contact can be saved in the CRM and later be enriched with HubSpot identifiers
@@ -221,7 +222,7 @@ Templates:
 3. The user selects one or more people and starts enrichment.
 4. Backend calls Apollo bulk people enrichment in batches, keyed by `apollo_person_id`.
 5. Returned full name and email update the same tenant-scoped `people.Person` rows.
-6. Phone enrichment remains intentionally out of scope for this phase.
+6. If the operator requests phone reveal, Nephew CRM creates a local webhook-backed job and waits for Apollo callback to finish the phone update.
 
 ### Bot Conversa dispatch flow
 

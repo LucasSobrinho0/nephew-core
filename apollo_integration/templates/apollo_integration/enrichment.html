@@ -30,6 +30,18 @@
 
       <form method="post" action="{% url 'apollo_integration:enrich_people_bulk' %}" id="apolloPeopleEnrichmentForm">
         {% csrf_token %}
+        <div class="alert alert-secondary mb-3" role="alert">
+          <div class="form-check mb-2">
+            {{ enrichment_form.fetch_phone }}
+            <label class="form-check-label" for="{{ enrichment_form.fetch_phone.id_for_label }}">
+              {{ enrichment_form.fetch_phone.label }}
+            </label>
+          </div>
+          <p class="small text-body-secondary mb-0">
+            Quando marcado, o Apollo tenta revelar telefone por webhook. Isso so funciona com uma URL publica HTTPS, como a producao em
+            <strong>crm.alow.com.br</strong>.
+          </p>
+        </div>
         <div class="scroll-area scroll-area-table">
           <table class="table table-clean align-middle mb-0">
             <thead>
@@ -76,6 +88,45 @@
     {% else %}
       <div class="soft-empty">
         <p class="mb-0">Nenhuma pessoa sincronizada com o Apollo foi encontrada neste tenant.</p>
+      </div>
+    {% endif %}
+  </section>
+
+  <section class="glass-card content-card scroll-card mt-4">
+    <div class="content-card-header">
+      <div>
+        <span class="section-kicker">Historico</span>
+        <h2>Jobs recentes de enrichment</h2>
+      </div>
+    </div>
+    {% if recent_enrichment_jobs %}
+      <div class="table-responsive">
+        <table class="table table-clean align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Iniciado em</th>
+              <th>Status</th>
+              <th>Telefone</th>
+              <th>Sucesso</th>
+              <th>Falhas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in recent_enrichment_jobs %}
+              <tr>
+                <td>{{ row.job.started_at|date:'d/m/Y H:i' }}</td>
+                <td>{{ row.job.get_status_display }}</td>
+                <td>{% if row.job.fetch_phone %}Solicitado{% else %}Nao{% endif %}</td>
+                <td>{{ row.job.success_people }}/{{ row.job.total_people }}</td>
+                <td>{{ row.job.failed_people }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="soft-empty">
+        <p class="mb-0">Nenhum job de enrichment foi executado ainda.</p>
       </div>
     {% endif %}
   </section>

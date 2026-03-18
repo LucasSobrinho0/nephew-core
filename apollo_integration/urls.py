@@ -8,6 +8,7 @@ from apollo_integration.views import (
     ApolloCompaniesView,
     ApolloDashboardView,
     ApolloPeopleEnrichmentView,
+    ApolloPeopleEnrichmentWebhookView,
     ApolloPeopleView,
 )
 
@@ -22,4 +23,5 @@ urlpatterns = [
     path('apps/apollo/people/import/bulk/', ApolloBulkRemotePersonImportView.as_view(), name='import_people_bulk'),
     path('apps/apollo/enrichment/', ApolloPeopleEnrichmentView.as_view(), name='enrichment'),
     path('apps/apollo/enrichment/bulk/', ApolloBulkPeopleEnrichmentView.as_view(), name='enrich_people_bulk'),
+    path('apps/apollo/webhooks/people-enrichment/<uuid:job_public_id>/', ApolloPeopleEnrichmentWebhookView.as_view(), name='people_enrichment_webhook'),
 ]

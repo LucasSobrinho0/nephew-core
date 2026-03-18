@@ -12,6 +12,7 @@
   - consultar pessoas remotas no Apollo com filtros por empresa opcional, cargo e palavras-chave
   - salvar pessoas remotas no CRM com `apollo_person_id`, mesmo quando a busca retorna dados censurados
   - enriquecer pessoas ja sincronizadas com o Apollo para recuperar nome completo sem censura e email
+  - opcionalmente pedir telefone via webhook HTTPS quando o usuario marcar essa opcao
   - visualizar um resumo de uso da API do Apollo
 - O modulo ainda nao cobre:
   - enrichment de empresas
@@ -40,6 +41,7 @@
   Usado para buscar pessoas remotas com dados censurados e filtros de cargo, empresa e palavras-chave.
 - `POST /api/v1/people/bulk_match`
   Usado para enriquecer pessoas ja sincronizadas com o Apollo por `apollo_person_id`.
+  Quando `reveal_phone_number=true`, o modulo envia `webhook_url` e aguarda o callback do Apollo para concluir o telefone.
 - `POST /api/v1/usage_stats/api_usage_stats`
   Usado para montar o resumo de uso exibido no dashboard.
 
@@ -122,7 +124,8 @@
 3. O usuario seleciona as pessoas desejadas.
 4. O backend chama `POST /api/v1/people/bulk_match` em lotes pequenos, usando o `apollo_person_id` como chave principal.
 5. Quando o Apollo retorna `first_name`, `last_name` e email real, o CRM atualiza o cadastro local existente.
-6. Nesta fase, o enrichment nao busca telefone. O foco fica em nome completo e email.
+6. Se o usuario marcar `Pegar telefone`, o sistema cria um job local, chama o Apollo com `webhook_url` e fica aguardando o callback assíncrono.
+7. O webhook atualiza o `people.Person` pelo `apollo_person_id` e registra o resultado do job.
 
 ## Decisao sobre dados censurados
 
@@ -165,5 +168,6 @@
 ## Decisoes intencionais desta fase
 
 - O enrichment de pessoas atualiza apenas nome completo e email.
-- Telefone do Apollo continua fora desta fase para manter custo e UX mais controlados.
+- Telefone do Apollo so e pedido quando o usuario marcar `Pegar telefone`.
+- Esse fluxo depende de uma URL publica HTTPS. Em ambiente local, so funciona com tunel publico ou producao.
 - A sincronizacao com HubSpot permanece opcional e parte das empresas locais, nao como dependencia de runtime do Apollo.
