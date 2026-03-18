@@ -30,6 +30,7 @@ class FakeBotConversaClient:
         self.sent_payloads = []
         self.created_payloads = []
         self.assigned_tag_payloads = []
+        self.remote_contacts_by_phone = {}
 
     def list_contacts(self, search=''):
         return []
@@ -49,7 +50,7 @@ class FakeBotConversaClient:
         ]
 
     def search_contact_by_phone(self, *, phone):
-        return None
+        return self.remote_contacts_by_phone.get(phone)
 
     def create_contact(self, *, first_name, last_name, phone):
         self.created_payloads.append(
@@ -277,6 +278,41 @@ class BotConversaModuleTests(TestCase):
         self.assertEqual(self.person.bot_conversa_id, 'subscriber-001')
         self.assertEqual(fake_client.created_payloads[0]['phone'], self.person.normalized_phone)
 
+    @patch('bot_conversa.services.BotConversaInstallationService.build_client')
+    def test_sync_person_imports_remote_tags_to_crm(self, build_client_mock):
+        fake_client = FakeBotConversaClient()
+        fake_client.remote_contacts_by_phone[self.person.normalized_phone] = {
+            'external_subscriber_id': 'subscriber-remote-010',
+            'name': self.person.full_name,
+            'phone': self.person.normalized_phone,
+            'status': 'active',
+            'tag_names': ['VIP', 'Reativacao'],
+            'raw_payload': {
+                'id': 'subscriber-remote-010',
+                'phone': self.person.normalized_phone,
+                'tags': ['VIP', 'Reativacao'],
+            },
+        }
+        build_client_mock.return_value = fake_client
+        self.client.force_login(self.owner)
+        self.activate_organization(self.organization)
+
+        response = self.client.post(
+            reverse('bot_conversa:sync_person'),
+            {
+                'person_public_id': self.person.public_id,
+                'next': reverse('bot_conversa:people'),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(BotConversaTag.objects.filter(organization=self.organization, name='VIP').exists())
+        self.assertTrue(BotConversaTag.objects.filter(organization=self.organization, name='Reativacao').exists())
+        self.assertEqual(
+            BotConversaPersonTag.objects.filter(person=self.person, organization=self.organization).count(),
+            2,
+        )
+
     def test_save_remote_contact_creates_person_and_persists_bot_conversa_id(self):
         self.client.force_login(self.owner)
         self.activate_organization(self.organization)
@@ -365,6 +401,43 @@ class BotConversaModuleTests(TestCase):
             person__bot_conversa_id='subscriber-remote-003',
         ).latest('created_at')
         self.assertIsNotNone(sync_log.contact_link_id)
+
+    @patch('bot_conversa.services.BotConversaInstallationService.build_client')
+    def test_bulk_sync_people_imports_remote_tags_to_crm(self, build_client_mock):
+        fake_client = FakeBotConversaClient()
+        fake_client.remote_contacts_by_phone[self.person.normalized_phone] = {
+            'external_subscriber_id': 'subscriber-remote-011',
+            'name': self.person.full_name,
+            'phone': self.person.normalized_phone,
+            'status': 'active',
+            'tag_names': ['VIP'],
+            'raw_payload': {
+                'id': 'subscriber-remote-011',
+                'phone': self.person.normalized_phone,
+                'tags': ['VIP'],
+            },
+        }
+        build_client_mock.return_value = fake_client
+        self.client.force_login(self.owner)
+        self.activate_organization(self.organization)
+
+        response = self.client.post(
+            reverse('bot_conversa:sync_people_bulk'),
+            {
+                'person_public_ids': [str(self.person.public_id)],
+                'next': reverse('bot_conversa:people'),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(BotConversaTag.objects.filter(organization=self.organization, name='VIP').exists())
+        self.assertTrue(
+            BotConversaPersonTag.objects.filter(
+                organization=self.organization,
+                person=self.person,
+                tag__name='VIP',
+            ).exists()
+        )
 
     def test_user_role_cannot_sync_person(self):
         self.client.force_login(self.user)

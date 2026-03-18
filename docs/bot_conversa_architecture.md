@@ -223,7 +223,7 @@ bot_conversa/
 3. Backend loads the Bot Conversa API key from the database.
 4. Backend searches the remote contact by normalized phone.
 5. If found:
-   the local link is updated with the returned subscriber id.
+   the local link is updated with the returned subscriber id and the remote tags are synchronized into the local Bot Conversa tag cache plus the person-tag links.
 6. If not found:
    backend creates the remote contact and then stores the local link.
 7. Sync logs are recorded without exposing secrets.

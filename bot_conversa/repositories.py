@@ -154,6 +154,16 @@ class BotConversaTagRepository:
     def create(**kwargs):
         return BotConversaTag.objects.create(**kwargs)
 
+    @staticmethod
+    def bulk_create(tags, **kwargs):
+        return BotConversaTag.objects.bulk_create(tags, **kwargs)
+
+    @staticmethod
+    def bulk_update(tags, fields, **kwargs):
+        if not tags:
+            return 0
+        return BotConversaTag.objects.bulk_update(tags, fields, **kwargs)
+
 
 class BotConversaPersonTagRepository:
     @staticmethod
@@ -213,6 +223,13 @@ class BotConversaPersonTagRepository:
         if not person_tags:
             return 0
         return BotConversaPersonTag.objects.bulk_update(person_tags, fields, **kwargs)
+
+    @staticmethod
+    def delete_for_organization_and_person_excluding_tag_ids(organization, person, keep_tag_ids):
+        queryset = BotConversaPersonTag.objects.for_organization(organization).filter(person=person)
+        if keep_tag_ids:
+            queryset = queryset.exclude(tag_id__in=keep_tag_ids)
+        return queryset.delete()
 
 
 class BotConversaSyncLogRepository:

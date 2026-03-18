@@ -147,6 +147,46 @@ class BotConversaBulkPreparationService:
 
 class BotConversaTagService:
     @staticmethod
+    def sync_tag_cache_from_payloads(*, organization, installation, remote_tags, synced_at):
+        existing_tags = {
+            tag.external_tag_id: tag
+            for tag in BotConversaTagRepository.list_for_organization(organization)
+        }
+        tags_to_create = []
+        tags_to_update = []
+
+        for remote_tag in remote_tags:
+            external_tag_id = remote_tag['external_tag_id']
+            tag = existing_tags.get(external_tag_id)
+            if tag is None:
+                tags_to_create.append(
+                    BotConversaTag(
+                        organization=organization,
+                        installation=installation,
+                        external_tag_id=external_tag_id,
+                        name=remote_tag['name'],
+                        last_synced_at=synced_at,
+                        raw_payload=remote_tag['raw_payload'],
+                    )
+                )
+                continue
+
+            tag.name = remote_tag['name']
+            tag.last_synced_at = synced_at
+            tag.raw_payload = remote_tag['raw_payload']
+            tags_to_update.append(tag)
+
+        if tags_to_create:
+            BotConversaTagRepository.bulk_create(tags_to_create)
+        if tags_to_update:
+            BotConversaTagRepository.bulk_update(
+                tags_to_update,
+                ['name', 'last_synced_at', 'raw_payload', 'updated_at'],
+            )
+
+        return list(BotConversaTagRepository.list_for_organization(organization))
+
+    @staticmethod
     @transaction.atomic
     def refresh_tags(*, user, organization):
         installation = BotConversaInstallationService.get_installation(organization=organization)
@@ -154,30 +194,12 @@ class BotConversaTagService:
         client = BotConversaInstallationService.build_client(organization=organization)
 
         synced_at = timezone.now()
-        refreshed_tags = []
-
-        for remote_tag in client.list_tags():
-            tag = BotConversaTagRepository.get_for_organization_and_external_id(
-                organization,
-                remote_tag['external_tag_id'],
-            )
-            if tag is None:
-                tag = BotConversaTagRepository.create(
-                    organization=organization,
-                    installation=installation,
-                    external_tag_id=remote_tag['external_tag_id'],
-                    name=remote_tag['name'],
-                    last_synced_at=synced_at,
-                    raw_payload=remote_tag['raw_payload'],
-                )
-            else:
-                tag.name = remote_tag['name']
-                tag.last_synced_at = synced_at
-                tag.raw_payload = remote_tag['raw_payload']
-                tag.save(update_fields=['name', 'last_synced_at', 'raw_payload', 'updated_at'])
-            refreshed_tags.append(tag)
-
-        return refreshed_tags
+        return BotConversaTagService.sync_tag_cache_from_payloads(
+            organization=organization,
+            installation=installation,
+            remote_tags=client.list_tags(),
+            synced_at=synced_at,
+        )
 
     @staticmethod
     def build_tag_rows(*, organization):
@@ -205,6 +227,85 @@ class BotConversaTagService:
         return BotConversaPersonTagRepository.list_person_ids_for_organization_and_tag_ids(
             organization,
             tag_ids,
+        )
+
+    @staticmethod
+    def sync_remote_tags_for_person(
+        *,
+        user,
+        organization,
+        installation,
+        person,
+        contact_link,
+        remote_contact,
+        available_tags_by_name,
+        synced_at,
+    ):
+        remote_tag_names = remote_contact.get('tag_names') or []
+        keep_tag_ids = []
+        person_tags_to_create = []
+        person_tags_to_update = []
+
+        for tag_name in remote_tag_names:
+            tag = available_tags_by_name.get(tag_name.strip().lower())
+            if tag is None:
+                continue
+
+            keep_tag_ids.append(tag.id)
+            person_tag_link = BotConversaPersonTagRepository.get_for_organization_and_person_and_tag(
+                organization,
+                person,
+                tag,
+            )
+
+            if person_tag_link is None:
+                person_tags_to_create.append(
+                    BotConversaPersonTag(
+                        organization=organization,
+                        installation=installation,
+                        person=person,
+                        tag=tag,
+                        contact_link=contact_link,
+                        external_subscriber_id=contact_link.external_subscriber_id,
+                        sync_status=BotConversaPersonTag.SyncStatus.SYNCED,
+                        last_synced_at=synced_at,
+                        remote_payload=remote_contact['raw_payload'],
+                        created_by=user,
+                        updated_by=user,
+                    )
+                )
+                continue
+
+            person_tag_link.contact_link = contact_link
+            person_tag_link.external_subscriber_id = contact_link.external_subscriber_id
+            person_tag_link.sync_status = BotConversaPersonTag.SyncStatus.SYNCED
+            person_tag_link.last_synced_at = synced_at
+            person_tag_link.last_error_message = ''
+            person_tag_link.remote_payload = remote_contact['raw_payload']
+            person_tag_link.updated_by = user
+            person_tags_to_update.append(person_tag_link)
+
+        if person_tags_to_create:
+            BotConversaPersonTagRepository.bulk_create(person_tags_to_create)
+        if person_tags_to_update:
+            BotConversaPersonTagRepository.bulk_update(
+                person_tags_to_update,
+                [
+                    'contact_link',
+                    'external_subscriber_id',
+                    'sync_status',
+                    'last_synced_at',
+                    'last_error_message',
+                    'remote_payload',
+                    'updated_by',
+                    'updated_at',
+                ],
+            )
+
+        BotConversaPersonTagRepository.delete_for_organization_and_person_excluding_tag_ids(
+            organization,
+            person,
+            keep_tag_ids,
         )
 
     @staticmethod
@@ -358,6 +459,16 @@ class BotConversaContactSyncService:
         BotConversaContactSyncService.ensure_person_access(organization=organization, person=person)
 
         client = BotConversaInstallationService.build_client(organization=organization)
+        synced_at = timezone.now()
+        available_tags_by_name = {
+            tag.name.strip().lower(): tag
+            for tag in BotConversaTagService.sync_tag_cache_from_payloads(
+                organization=organization,
+                installation=installation,
+                remote_tags=client.list_tags(),
+                synced_at=synced_at,
+            )
+        }
         remote_phone = person.normalized_phone
         remote_contact = client.search_contact_by_phone(phone=remote_phone)
 
@@ -387,6 +498,16 @@ class BotConversaContactSyncService:
             person=person,
             remote_contact=remote_contact,
         )
+        BotConversaTagService.sync_remote_tags_for_person(
+            user=user,
+            organization=organization,
+            installation=installation,
+            person=person,
+            contact_link=contact_link,
+            remote_contact=remote_contact,
+            available_tags_by_name=available_tags_by_name,
+            synced_at=synced_at,
+        )
 
         BotConversaSyncLogRepository.create(
             organization=organization,
@@ -409,6 +530,15 @@ class BotConversaContactSyncService:
         BotConversaAuthorizationService.ensure_operator_access(user=user, organization=organization)
         client = BotConversaInstallationService.build_client(organization=organization)
         synced_at = timezone.now()
+        available_tags_by_name = {
+            tag.name.strip().lower(): tag
+            for tag in BotConversaTagService.sync_tag_cache_from_payloads(
+                organization=organization,
+                installation=installation,
+                remote_tags=client.list_tags(),
+                synced_at=synced_at,
+            )
+        }
 
         unique_persons = []
         seen_person_ids = set()
@@ -431,6 +561,7 @@ class BotConversaContactSyncService:
         contact_links_to_create = []
         contact_links_to_update = []
         sync_logs = []
+        remote_contacts_by_person_id = {}
 
         for person in unique_persons:
             remote_phone = person.normalized_phone
@@ -443,6 +574,7 @@ class BotConversaContactSyncService:
                     phone=remote_phone,
                 )
                 action = BotConversaSyncLog.Action.CREATE
+            remote_contacts_by_person_id[person.id] = remote_contact
 
             person.bot_conversa_id = remote_contact['external_subscriber_id']
             person.updated_by = user
@@ -521,6 +653,21 @@ class BotConversaContactSyncService:
                     'updated_by',
                     'updated_at',
                 ],
+            )
+        contact_links_by_person_id = {
+            contact_link.person_id: contact_link
+            for contact_link in BotConversaContactRepository.list_for_organization(organization)
+        }
+        for person in unique_persons:
+            BotConversaTagService.sync_remote_tags_for_person(
+                user=user,
+                organization=organization,
+                installation=installation,
+                person=person,
+                contact_link=contact_links_by_person_id[person.id],
+                remote_contact=remote_contacts_by_person_id[person.id],
+                available_tags_by_name=available_tags_by_name,
+                synced_at=synced_at,
             )
         BotConversaSyncLogRepository.bulk_create(sync_logs)
         return unique_persons
