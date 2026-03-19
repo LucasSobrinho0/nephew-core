@@ -643,6 +643,25 @@ a {
   padding-top: 0.25rem;
 }
 
+.selection-modal-list {
+  display: grid;
+  gap: 0.55rem;
+  max-height: 14rem;
+  padding: 0.85rem;
+  overflow-y: auto;
+  border: 1px solid var(--crm-border);
+  border-radius: 1rem;
+  background: rgba(var(--crm-surface-rgb), 0.35);
+}
+
+.selection-modal-item {
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.85rem;
+  background: rgba(var(--crm-primary-rgb), 0.06);
+  color: var(--crm-text);
+  font-weight: 600;
+}
+
 .table-clean {
   --bs-table-bg: transparent;
   --bs-table-color: var(--crm-text);

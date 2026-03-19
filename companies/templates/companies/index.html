@@ -43,14 +43,19 @@
             <h2>Empresas cadastradas</h2>
             <p class="text-body-secondary mb-0">Todas as empresas abaixo pertencem somente a organizacao ativa.</p>
           </div>
-          {% if has_loaded_companies %}
-            <span class="status-badge status-available">{{ company_rows|length }} registro{{ company_rows|length|pluralize }}</span>
-          {% else %}
-            <form method="get" action="{% url 'companies:index' %}">
-              <input type="hidden" name="load" value="1">
-              <button type="submit" class="btn btn-outline-secondary">Listar empresas</button>
-            </form>
-          {% endif %}
+          <div class="d-flex flex-wrap gap-2 align-items-center">
+            {% if can_manage_company_import %}
+              <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#companiesImportModal">Importar planilha</button>
+            {% endif %}
+            {% if has_loaded_companies %}
+              <span class="status-badge status-available">{{ company_rows|length }} registro{{ company_rows|length|pluralize }}</span>
+            {% else %}
+              <form method="get" action="{% url 'companies:index' %}">
+                <input type="hidden" name="load" value="1">
+                <button type="submit" class="btn btn-outline-secondary">Listar empresas</button>
+              </form>
+            {% endif %}
+          </div>
         </div>
         {% if has_loaded_companies and company_rows %}
           <div class="mb-3">
@@ -70,10 +75,11 @@
               </thead>
               <tbody id="companiesListTableBody">
                 {% for company in company_rows %}
-                  <tr data-filter-item data-filter-text="{{ company.name }} {{ company.website|default:'' }} {{ company.email|default:'' }} {{ company.phone|default:'' }} {{ company.segment|default:'' }} {{ company.hubspot_company_id|default:'' }} {{ company.apollo_company_id|default:'' }}">
+                  <tr data-filter-item data-filter-text="{{ company.name }} {{ company.cnpj|default:'' }} {{ company.website|default:'' }} {{ company.email|default:'' }} {{ company.phone|default:'' }} {{ company.segment|default:'' }} {{ company.hubspot_company_id|default:'' }} {{ company.apollo_company_id|default:'' }}">
                     <td>
                       <strong>{{ company.name }}</strong>
                       <div class="small text-body-secondary">{{ company.website|default:'-' }}</div>
+                      <div class="small text-body-secondary">CNPJ: {{ company.cnpj|default:'-' }}</div>
                     </td>
                     <td>
                       <div class="small text-body-secondary">Email: {{ company.email|default:'-' }}</div>
@@ -111,4 +117,8 @@
       </div>
     </div>
   </section>
+
+  {% if can_manage_company_import %}
+    {% include 'partials/import_modal.html' with modal_id='companiesImportModal' modal_kicker='Importacao' modal_title='Importar empresas por planilha' modal_message='Baixe o modelo XLSX, preencha as colunas esperadas e envie a planilha para criar empresas em background com acompanhamento de progresso.' modal_form=import_form modal_form_action=company_import_action_url modal_template_url=company_import_template_url %}
+  {% endif %}
 {% endblock %}

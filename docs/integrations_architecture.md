@@ -104,6 +104,7 @@ integrations/
 - Apollo agora interage com o CRM por meio de `companies.Company` e `people.Person`.
 - `dispatch_flow` funciona como uma camada de orquestracao de tela com audiencia unica do CRM, selecao por canal, validacao de elegibilidade por pessoa, preservacao da mesma selecao em erros de contato e criacao multicanal de disparos quando um ou ambos os apps estiverem instalados.
 - A camada de HubSpot valida remotamente se empresas e contatos ja estao associados a negocios antes de abrir fluxos de sincronizacao com criacao de novo negocio, para que o espelho local reflita o estado real do HubSpot.
+- O CRM agora tambem suporta importacao XLSX em background para pessoas e empresas, com jobs por linha, progresso visual e download de modelos operados no servidor.
 - A busca de pessoas do Apollo salva resultados censurados no CRM por `apollo_person_id`, sem depender de enrichment nesta fase.
 - O enrichment de pessoas do Apollo opera sobre `people.Person` ja sincronizadas e atualiza nome completo e email no proprio registro local.
 - Quando o operador marca `Pegar telefone`, o Apollo passa a responder pelo webhook HTTPS do proprio Nephew CRM.
@@ -263,9 +264,20 @@ Templates:
 1. Owner or admin opens the shared dispatch-flow screen inside the active organization.
 2. The screen renders one shared audience list from the local CRM, with delivery eligibility for Gmail and WhatsApp on each person.
 3. The operator can filter the audience by people who have not yet received e-mail, WhatsApp, or either channel.
-4. The operator selects one list of people and then enables one or both channels.
-5. Backend validation blocks the chosen channel if any selected person lacks the required contact data, while preserving the same selected audience on the form.
-6. If validation passes, the backend creates one Bot Conversa dispatch, one Gmail dispatch, or both from that same audience selection.
+4. If WhatsApp is selected, the backend checks whether the selected people already have Bot Conversa tags.
+5. When untagged people are found, the UI opens a reusable selection modal so the operator can continue without tags or apply one or more Bot Conversa tags before the send.
+6. The operator selects one list of people and then enables one or both channels.
+7. Backend validation blocks the chosen channel if any selected person lacks the required contact data, while preserving the same selected audience on the form.
+8. If validation passes, the backend creates one Bot Conversa dispatch, one Gmail dispatch, or both from that same audience selection.
+
+### CRM XLSX import flow
+
+1. Owner or admin opens the local CRM screen for people or companies.
+2. The list header exposes a reusable import modal with a server-backed XLSX template download and file upload field.
+3. Backend validates the XLSX file, parses the header, stores a local copy, and creates one import job plus one row item per spreadsheet line.
+4. The user is redirected to a dedicated job detail page with progress bar, counters, and row-by-row feedback.
+5. A background worker command processes pending import rows and updates the job counters.
+6. The job detail page polls the backend for progress until the import reaches a terminal state.
 
 ### Bot Conversa tags flow
 

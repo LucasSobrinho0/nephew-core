@@ -5,8 +5,14 @@ from bot_conversa.repositories import (
     BotConversaFlowCacheRepository,
     BotConversaFlowDispatchItemRepository,
     BotConversaFlowDispatchRepository,
+    BotConversaTagRepository,
 )
-from bot_conversa.services import BotConversaDispatchService, BotConversaDispatchWorkspaceService
+from bot_conversa.services import (
+    BotConversaDispatchService,
+    BotConversaDispatchWorkspaceService,
+    BotConversaTagPreflightService,
+    BotConversaTagService,
+)
 from dispatch_flow.forms import DispatchFlowCreateForm, DispatchFlowFilterForm
 from gmail_integration.exceptions import GmailApiError, GmailConfigurationError
 from gmail_integration.repositories import (
@@ -126,6 +132,13 @@ class DispatchFlowWorkspaceService:
                     organization=organization,
                 )
             ),
+            bot_tag_choices=(
+                []
+                if not channel_state['bot_conversa_enabled']
+                else BotConversaTagService.build_tag_choice_rows(
+                    organization=organization,
+                )
+            ),
             gmail_template_choices=(
                 []
                 if not channel_state['gmail_enabled']
@@ -135,6 +148,7 @@ class DispatchFlowWorkspaceService:
             ),
             bot_enabled=channel_state['bot_conversa_enabled'],
             gmail_enabled=channel_state['gmail_enabled'],
+            form_id='dispatchFlowCreateForm',
         )
 
     @staticmethod
@@ -165,6 +179,47 @@ class DispatchFlowWorkspaceService:
 
 
 class DispatchFlowActionService:
+    @staticmethod
+    def resolve_people(*, organization, person_public_ids):
+        return list(
+            PersonRepository.list_for_organization_and_public_ids(
+                organization,
+                person_public_ids,
+            )
+        )
+
+    @staticmethod
+    def build_bot_conversa_tag_preflight(*, organization, persons):
+        untagged_people = BotConversaTagPreflightService.list_untagged_people(
+            organization=organization,
+            persons=persons,
+        )
+        return {
+            'should_prompt': bool(untagged_people),
+            'untagged_people': untagged_people,
+            'tag_choices': BotConversaTagService.build_tag_choice_rows(organization=organization),
+        }
+
+    @staticmethod
+    def apply_bot_conversa_tags_if_requested(
+        *,
+        user,
+        organization,
+        persons,
+        tag_public_ids,
+        preflight_action='',
+    ):
+        if preflight_action == 'apply' and not tag_public_ids:
+            raise ValidationError({'bot_conversa_tag_public_ids': ['Selecione pelo menos uma etiqueta para continuar.']})
+        if not tag_public_ids:
+            return []
+        return BotConversaTagPreflightService.apply_tags_by_public_ids(
+            user=user,
+            organization=organization,
+            persons=persons,
+            tag_public_ids=tag_public_ids,
+        )
+
     @staticmethod
     def validate_people_for_channels(*, persons, send_bot_conversa=False, send_gmail=False):
         errors = []
@@ -202,11 +257,9 @@ class DispatchFlowActionService:
         gmail_min_delay_seconds=0,
         gmail_max_delay_seconds=0,
     ):
-        persons = list(
-            PersonRepository.list_for_organization_and_public_ids(
-                organization,
-                person_public_ids,
-            )
+        persons = DispatchFlowActionService.resolve_people(
+            organization=organization,
+            person_public_ids=person_public_ids,
         )
         DispatchFlowActionService.validate_people_for_channels(
             persons=persons,

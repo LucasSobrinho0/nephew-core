@@ -1,11 +1,13 @@
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.views import View
 from django.views.generic import TemplateView
 
 from companies.repositories import CompanyRepository
 from common.mixins import ActiveOrganizationRequiredMixin
+from imports.forms import ImportUploadForm
 from people.forms import PersonCreateForm, PersonUpdateForm
 from people.repositories import PersonRepository
 from people.services import PersonService
@@ -25,6 +27,9 @@ class PeopleListView(ActiveOrganizationRequiredMixin, TemplateView):
         should_load_people = self.request.GET.get('load') == '1'
         context.update(
             {
+                'can_manage_people_import': bool(
+                    getattr(getattr(self.request, 'active_membership', None), 'can_manage_integrations', False)
+                ),
                 'person_rows': (
                     PersonRepository.list_for_organization(self.request.active_organization)
                     if should_load_people
@@ -32,6 +37,9 @@ class PeopleListView(ActiveOrganizationRequiredMixin, TemplateView):
                 ),
                 'has_loaded_people': should_load_people,
                 'create_form': kwargs.get('create_form') or PersonCreateForm(company_choices=self.build_company_choices()),
+                'import_form': kwargs.get('import_form') or ImportUploadForm(),
+                'person_import_action_url': reverse('imports:create_person_job'),
+                'person_import_template_url': reverse('imports:download_template', args=['people']),
             }
         )
         return context

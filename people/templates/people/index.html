@@ -43,14 +43,19 @@
             <h2>Pessoas cadastradas</h2>
             <p class="text-body-secondary mb-0">Todas as pessoas abaixo pertencem somente à organização ativa.</p>
           </div>
-          {% if has_loaded_people %}
-            <span class="status-badge status-available">{{ person_rows|length }} registro{{ person_rows|length|pluralize }}</span>
-          {% else %}
-            <form method="get" action="{% url 'people:index' %}" data-async-list-form data-async-target="#peopleLocalListCard" data-loading-text="Listando pessoas...">
-              <input type="hidden" name="load" value="1">
-              <button type="submit" class="btn btn-outline-secondary">Listar pessoas</button>
-            </form>
-          {% endif %}
+          <div class="d-flex flex-wrap gap-2 align-items-center">
+            {% if can_manage_people_import %}
+              <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#peopleImportModal">Importar planilha</button>
+            {% endif %}
+            {% if has_loaded_people %}
+              <span class="status-badge status-available">{{ person_rows|length }} registro{{ person_rows|length|pluralize }}</span>
+            {% else %}
+              <form method="get" action="{% url 'people:index' %}" data-async-list-form data-async-target="#peopleLocalListCard" data-loading-text="Listando pessoas...">
+                <input type="hidden" name="load" value="1">
+                <button type="submit" class="btn btn-outline-secondary">Listar pessoas</button>
+              </form>
+            {% endif %}
+          </div>
         </div>
         {% if has_loaded_people and person_rows %}
           <div class="mb-3">
@@ -95,4 +100,8 @@
       </div>
     </div>
   </section>
+
+  {% if can_manage_people_import %}
+    {% include 'partials/import_modal.html' with modal_id='peopleImportModal' modal_kicker='Importacao' modal_title='Importar pessoas por planilha' modal_message='Baixe o modelo XLSX, preencha as colunas esperadas e envie a planilha para criar pessoas em background com acompanhamento de progresso.' modal_form=import_form modal_form_action=person_import_action_url modal_template_url=person_import_template_url %}
+  {% endif %}
 {% endblock %}

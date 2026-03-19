@@ -503,6 +503,44 @@ class BotConversaTagService:
         return unique_persons
 
 
+class BotConversaTagPreflightService:
+    @staticmethod
+    def list_untagged_people(*, organization, persons):
+        unique_persons = []
+        seen_person_ids = set()
+        tagged_person_ids = {
+            person_tag.person_id
+            for person_tag in BotConversaPersonTagRepository.list_for_organization(organization)
+            if person_tag.person_id is not None
+        }
+
+        for person in persons:
+            if person.organization_id != organization.id or person.id in seen_person_ids:
+                continue
+            seen_person_ids.add(person.id)
+            if person.id not in tagged_person_ids:
+                unique_persons.append(person)
+
+        return unique_persons
+
+    @staticmethod
+    def apply_tags_by_public_ids(*, user, organization, persons, tag_public_ids):
+        resolved_tags = list(
+            BotConversaTagRepository.list_for_organization_and_public_ids(
+                organization,
+                tag_public_ids,
+            )
+        )
+        for tag in resolved_tags:
+            BotConversaTagService.assign_tag_to_people(
+                user=user,
+                organization=organization,
+                tag=tag,
+                persons=persons,
+            )
+        return resolved_tags
+
+
 class BotConversaFlowService:
     @staticmethod
     @transaction.atomic

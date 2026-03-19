@@ -39,6 +39,7 @@ from bot_conversa.services import (
     BotConversaInstallationService,
     BotConversaPeopleService,
     BotConversaRemoteContactService,
+    BotConversaTagPreflightService,
     BotConversaTagService,
 )
 from people.repositories import PersonRepository
@@ -164,10 +165,10 @@ class BotConversaPeopleView(BotConversaAccessMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         list_form = BotConversaListForm(self.request.GET or None)
-        has_loaded_people = False
+        has_loaded_people = kwargs.get('force_load_people', False)
         person_rows = []
 
-        if self.request.GET.get('load') == '1' and list_form.is_valid():
+        if has_loaded_people or (self.request.GET.get('load') == '1' and list_form.is_valid()):
             has_loaded_people = True
             person_rows = BotConversaPeopleService.build_person_rows(
                 organization=self.active_organization,
@@ -180,6 +181,15 @@ class BotConversaPeopleView(BotConversaAccessMixin, TemplateView):
                 'has_loaded_people': has_loaded_people,
                 'list_form': list_form,
                 'create_form': kwargs.get('create_form') or self.build_person_create_form(),
+                'bulk_sync_form': kwargs.get('bulk_sync_form') or BotConversaBulkPersonSyncForm(
+                    person_choices=self.build_person_choices(),
+                    tag_choices=self.build_tag_choices(),
+                    form_id='botBulkPersonSyncForm',
+                    initial={'next': 'bot_conversa:people'},
+                ),
+                'selected_sync_person_public_ids': kwargs.get('selected_sync_person_public_ids', []),
+                'sync_tag_preflight_modal_open': kwargs.get('sync_tag_preflight_modal_open', False),
+                'sync_tag_preflight_people': kwargs.get('sync_tag_preflight_people', []),
             }
         )
         return context
@@ -260,7 +270,12 @@ class BotConversaPersonSyncView(BotConversaOperatorRequiredMixin, View):
 
 class BotConversaBulkPersonSyncView(BotConversaOperatorRequiredMixin, View):
     def post(self, request, *args, **kwargs):
-        form = BotConversaBulkPersonSyncForm(request.POST, person_choices=self.build_person_choices())
+        form = BotConversaBulkPersonSyncForm(
+            request.POST,
+            person_choices=self.build_person_choices(),
+            tag_choices=self.build_tag_choices(),
+            form_id='botBulkPersonSyncForm',
+        )
         next_url = request.POST.get('next') or 'bot_conversa:people'
 
         if not form.is_valid():
@@ -273,7 +288,59 @@ class BotConversaBulkPersonSyncView(BotConversaOperatorRequiredMixin, View):
                 form.cleaned_data['person_public_ids'],
             )
         )
+
+        if not form.cleaned_data['skip_tag_preflight']:
+            untagged_people = BotConversaTagPreflightService.list_untagged_people(
+                organization=self.active_organization,
+                persons=persons,
+            )
+            if untagged_people:
+                view = BotConversaPeopleView()
+                view.request = request
+                view.args = args
+                view.kwargs = kwargs
+                view.installation = self.installation
+                view.active_organization = self.active_organization
+                view.active_membership = self.active_membership
+                return view.render_to_response(
+                    view.get_context_data(
+                        bulk_sync_form=form,
+                        force_load_people=True,
+                        selected_sync_person_public_ids=form.cleaned_data['person_public_ids'],
+                        sync_tag_preflight_modal_open=True,
+                        sync_tag_preflight_people=untagged_people,
+                    ),
+                )
+
         try:
+            if form.cleaned_data['tag_preflight_action'] == 'apply' and not form.cleaned_data['tag_public_ids']:
+                view = BotConversaPeopleView()
+                view.request = request
+                view.args = args
+                view.kwargs = kwargs
+                view.installation = self.installation
+                view.active_organization = self.active_organization
+                view.active_membership = self.active_membership
+                form.add_error('tag_public_ids', 'Selecione pelo menos uma etiqueta para continuar.')
+                return view.render_to_response(
+                    view.get_context_data(
+                        bulk_sync_form=form,
+                        force_load_people=True,
+                        selected_sync_person_public_ids=form.cleaned_data['person_public_ids'],
+                        sync_tag_preflight_modal_open=True,
+                        sync_tag_preflight_people=BotConversaTagPreflightService.list_untagged_people(
+                            organization=self.active_organization,
+                            persons=persons,
+                        ),
+                    ),
+                )
+            if form.cleaned_data['tag_public_ids']:
+                BotConversaTagPreflightService.apply_tags_by_public_ids(
+                    user=request.user,
+                    organization=self.active_organization,
+                    persons=persons,
+                    tag_public_ids=form.cleaned_data['tag_public_ids'],
+                )
             BotConversaContactSyncService.sync_people(
                 user=request.user,
                 organization=self.active_organization,

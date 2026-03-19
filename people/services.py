@@ -10,20 +10,35 @@ from people.repositories import PersonRepository
 class PersonService:
     @staticmethod
     @transaction.atomic
-    def create_person(*, user, organization, first_name, last_name, phone, email='', bot_conversa_id=None, hubspot_contact_id='', company=None):
-        normalized_phone = normalize_phone(phone)
+    def create_person(
+        *,
+        user,
+        organization,
+        first_name,
+        last_name,
+        phone='',
+        email='',
+        bot_conversa_id=None,
+        hubspot_contact_id='',
+        apollo_person_id='',
+        company=None,
+    ):
+        normalized_phone = normalize_phone(phone) if phone else ''
         normalized_email = normalize_email_address(email) if email else ''
         email_lookup = build_email_lookup(normalized_email) if normalized_email else ''
         bot_conversa_id = (bot_conversa_id or '').strip() or None
         hubspot_contact_id = (hubspot_contact_id or '').strip()
+        apollo_person_id = (apollo_person_id or '').strip()
 
         if company is not None and company.organization_id != organization.id:
             raise ValidationError('A empresa selecionada não pertence à organização ativa.')
 
-        if PersonRepository.get_for_organization_and_normalized_phone(organization, normalized_phone):
+        if normalized_phone and PersonRepository.get_for_organization_and_normalized_phone(organization, normalized_phone):
             raise ValidationError('Já existe uma pessoa com este telefone na organização ativa.')
         if email_lookup and PersonRepository.get_for_organization_and_email_lookup(organization, email_lookup):
             raise ValidationError('Já existe uma pessoa com este e-mail na organização ativa.')
+        if apollo_person_id and PersonRepository.get_for_organization_and_apollo_person_id(organization, apollo_person_id):
+            raise ValidationError('Já existe uma pessoa com este ID do Apollo na organização ativa.')
         if bot_conversa_id and PersonRepository.get_for_organization_and_bot_conversa_id(organization, bot_conversa_id):
             raise ValidationError('Já existe uma pessoa com este ID do Bot Conversa na organização ativa.')
         if hubspot_contact_id and PersonRepository.get_for_organization_and_hubspot_contact_id(organization, hubspot_contact_id):
@@ -32,6 +47,7 @@ class PersonService:
         try:
             return PersonRepository.create(
                 organization=organization,
+                apollo_person_id=apollo_person_id,
                 bot_conversa_id=bot_conversa_id,
                 hubspot_contact_id=hubspot_contact_id,
                 company=company,
@@ -51,14 +67,16 @@ class PersonService:
         if person.organization_id != organization.id:
             raise ValidationError('A pessoa selecionada não pertence à organização ativa.')
 
-        normalized_phone = normalize_phone(phone)
+        normalized_phone = normalize_phone(phone) if phone else ''
         normalized_email = normalize_email_address(email) if email else ''
         email_lookup = build_email_lookup(normalized_email) if normalized_email else ''
 
         if company is not None and company.organization_id != organization.id:
             raise ValidationError('A empresa selecionada não pertence à organização ativa.')
 
-        existing_phone_person = PersonRepository.get_for_organization_and_normalized_phone(organization, normalized_phone)
+        existing_phone_person = None
+        if normalized_phone:
+            existing_phone_person = PersonRepository.get_for_organization_and_normalized_phone(organization, normalized_phone)
         if existing_phone_person and existing_phone_person.pk != person.pk:
             raise ValidationError('Já existe uma pessoa com este telefone na organização ativa.')
 

@@ -28,9 +28,11 @@
     </form>
   </section>
 
-  <form method="post" action="{% url 'dispatch_flow:create_dispatch' %}" class="row g-4">
+  <form method="post" action="{% url 'dispatch_flow:create_dispatch' %}" class="row g-4" id="dispatchFlowCreateForm">
     {% csrf_token %}
     <input type="hidden" name="audience_filter" value="{{ filter_form.audience_filter.value|default:'all' }}">
+    {{ dispatch_form.skip_bot_conversa_tag_preflight }}
+    {{ dispatch_form.bot_conversa_tag_preflight_action }}
 
     <div class="col-xl-8">
       <section class="glass-card content-card h-100">
@@ -240,4 +242,9 @@
       {% endif %}
     </div>
   </form>
+
+  {% if bot_tag_preflight_modal_open %}
+    <div class="d-none" data-auto-open-modal="dispatchFlowBotTagPreflightModal" data-auto-open-modal-once="true"></div>
+  {% endif %}
+  {% include 'partials/selection_modal.html' with modal_id='dispatchFlowBotTagPreflightModal' modal_kicker='Fluxo de disparo' modal_title='Pessoas sem etiqueta no Bot Conversa' modal_message='Algumas pessoas selecionadas ainda nao possuem etiqueta no Bot Conversa. Deseja etiquetar antes do disparo de WhatsApp?' modal_warning='Se voce aplicar etiquetas agora, o sistema vai sincronizar as pessoas com as etiquetas escolhidas antes do envio do fluxo.' modal_people=bot_tag_preflight_people modal_select_field=dispatch_form.bot_conversa_tag_public_ids modal_form_target='#dispatchFlowCreateForm' modal_skip_field_selector='input[name=\"skip_bot_conversa_tag_preflight\"]' modal_action_field_selector='input[name=\"bot_conversa_tag_preflight_action\"]' modal_skip_label='Continuar sem etiqueta' modal_apply_label='Aplicar etiquetas e disparar' %}
 {% endblock %}

@@ -42,6 +42,16 @@ class CompanyRepository:
         )
 
     @staticmethod
+    def get_for_organization_and_cnpj(organization, cnpj):
+        return (
+            Company.objects.active()
+            .for_organization(organization)
+            .with_related_objects()
+            .filter(cnpj=cnpj)
+            .first()
+        )
+
+    @staticmethod
     def list_for_organization_and_public_ids(organization, public_ids):
         return (
             Company.objects.active()

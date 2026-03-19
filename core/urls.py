@@ -12,6 +12,7 @@ urlpatterns = [
     path('', include('admin_panel.urls')),
     path('', include('dispatch_flow.urls')),
     path('', include('integrations.urls')),
+    path('', include('imports.urls')),
     path('', include('companies.urls')),
     path('', include('people.urls')),
     path('', include('apollo_integration.urls')),

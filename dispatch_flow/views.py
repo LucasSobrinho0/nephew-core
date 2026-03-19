@@ -81,6 +81,12 @@ class DispatchFlowView(DispatchFlowAccessMixin, TemplateView):
                 audience_rows=audience_rows,
             )
         )
+        context.update(
+            {
+                'bot_tag_preflight_modal_open': kwargs.get('bot_tag_preflight_modal_open', False),
+                'bot_tag_preflight_people': kwargs.get('bot_tag_preflight_people', []),
+            }
+        )
         return context
 
 
@@ -118,7 +124,62 @@ class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
                 )
             )
 
+        persons = DispatchFlowActionService.resolve_people(
+            organization=self.active_organization,
+            person_public_ids=dispatch_form.cleaned_data['person_public_ids'],
+        )
+
+        if dispatch_form.cleaned_data['send_bot_conversa'] and not dispatch_form.cleaned_data['skip_bot_conversa_tag_preflight']:
+            preflight = DispatchFlowActionService.build_bot_conversa_tag_preflight(
+                organization=self.active_organization,
+                persons=persons,
+            )
+            if preflight['should_prompt']:
+                view = DispatchFlowView()
+                view.request = request
+                view.active_organization = self.active_organization
+                view.active_membership = self.active_membership
+                return view.render_to_response(
+                    view.get_context_data(
+                        filter_form=filter_form,
+                        dispatch_form=dispatch_form,
+                        audience_rows=audience_rows,
+                        bot_tag_preflight_modal_open=True,
+                        bot_tag_preflight_people=preflight['untagged_people'],
+                )
+                )
+
+        if (
+            dispatch_form.cleaned_data['send_bot_conversa']
+            and dispatch_form.cleaned_data['bot_conversa_tag_preflight_action'] == 'apply'
+            and not dispatch_form.cleaned_data['bot_conversa_tag_public_ids']
+        ):
+            dispatch_form.add_error('bot_conversa_tag_public_ids', 'Selecione pelo menos uma etiqueta para continuar.')
+            view = DispatchFlowView()
+            view.request = request
+            view.active_organization = self.active_organization
+            view.active_membership = self.active_membership
+            return view.render_to_response(
+                view.get_context_data(
+                    filter_form=filter_form,
+                    dispatch_form=dispatch_form,
+                    audience_rows=audience_rows,
+                    bot_tag_preflight_modal_open=True,
+                    bot_tag_preflight_people=DispatchFlowActionService.build_bot_conversa_tag_preflight(
+                        organization=self.active_organization,
+                        persons=persons,
+                    )['untagged_people'],
+                )
+            )
+
         try:
+            DispatchFlowActionService.apply_bot_conversa_tags_if_requested(
+                user=request.user,
+                organization=self.active_organization,
+                persons=persons,
+                tag_public_ids=dispatch_form.cleaned_data['bot_conversa_tag_public_ids'],
+                preflight_action=dispatch_form.cleaned_data['bot_conversa_tag_preflight_action'],
+            )
             result = DispatchFlowActionService.create_multichannel_dispatch(
                 user=request.user,
                 organization=self.active_organization,
@@ -149,6 +210,11 @@ class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
                     filter_form=filter_form,
                     dispatch_form=dispatch_form,
                     audience_rows=audience_rows,
+                    bot_tag_preflight_modal_open=bool(dispatch_form.cleaned_data.get('send_bot_conversa')),
+                    bot_tag_preflight_people=DispatchFlowActionService.build_bot_conversa_tag_preflight(
+                        organization=self.active_organization,
+                        persons=persons,
+                    )['untagged_people'],
                 )
             )
 

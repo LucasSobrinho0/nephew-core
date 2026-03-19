@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.views import View
 from django.views.generic import TemplateView
 
@@ -8,6 +9,7 @@ from common.mixins import ActiveOrganizationRequiredMixin
 from companies.forms import CompanyCreateForm, CompanyUpdateForm
 from companies.repositories import CompanyRepository
 from companies.services import CompanyService
+from imports.forms import ImportUploadForm
 from integrations.repositories import AppCatalogRepository, AppInstallationRepository
 
 
@@ -44,6 +46,9 @@ class CompanyListView(ActiveOrganizationRequiredMixin, CompanyFeatureSupportMixi
         feature_flags = self.build_feature_flags()
         context.update(
             {
+                'can_manage_company_import': bool(
+                    getattr(getattr(self.request, 'active_membership', None), 'can_manage_integrations', False)
+                ),
                 'company_rows': (
                     CompanyRepository.list_for_organization(self.request.active_organization)
                     if should_load_companies
@@ -51,6 +56,9 @@ class CompanyListView(ActiveOrganizationRequiredMixin, CompanyFeatureSupportMixi
                 ),
                 'has_loaded_companies': should_load_companies,
                 'create_form': kwargs.get('create_form') or CompanyCreateForm(**self.build_form_kwargs()),
+                'import_form': kwargs.get('import_form') or ImportUploadForm(),
+                'company_import_action_url': reverse('imports:create_company_job'),
+                'company_import_template_url': reverse('imports:download_template', args=['companies']),
                 **feature_flags,
             }
         )
@@ -72,6 +80,7 @@ class CompanyCreateView(ActiveOrganizationRequiredMixin, CompanyFeatureSupportMi
                 user=request.user,
                 organization=request.active_organization,
                 name=form.cleaned_data['name'],
+                cnpj=form.cleaned_data.get('cnpj', ''),
                 website=form.cleaned_data.get('website', ''),
                 email=form.cleaned_data.get('email', ''),
                 phone=form.cleaned_data.get('phone', ''),
@@ -110,6 +119,7 @@ class CompanyUpdateView(ActiveOrganizationRequiredMixin, CompanyFeatureSupportMi
         form = kwargs.get('form') or CompanyUpdateForm(
             initial={
                 'name': self.company.name,
+                'cnpj': self.company.cnpj,
                 'website': self.company.website,
                 'email': self.company.email,
                 'phone': self.company.phone,
@@ -140,6 +150,7 @@ class CompanyUpdateView(ActiveOrganizationRequiredMixin, CompanyFeatureSupportMi
                 organization=request.active_organization,
                 company=self.company,
                 name=form.cleaned_data['name'],
+                cnpj=form.cleaned_data.get('cnpj', ''),
                 website=form.cleaned_data.get('website', ''),
                 email=form.cleaned_data.get('email', ''),
                 phone=form.cleaned_data.get('phone', ''),

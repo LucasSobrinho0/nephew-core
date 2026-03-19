@@ -25,6 +25,19 @@ class DispatchFlowCreateForm(BootstrapFormMixin, forms.Form):
         required=False,
         widget=forms.MultipleHiddenInput(),
     )
+    bot_conversa_tag_public_ids = forms.MultipleChoiceField(
+        label='Etiquetas do Bot Conversa',
+        required=False,
+        choices=(),
+        widget=forms.SelectMultiple(
+            attrs={
+                'data-enhanced-multiselect': 'true',
+                'data-placeholder': 'Pesquisar etiquetas do Bot Conversa',
+            }
+        ),
+    )
+    skip_bot_conversa_tag_preflight = forms.BooleanField(required=False, widget=forms.HiddenInput())
+    bot_conversa_tag_preflight_action = forms.CharField(required=False, widget=forms.HiddenInput())
     send_bot_conversa = forms.BooleanField(
         label='Enviar por WhatsApp',
         required=False,
@@ -63,17 +76,22 @@ class DispatchFlowCreateForm(BootstrapFormMixin, forms.Form):
         *args,
         person_choices=(),
         bot_flow_choices=(),
+        bot_tag_choices=(),
         gmail_template_choices=(),
         bot_enabled=False,
         gmail_enabled=False,
+        form_id='',
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.fields['person_public_ids'].choices = list(person_choices)
+        self.fields['bot_conversa_tag_public_ids'].choices = list(bot_tag_choices)
         self.fields['flow_public_id'].choices = [('', 'Selecione')] + list(bot_flow_choices)
         self.fields['gmail_template_public_id'].choices = [('', 'Selecione')] + list(gmail_template_choices)
         self.bot_enabled = bot_enabled
         self.gmail_enabled = gmail_enabled
+        if form_id:
+            self.fields['bot_conversa_tag_public_ids'].widget.attrs['form'] = form_id
 
     def clean_person_public_ids(self):
         person_public_ids = self.cleaned_data.get('person_public_ids') or []

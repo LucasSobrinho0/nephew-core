@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+
+{% block title %}Status da importacao{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Importacao</span>
+    <h1>{{ job.get_entity_type_display }}</h1>
+    <p class="text-body-secondary mb-0">Acompanhe o processamento da planilha em background e revise cada linha importada ou rejeitada.</p>
+  </section>
+
+  <section class="row g-4 mb-4">
+    <div class="col-xl-4">
+      <div class="glass-card content-card h-100">
+        <span class="section-kicker">Resumo</span>
+        <h2 class="h4">{{ job.source_filename }}</h2>
+        <dl class="details-grid mt-4">
+          <div>
+            <dt>Status</dt>
+            <dd id="importJobStatusLabel">{{ job.get_status_display }}</dd>
+          </div>
+          <div>
+            <dt>Processado</dt>
+            <dd><span id="importJobProcessedCount">{{ job.processed_rows }}</span> / <span id="importJobTotalCount">{{ job.total_rows }}</span></dd>
+          </div>
+          <div>
+            <dt>Sucesso</dt>
+            <dd id="importJobSuccessCount">{{ job.success_rows }}</dd>
+          </div>
+          <div>
+            <dt>Falhas</dt>
+            <dd id="importJobFailedCount">{{ job.failed_rows }}</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+    <div class="col-xl-8">
+      <div class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Progresso</span>
+            <h2>Execucao da importacao</h2>
+          </div>
+          <span class="status-badge status-used" id="importJobStatusBadge">{{ job.get_status_display }}</span>
+        </div>
+        <div class="bot-progress-shell bot-progress-shell-lg">
+          <div class="progress">
+            <div class="progress-bar" id="importJobProgressBar" style="width: {{ status_payload.progress_percent }}%"></div>
+          </div>
+          <span id="importJobProgressValue">{{ status_payload.progress_percent }}%</span>
+        </div>
+        <p class="text-body-secondary mb-0 mt-3">Esta tela consulta o progresso periodicamente enquanto o worker de importacao processa as linhas pendentes.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="glass-card content-card">
+    <div class="content-card-header">
+      <div>
+        <span class="section-kicker">Itens</span>
+        <h2>Resultado por linha</h2>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-clean align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Linha</th>
+            <th>Status</th>
+            <th>Mensagem</th>
+          </tr>
+        </thead>
+        <tbody id="importJobItemsTableBody">
+          {% for item in job.items.all %}
+            <tr>
+              <td>{{ item.row_number }}</td>
+              <td><span class="status-badge status-used">{{ item.get_status_display }}</span></td>
+              <td class="small text-body-secondary">{{ item.message|default:'Aguardando processamento.' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <form id="importJobPoller" class="d-none">
+    {% csrf_token %}
+    <input type="hidden" name="poll_url" value="{% url 'imports:job_progress' job.public_id %}">
+    <input type="hidden" name="is_finished" value="{% if status_payload.is_finished %}true{% else %}false{% endif %}">
+    <input type="hidden" name="next_poll_delay_ms" value="1600">
+  </form>
+{% endblock %}

@@ -376,8 +376,11 @@
         var formSelector = button.getAttribute('data-confirm-submit-target');
         var fieldSelector = button.getAttribute('data-confirm-set-field');
         var fieldValue = button.getAttribute('data-confirm-set-value') || '1';
+        var secondaryFieldSelector = button.getAttribute('data-confirm-secondary-set-field');
+        var secondaryFieldValue = button.getAttribute('data-confirm-secondary-set-value') || '';
         var form = formSelector ? document.querySelector(formSelector) : null;
         var field = fieldSelector && form ? form.querySelector(fieldSelector) : null;
+        var secondaryField = secondaryFieldSelector && form ? form.querySelector(secondaryFieldSelector) : null;
 
         if (!form) {
           return;
@@ -385,6 +388,9 @@
 
         if (field) {
           field.value = fieldValue;
+        }
+        if (secondaryField) {
+          secondaryField.value = secondaryFieldValue;
         }
 
         window.setTimeout(function () {
@@ -968,6 +974,162 @@
     };
   }
 
+  function initImportJobPoller() {
+    var pollerForm = document.getElementById('importJobPoller');
+
+    if (!pollerForm) {
+      return null;
+    }
+
+    var csrfField = pollerForm.querySelector('input[name="csrfmiddlewaretoken"]');
+    var pollUrlField = pollerForm.querySelector('input[name="poll_url"]');
+    var isFinishedField = pollerForm.querySelector('input[name="is_finished"]');
+    var nextPollDelayField = pollerForm.querySelector('input[name="next_poll_delay_ms"]');
+    var progressBar = document.getElementById('importJobProgressBar');
+    var progressValue = document.getElementById('importJobProgressValue');
+    var processedCount = document.getElementById('importJobProcessedCount');
+    var totalCount = document.getElementById('importJobTotalCount');
+    var successCount = document.getElementById('importJobSuccessCount');
+    var failedCount = document.getElementById('importJobFailedCount');
+    var statusLabel = document.getElementById('importJobStatusLabel');
+    var statusBadge = document.getElementById('importJobStatusBadge');
+    var itemsTableBody = document.getElementById('importJobItemsTableBody');
+    var timerId = null;
+    var isPolling = false;
+
+    function humanizeStatus(status) {
+      var statusMap = {
+        pending: 'Pendente',
+        running: 'Em andamento',
+        completed: 'Concluido',
+        completed_with_errors: 'Concluido com erros',
+        failed: 'Falhou',
+        success: 'Sucesso'
+      };
+
+      return statusMap[String(status || '').toLowerCase()] || String(status || '')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, function (character) {
+          return character.toUpperCase();
+        });
+    }
+
+    function renderItems(items) {
+      if (!itemsTableBody) {
+        return;
+      }
+
+      itemsTableBody.innerHTML = items.map(function (item) {
+        return (
+          '<tr>' +
+            '<td>' + escapeHtml(item.row_number) + '</td>' +
+            '<td><span class="status-badge status-used">' + escapeHtml(humanizeStatus(item.status)) + '</span></td>' +
+            '<td class="small text-body-secondary">' + escapeHtml(item.message || 'Aguardando processamento.') + '</td>' +
+          '</tr>'
+        );
+      }).join('');
+    }
+
+    function renderPayload(payload) {
+      if (progressBar) {
+        progressBar.style.width = payload.progress_percent + '%';
+      }
+      if (progressValue) {
+        progressValue.textContent = payload.progress_percent + '%';
+      }
+      if (processedCount) {
+        processedCount.textContent = payload.processed_rows;
+      }
+      if (totalCount) {
+        totalCount.textContent = payload.total_rows;
+      }
+      if (successCount) {
+        successCount.textContent = payload.success_rows;
+      }
+      if (failedCount) {
+        failedCount.textContent = payload.failed_rows;
+      }
+      if (statusLabel) {
+        statusLabel.textContent = humanizeStatus(payload.status);
+      }
+      if (statusBadge) {
+        statusBadge.textContent = humanizeStatus(payload.status);
+      }
+      if (Array.isArray(payload.items)) {
+        renderItems(payload.items);
+      }
+      if (payload.is_finished && isFinishedField) {
+        isFinishedField.value = 'true';
+      }
+    }
+
+    function scheduleNextPoll() {
+      if (!isFinishedField || isFinishedField.value === 'true') {
+        return;
+      }
+      timerId = window.setTimeout(runPoll, Number(nextPollDelayField && nextPollDelayField.value ? nextPollDelayField.value : 1600));
+    }
+
+    function runPoll() {
+      if (isPolling || !pollUrlField || !csrfField || !isFinishedField || isFinishedField.value === 'true') {
+        return;
+      }
+
+      isPolling = true;
+      fetch(pollUrlField.value, {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: {
+          'X-CSRFToken': csrfField.value,
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+        .then(function (response) {
+          return response.json().then(function (payload) {
+            return {
+              ok: response.ok,
+              payload: payload
+            };
+          });
+        })
+        .then(function (result) {
+          if (!result.ok) {
+            throw new Error(result.payload && result.payload.detail ? result.payload.detail : 'Falha ao acompanhar a importacao.');
+          }
+          renderPayload(result.payload);
+        })
+        .catch(function (error) {
+          if (crmErrorModal) {
+            crmErrorModal.open({
+              title: 'Erro no acompanhamento da importacao',
+              message: 'Nao foi possivel atualizar o progresso do job agora.',
+              details: error && error.message ? error.message : 'Tente novamente em instantes.'
+            });
+          }
+          if (isFinishedField) {
+            isFinishedField.value = 'true';
+          }
+        })
+        .finally(function () {
+          isPolling = false;
+          scheduleNextPoll();
+        });
+    }
+
+    if (isFinishedField && isFinishedField.value !== 'true') {
+      scheduleNextPoll();
+    }
+
+    return {
+      stop: function () {
+        if (timerId) {
+          window.clearTimeout(timerId);
+        }
+      }
+    };
+  }
+
   function initDispatchAudienceFilters() {
     document.querySelectorAll('[data-audience-url]').forEach(function (trigger) {
       if (trigger.dataset.audienceBound === 'true') {
@@ -1085,6 +1247,7 @@
   var apiKeyRevealFlow = null;
   var botConversaDispatchPoller = null;
   var gmailDispatchPoller = null;
+  var importJobPoller = null;
   var crmErrorModal = null;
 
   document.addEventListener('click', function (event) {
@@ -1118,6 +1281,7 @@
   apiKeyRevealFlow = initApiKeyRevealFlow();
   botConversaDispatchPoller = initBotConversaDispatchPoller();
   gmailDispatchPoller = initGmailDispatchPoller();
+  importJobPoller = initImportJobPoller();
   initSelectAllCheckboxes();
   initCheckboxSelectionButtons();
   initLoadingForms();

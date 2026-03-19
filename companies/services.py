@@ -12,6 +12,7 @@ class CompanyService:
         user,
         organization,
         name,
+        cnpj='',
         website='',
         email='',
         phone='',
@@ -26,6 +27,7 @@ class CompanyService:
                 apollo_company_id=(apollo_company_id or '').strip(),
                 hubspot_company_id=(hubspot_company_id or '').strip(),
                 name=name,
+                cnpj=(cnpj or '').strip(),
                 website=website,
                 email=email,
                 phone=phone,
@@ -35,7 +37,7 @@ class CompanyService:
                 updated_by=user,
             )
         except IntegrityError as exc:
-            raise ValidationError('Ja existe uma empresa com este identificador externo na organizacao ativa.') from exc
+            raise ValidationError('Ja existe uma empresa com este identificador externo ou CNPJ na organizacao ativa.') from exc
 
     @staticmethod
     @transaction.atomic
@@ -45,6 +47,7 @@ class CompanyService:
         organization,
         company,
         name,
+        cnpj='',
         website='',
         email='',
         phone='',
@@ -62,6 +65,7 @@ class CompanyService:
                 apollo_company_id=(apollo_company_id or '').strip(),
                 hubspot_company_id=(hubspot_company_id or '').strip(),
                 name=name,
+                cnpj=(cnpj or '').strip(),
                 website=website,
                 email=email,
                 phone=phone,
@@ -70,4 +74,4 @@ class CompanyService:
                 updated_by=user,
             )
         except IntegrityError as exc:
-            raise ValidationError('Ja existe uma empresa com este identificador externo na organizacao ativa.') from exc
+            raise ValidationError('Ja existe uma empresa com este identificador externo ou CNPJ na organizacao ativa.') from exc

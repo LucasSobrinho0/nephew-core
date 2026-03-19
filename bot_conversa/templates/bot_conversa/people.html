@@ -37,7 +37,9 @@
             </div>
           <form method="post" action="{% url 'bot_conversa:sync_people_bulk' %}" id="botBulkPersonSyncForm">
             {% csrf_token %}
-            <input type="hidden" name="next" value="{% url 'bot_conversa:people' %}">
+            {{ bulk_sync_form.skip_tag_preflight }}
+            {{ bulk_sync_form.tag_preflight_action }}
+            {{ bulk_sync_form.next }}
             <div class="scroll-area scroll-area-table">
               <table class="table table-clean align-middle mb-0">
                 <thead>
@@ -54,7 +56,7 @@
                   {% for row in person_rows %}
                     <tr data-filter-item data-filter-text="{{ row.person.full_name }} {{ row.person.phone }} {{ row.person.bot_conversa_id|default:'' }} {% if row.contact_link %}{{ row.contact_link.external_subscriber_id }} {{ row.contact_link.get_sync_status_display }}{% endif %} {% for tag in row.tags %}{{ tag.name }} {% endfor %}">
                       {% if can_manage_bot_conversa %}
-                        <td><input type="checkbox" name="person_public_ids" value="{{ row.person.public_id }}" data-checkbox-group="bot-person-sync"></td>
+                        <td><input type="checkbox" name="person_public_ids" value="{{ row.person.public_id }}" data-checkbox-group="bot-person-sync" {% if row.person.public_id|stringformat:'s' in selected_sync_person_public_ids %}checked{% endif %}></td>
                       {% endif %}
                       <td><strong>{{ row.person.full_name }}</strong><div class="text-body-secondary small">{{ row.person.created_at|date:'Y-m-d H:i' }}</div></td>
                       <td>{{ row.person.phone }}</td>
@@ -153,5 +155,10 @@
       </div>
     </div>
   </section>
+
+  {% if sync_tag_preflight_modal_open %}
+    <div class="d-none" data-auto-open-modal="botConversaTagPreflightModal" data-auto-open-modal-once="true"></div>
+  {% endif %}
+  {% include 'partials/selection_modal.html' with modal_id='botConversaTagPreflightModal' modal_kicker='Bot Conversa' modal_title='Pessoas sem etiqueta' modal_message='Algumas pessoas selecionadas ainda nao possuem etiqueta no Bot Conversa. Deseja etiquetar antes de sincronizar?' modal_warning='Se voce aplicar etiquetas agora, o sistema vai sincronizar essas pessoas com as etiquetas escolhidas antes da sincronizacao principal.' modal_people=sync_tag_preflight_people modal_select_field=bulk_sync_form.tag_public_ids modal_form_target='#botBulkPersonSyncForm' modal_skip_field_selector='input[name=\"skip_tag_preflight\"]' modal_action_field_selector='input[name=\"tag_preflight_action\"]' modal_skip_label='Continuar sem etiqueta' modal_apply_label='Aplicar etiquetas e sincronizar' %}
 
 {% endblock %}

@@ -11,6 +11,7 @@
 - `dispatch_flow`: unified dispatch workspace with one shared audience list, multichannel selection, delivery-eligibility feedback, and channel-specific dispatch configuration when Bot Conversa and/or Gmail are installed.
 - `companies`: tenant-scoped CRM companies.
 - `people`: tenant-scoped CRM persons and contact identity.
+- `imports`: background XLSX import jobs, per-row progress tracking, template download, and import worker orchestration for CRM entities.
 - `integrations`: app catalog, tenant installations, encrypted credentials, and credential access audit.
 - `apollo_integration`: Apollo API key wiring, remote company search, person search, synchronous person enrichment, webhook-backed phone reveal jobs, usage snapshots, bulk import, and optional company sync handoff to HubSpot.
 - `bot_conversa`: Bot Conversa contact linking, tag cache, flow cache, dispatching, and sync logs.
@@ -27,6 +28,7 @@ NephewCRM/
 |-- organizations/
 |-- dashboard/
 |-- dispatch_flow/
+|-- imports/
 |-- companies/
 |-- people/
 |-- integrations/
@@ -82,6 +84,7 @@ NephewCRM/
 
 - Tenant-scoped CRM company table.
 - Stores `organization`, `name`, `website`, `phone`, `normalized_phone`, `email`, `segment`, `employee_count`, `hubspot_company_id`, `apollo_company_id`, `is_active`, and audit ownership fields.
+- Stores `cnpj` without mask for local matching and bulk-import workflows.
 - A company belongs to only one organization and is not shared globally between tenants.
 
 ### `people.Person`
@@ -162,6 +165,10 @@ NephewCRM/
   Creates and updates tenant-scoped companies.
 - `people.services.PersonService`
   Creates and updates tenant-scoped persons with normalized contact data.
+- `imports.services.ImportJobService`
+  Creates import jobs from XLSX uploads, persists row snapshots, and prepares background execution.
+- `imports.services.ImportJobWorkerService`
+  Processes pending import rows in background and updates progress counters for the UI.
 - `admin_panel.services.AdminAuthorizationService`
   Validates membership in the global `Admin` auth group.
 - `admin_panel.services.AdminAccessAuditService`
@@ -201,6 +208,10 @@ NephewCRM/
 - `/organizations/switch/`
 - `/invites/`
 - `/invites/generate/`
+- `/imports/templates/<entity_type>/`
+- `/imports/people/create/`
+- `/imports/companies/create/`
+- `/imports/<job_public_id>/`
 - `/apps/`
 - `/api-keys/`
 - `/companies/`
@@ -238,6 +249,7 @@ NephewCRM/
 - Bot Conversa, HubSpot, Gmail, and API key mutation flows require both:
   a valid active organization,
   and a manager-capable membership.
+- XLSX imports require backend validation of manager permissions, active organization ownership, and row-level tenant consistency before any create attempt is persisted.
 - Invite redemption validates:
   code format,
   code existence,

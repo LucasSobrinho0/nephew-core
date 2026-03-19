@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 
+from common.documents import normalize_cnpj
 from common.models import PublicIdentifierMixin, TimeStampedModel
 from common.phone import format_phone_display, normalize_phone
 from organizations.models import Organization
@@ -26,6 +27,7 @@ class Company(PublicIdentifierMixin, TimeStampedModel):
     apollo_company_id = models.CharField(max_length=128, blank=True, default='', db_index=True)
     hubspot_company_id = models.CharField(max_length=128, blank=True, default='', db_index=True)
     name = models.CharField(max_length=255)
+    cnpj = models.CharField(max_length=14, blank=True, default='', db_index=True)
     website = models.URLField(max_length=255, blank=True)
     email = models.EmailField(max_length=254, blank=True)
     phone = models.CharField(max_length=32, blank=True)
@@ -63,12 +65,18 @@ class Company(PublicIdentifierMixin, TimeStampedModel):
                 condition=~models.Q(hubspot_company_id=''),
                 name='unique_company_hubspot_id_per_organization',
             ),
+            models.UniqueConstraint(
+                fields=('organization', 'cnpj'),
+                condition=~models.Q(cnpj=''),
+                name='unique_company_cnpj_per_organization',
+            ),
         ]
 
     def save(self, *args, **kwargs):
         self.apollo_company_id = (self.apollo_company_id or '').strip()
         self.hubspot_company_id = (self.hubspot_company_id or '').strip()
         self.name = self.name.strip()
+        self.cnpj = normalize_cnpj(self.cnpj)
         self.website = (self.website or '').strip()
         self.email = (self.email or '').strip().lower()
         self.segment = (self.segment or '').strip()

@@ -1,0 +1,30 @@
+<div class="modal fade" id="{{ modal_id }}" tabindex="-1" aria-labelledby="{{ modal_id }}Label" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content modal-surface">
+      <form method="post" action="{{ modal_form_action }}" enctype="multipart/form-data" data-loading-form data-loading-text="Enviando planilha...">
+        {% csrf_token %}
+        <div class="modal-header border-0 pb-0">
+          <div>
+            <span class="section-kicker">{{ modal_kicker }}</span>
+            <h2 class="modal-title h4 mb-0" id="{{ modal_id }}Label">{{ modal_title }}</h2>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body pt-3">
+          <p class="mb-3">{{ modal_message }}</p>
+          <div class="mb-3">
+            <a href="{{ modal_template_url }}" class="btn btn-outline-secondary">Baixar modelo XLSX</a>
+          </div>
+          <div>
+            <label for="{{ modal_form.file.id_for_label }}" class="form-label">{{ modal_form.file.label }}</label>
+            {{ modal_form.file }}
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+          <button type="submit" class="btn btn-brand">Importar planilha</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

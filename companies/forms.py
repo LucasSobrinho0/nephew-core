@@ -1,5 +1,6 @@
 from django import forms
 
+from common.documents import normalize_cnpj
 from common.forms import BootstrapFormMixin
 
 
@@ -13,6 +14,12 @@ class CompanyForm(BootstrapFormMixin, forms.Form):
         label='Website',
         required=False,
         widget=forms.URLInput(attrs={'placeholder': 'https://empresa.com'}),
+    )
+    cnpj = forms.CharField(
+        label='CNPJ',
+        required=False,
+        max_length=18,
+        widget=forms.TextInput(attrs={'placeholder': 'Somente numeros'}),
     )
     phone = forms.CharField(
         label='Telefone',
@@ -63,6 +70,9 @@ class CompanyForm(BootstrapFormMixin, forms.Form):
 
     def clean_website(self):
         return self.cleaned_data.get('website', '').strip()
+
+    def clean_cnpj(self):
+        return normalize_cnpj(self.cleaned_data.get('cnpj', ''))
 
     def clean_phone(self):
         return self.cleaned_data.get('phone', '').strip()

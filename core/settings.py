@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'admin_panel',
     'dispatch_flow',
     'integrations',
+    'imports',
     'companies',
     'people',
     'apollo_integration',

@@ -89,11 +89,27 @@ class BotConversaRemoteContactSaveForm(BootstrapFormMixin, forms.Form):
 
 class BotConversaBulkPersonSyncForm(BootstrapFormMixin, forms.Form):
     person_public_ids = forms.MultipleChoiceField(required=False, widget=forms.MultipleHiddenInput())
+    tag_public_ids = forms.MultipleChoiceField(
+        label='Etiquetas do Bot Conversa',
+        required=False,
+        choices=(),
+        widget=forms.SelectMultiple(
+            attrs={
+                'data-enhanced-multiselect': 'true',
+                'data-placeholder': 'Pesquisar etiquetas',
+            }
+        ),
+    )
+    skip_tag_preflight = forms.BooleanField(required=False, widget=forms.HiddenInput())
+    tag_preflight_action = forms.CharField(required=False, widget=forms.HiddenInput())
     next = forms.CharField(required=False, widget=forms.HiddenInput())
 
-    def __init__(self, *args, person_choices=(), **kwargs):
+    def __init__(self, *args, person_choices=(), tag_choices=(), form_id='', **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['person_public_ids'].choices = person_choices
+        self.fields['tag_public_ids'].choices = tag_choices
+        if form_id:
+            self.fields['tag_public_ids'].widget.attrs['form'] = form_id
 
     def clean_person_public_ids(self):
         person_public_ids = self.cleaned_data.get('person_public_ids') or []
