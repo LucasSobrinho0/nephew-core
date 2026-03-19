@@ -63,6 +63,11 @@
         {% else %}
           <div class="soft-empty"><p class="mb-0">Clique em listar para carregar as pessoas do CRM que ja possuem Apollo ID.</p></div>
         {% endif %}
+
+        {% if show_pending_enrichment_prompt %}
+          <div class="d-none" data-auto-open-modal="apolloPendingEnrichmentModal" data-auto-open-modal-once="true"></div>
+          {% include 'partials/confirmation_modal.html' with modal_id='apolloPendingEnrichmentModal' modal_kicker='Apollo' modal_title='Enriquecer dados das pessoas sincronizadas?' modal_message=pending_enrichment_prompt_message modal_warning='Este enrichment pode consumir creditos da sua conta Apollo.' modal_cancel_label='Nao' modal_confirm_label='Sim, enriquecer agora' modal_confirm_url=enrichment_prefill_url %}
+        {% endif %}
       </div>
     </div>
 
@@ -190,24 +195,4 @@
     </div>
   </section>
 
-  {% if show_pending_enrichment_prompt %}
-    {% include 'partials/confirmation_modal.html' with modal_id='apolloPendingEnrichmentModal' modal_kicker='Apollo' modal_title='Enriquecer dados das pessoas sincronizadas?' modal_message=pending_enrichment_prompt_message modal_warning='Este enrichment pode consumir creditos da sua conta Apollo.' modal_cancel_label='Nao' modal_confirm_label='Sim, enriquecer agora' modal_confirm_url=enrichment_prefill_url %}
-  {% endif %}
-{% endblock %}
-
-{% block extra_js %}
-  {{ block.super }}
-  {% if show_pending_enrichment_prompt %}
-    <script>
-      (function () {
-        var modalElement = document.getElementById('apolloPendingEnrichmentModal');
-        if (!modalElement || typeof bootstrap === 'undefined') {
-          return;
-        }
-        window.setTimeout(function () {
-          bootstrap.Modal.getOrCreateInstance(modalElement).show();
-        }, 150);
-      }());
-    </script>
-  {% endif %}
 {% endblock %}
