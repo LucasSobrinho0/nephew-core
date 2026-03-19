@@ -1,5 +1,4 @@
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import JsonResponse
 from django.shortcuts import redirect
@@ -13,7 +12,7 @@ from imports.repositories import ImportJobRepository
 from imports.services import ImportJobPresentationService, ImportJobService, ImportTemplateService
 
 
-class ImportAccessMixin(LoginRequiredMixin, ActiveOrganizationRequiredMixin):
+class ImportAccessMixin(ActiveOrganizationRequiredMixin):
     def ensure_manage_access(self, request):
         membership = getattr(request, 'active_membership', None)
         if membership is None or not membership.can_manage_integrations:
