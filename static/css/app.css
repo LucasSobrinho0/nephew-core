@@ -557,6 +557,92 @@ a {
   text-align: center;
 }
 
+.dispatch-channel-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.dispatch-channel-block {
+  padding: 1.15rem;
+  border: 1px solid var(--crm-border);
+  border-radius: 1.15rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.08));
+}
+
+[data-bs-theme='dark'] .dispatch-channel-block {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+}
+
+.dispatch-channel-block-whatsapp {
+  border-color: rgba(47, 143, 104, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(47, 143, 104, 0.06);
+}
+
+.dispatch-channel-block-gmail {
+  border-color: rgba(var(--crm-primary-rgb), 0.22);
+  box-shadow: inset 0 0 0 1px rgba(var(--crm-primary-rgb), 0.06);
+}
+
+.dispatch-channel-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.9rem;
+  align-items: start;
+  margin-bottom: 1rem;
+}
+
+.dispatch-channel-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 1rem;
+  font-size: 1.15rem;
+}
+
+.dispatch-channel-block-whatsapp .dispatch-channel-icon {
+  background: rgba(47, 143, 104, 0.16);
+  color: var(--crm-success);
+}
+
+.dispatch-channel-block-gmail .dispatch-channel-icon {
+  background: rgba(var(--crm-primary-rgb), 0.14);
+  color: var(--crm-primary);
+}
+
+.dispatch-channel-copy h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+}
+
+.dispatch-channel-copy p {
+  margin: 0;
+  color: var(--crm-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.dispatch-channel-toggle {
+  margin-bottom: 0.35rem;
+  padding: 0.85rem 1rem 0.85rem 2.5rem;
+  border: 1px dashed var(--crm-border);
+  border-radius: 0.95rem;
+  background: rgba(var(--crm-surface-rgb), 0.4);
+}
+
+.dispatch-channel-toggle .form-check-input {
+  margin-top: 0.2rem;
+}
+
+.dispatch-channel-toggle .form-check-label {
+  font-weight: 700;
+}
+
+.dispatch-channel-submit {
+  padding-top: 0.25rem;
+}
+
 .table-clean {
   --bs-table-bg: transparent;
   --bs-table-color: var(--crm-text);

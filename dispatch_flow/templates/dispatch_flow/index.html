@@ -110,69 +110,97 @@
           </div>
         </div>
 
-        <div class="row g-3">
+        <div class="dispatch-channel-stack">
           {% if bot_conversa_enabled %}
-            <div class="col-12">
-              <div class="form-check">
+            <section class="dispatch-channel-block dispatch-channel-block-whatsapp">
+              <div class="dispatch-channel-header">
+                <div class="dispatch-channel-icon">
+                  <i class="bi bi-whatsapp"></i>
+                </div>
+                <div class="dispatch-channel-copy">
+                  <h3>WhatsApp</h3>
+                  <p>Ative este canal para disparar o fluxo do Bot Conversa para a audiencia selecionada.</p>
+                </div>
+                <span class="status-badge status-available">Disponivel</span>
+              </div>
+
+              <div class="form-check dispatch-channel-toggle">
                 {{ dispatch_form.send_bot_conversa }}
                 <label class="form-check-label" for="{{ dispatch_form.send_bot_conversa.id_for_label }}">{{ dispatch_form.send_bot_conversa.label }}</label>
               </div>
               {% for error in dispatch_form.send_bot_conversa.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-            </div>
-            <div class="col-12">
-              <label for="{{ dispatch_form.flow_public_id.id_for_label }}" class="form-label">{{ dispatch_form.flow_public_id.label }}</label>
-              {{ dispatch_form.flow_public_id }}
-              {% for error in dispatch_form.flow_public_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-            </div>
-            <div class="col-md-6">
-              <label for="{{ dispatch_form.bot_min_delay_seconds.id_for_label }}" class="form-label">{{ dispatch_form.bot_min_delay_seconds.label }}</label>
-              {{ dispatch_form.bot_min_delay_seconds }}
-            </div>
-            <div class="col-md-6">
-              <label for="{{ dispatch_form.bot_max_delay_seconds.id_for_label }}" class="form-label">{{ dispatch_form.bot_max_delay_seconds.label }}</label>
-              {{ dispatch_form.bot_max_delay_seconds }}
-              {% for error in dispatch_form.bot_max_delay_seconds.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-            </div>
+
+              <div class="row g-3 mt-1">
+                <div class="col-12">
+                  <label for="{{ dispatch_form.flow_public_id.id_for_label }}" class="form-label">{{ dispatch_form.flow_public_id.label }}</label>
+                  {{ dispatch_form.flow_public_id }}
+                  {% for error in dispatch_form.flow_public_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+                <div class="col-md-6">
+                  <label for="{{ dispatch_form.bot_min_delay_seconds.id_for_label }}" class="form-label">{{ dispatch_form.bot_min_delay_seconds.label }}</label>
+                  {{ dispatch_form.bot_min_delay_seconds }}
+                </div>
+                <div class="col-md-6">
+                  <label for="{{ dispatch_form.bot_max_delay_seconds.id_for_label }}" class="form-label">{{ dispatch_form.bot_max_delay_seconds.label }}</label>
+                  {{ dispatch_form.bot_max_delay_seconds }}
+                  {% for error in dispatch_form.bot_max_delay_seconds.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+              </div>
+            </section>
           {% endif %}
 
           {% if gmail_enabled %}
-            <div class="col-12 pt-2">
-              <div class="form-check">
+            <section class="dispatch-channel-block dispatch-channel-block-gmail">
+              <div class="dispatch-channel-header">
+                <div class="dispatch-channel-icon">
+                  <i class="bi bi-envelope-paper"></i>
+                </div>
+                <div class="dispatch-channel-copy">
+                  <h3>Gmail</h3>
+                  <p>Ative este canal para usar um template salvo e enviar e-mails para a mesma lista selecionada.</p>
+                </div>
+                <span class="status-badge status-used">Disponivel</span>
+              </div>
+
+              <div class="form-check dispatch-channel-toggle">
                 {{ dispatch_form.send_gmail }}
                 <label class="form-check-label" for="{{ dispatch_form.send_gmail.id_for_label }}">{{ dispatch_form.send_gmail.label }}</label>
               </div>
               {% for error in dispatch_form.send_gmail.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-            </div>
-            <div class="col-12">
-              <label for="{{ dispatch_form.gmail_template_public_id.id_for_label }}" class="form-label">{{ dispatch_form.gmail_template_public_id.label }}</label>
-              {{ dispatch_form.gmail_template_public_id }}
-              {% for error in dispatch_form.gmail_template_public_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-            </div>
-            <div class="col-12">
-              <label for="{{ dispatch_form.gmail_cc_emails.id_for_label }}" class="form-label">{{ dispatch_form.gmail_cc_emails.label }}</label>
-              {{ dispatch_form.gmail_cc_emails }}
-              {% for error in dispatch_form.gmail_cc_emails.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-            </div>
-            <div class="col-md-6">
-              <label for="{{ dispatch_form.gmail_min_delay_seconds.id_for_label }}" class="form-label">{{ dispatch_form.gmail_min_delay_seconds.label }}</label>
-              {{ dispatch_form.gmail_min_delay_seconds }}
-            </div>
-            <div class="col-md-6">
-              <label for="{{ dispatch_form.gmail_max_delay_seconds.id_for_label }}" class="form-label">{{ dispatch_form.gmail_max_delay_seconds.label }}</label>
-              {{ dispatch_form.gmail_max_delay_seconds }}
-              {% for error in dispatch_form.gmail_max_delay_seconds.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-            </div>
+
+              <div class="row g-3 mt-1">
+                <div class="col-12">
+                  <label for="{{ dispatch_form.gmail_template_public_id.id_for_label }}" class="form-label">{{ dispatch_form.gmail_template_public_id.label }}</label>
+                  {{ dispatch_form.gmail_template_public_id }}
+                  {% for error in dispatch_form.gmail_template_public_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+                <div class="col-12">
+                  <label for="{{ dispatch_form.gmail_cc_emails.id_for_label }}" class="form-label">{{ dispatch_form.gmail_cc_emails.label }}</label>
+                  {{ dispatch_form.gmail_cc_emails }}
+                  {% for error in dispatch_form.gmail_cc_emails.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+                <div class="col-md-6">
+                  <label for="{{ dispatch_form.gmail_min_delay_seconds.id_for_label }}" class="form-label">{{ dispatch_form.gmail_min_delay_seconds.label }}</label>
+                  {{ dispatch_form.gmail_min_delay_seconds }}
+                </div>
+                <div class="col-md-6">
+                  <label for="{{ dispatch_form.gmail_max_delay_seconds.id_for_label }}" class="form-label">{{ dispatch_form.gmail_max_delay_seconds.label }}</label>
+                  {{ dispatch_form.gmail_max_delay_seconds }}
+                  {% for error in dispatch_form.gmail_max_delay_seconds.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+              </div>
+            </section>
           {% endif %}
 
           {% if dispatch_form.non_field_errors %}
-            <div class="col-12">
+            <div>
               {% for error in dispatch_form.non_field_errors %}
                 <div class="alert alert-danger mb-2" role="alert">{{ error }}</div>
               {% endfor %}
             </div>
           {% endif %}
 
-          <div class="col-12">
+          <div class="dispatch-channel-submit">
             <button type="submit" class="btn btn-brand w-100">Criar disparo</button>
           </div>
         </div>
