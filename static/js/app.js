@@ -190,6 +190,7 @@
             initListFilters();
             initLoadingForms();
             initAsyncListForms();
+            initEnhancedMultiSelects();
           })
           .catch(function () {
             if (crmErrorModal) {
@@ -233,6 +234,36 @@
 
       input.addEventListener('input', applyFilter);
       applyFilter();
+    });
+  }
+
+  function initEnhancedMultiSelects() {
+    if (typeof TomSelect === 'undefined') {
+      return;
+    }
+
+    document.querySelectorAll('select[data-enhanced-multiselect="true"]').forEach(function (select) {
+      if (select.tomselect) {
+        return;
+      }
+
+      new TomSelect(select, {
+        plugins: {
+          remove_button: {
+            title: 'Remover item'
+          }
+        },
+        create: false,
+        hidePlaceholder: true,
+        closeAfterSelect: false,
+        maxOptions: null,
+        placeholder: select.getAttribute('data-placeholder') || 'Pesquisar',
+        render: {
+          no_results: function (data, escape) {
+            return '<div class="no-results">Nenhum resultado para "' + escape(data.input) + '".</div>';
+          }
+        }
+      });
     });
   }
 
@@ -966,5 +997,6 @@
   initListFilters();
   initAsyncListForms();
   initDispatchAudienceFilters();
+  initEnhancedMultiSelects();
   applyTheme(getTheme());
 }());

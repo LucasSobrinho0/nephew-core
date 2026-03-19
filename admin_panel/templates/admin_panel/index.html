@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+
+{% block title %}Painel Admin{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Painel Admin</span>
+    <h1>Administracao global do sistema</h1>
+    <p class="text-body-secondary mb-0">Use esta area para acompanhar os acessos administrativos globais e navegar pelas interfaces exclusivas do grupo Admin.</p>
+  </section>
+
+  <section class="glass-card bot-conversa-subnav mb-4">
+    {% for tab in admin_panel_tabs %}
+      <a href="{% url tab.route_name %}" class="bot-conversa-tab {% if admin_panel_active_tab == tab.key %}active{% endif %}">
+        <i class="{{ tab.icon_class }}"></i>
+        <span class="ms-2">{{ tab.label }}</span>
+      </a>
+    {% endfor %}
+  </section>
+
+  <section class="row g-4 mb-4">
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><i class="bi bi-person-badge-fill"></i></div>
+        <div>
+          <span class="stat-label">Acessos logados</span>
+          <h2>{{ summary.total_access_logs }}</h2>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card glass-card">
+        <div class="stat-icon"><i class="bi bi-broadcast-pin"></i></div>
+        <div>
+          <span class="stat-label">Sessoes abertas</span>
+          <h2>{{ summary.open_sessions }}</h2>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="row g-4">
+    <div class="col-xl-6">
+      <div class="glass-card integration-card h-100">
+        <div class="integration-card-header">
+          <div class="integration-card-title">
+            <span class="placeholder-icon"><i class="bi bi-speedometer2"></i></span>
+            <div>
+              <span class="section-kicker">Visao geral</span>
+              <h2>Resumo do painel</h2>
+            </div>
+          </div>
+          <span class="status-badge status-available">Ativo</span>
+        </div>
+        <p class="text-body-secondary mb-4">Area global reservada para operadores do grupo Admin com validacao no backend.</p>
+        {% if summary.latest_entry %}
+          <dl class="details-grid">
+            <div>
+              <dt>Ultimo acesso</dt>
+              <dd>{{ summary.latest_entry.logged_in_at|date:'d/m/Y H:i' }}</dd>
+            </div>
+            <div>
+              <dt>Usuario</dt>
+              <dd>{{ summary.latest_entry.user.full_name|default:'Nao identificado' }}</dd>
+            </div>
+            <div>
+              <dt>IP</dt>
+              <dd>{{ summary.latest_entry.ip_address|default:'Nao informado' }}</dd>
+            </div>
+          </dl>
+        {% else %}
+          <div class="soft-empty text-start px-0 pb-0">
+            <p class="mb-0">Ainda nao existe historico de acesso registrado.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-xl-6">
+      <div class="glass-card integration-card h-100">
+        <div class="integration-card-header">
+          <div class="integration-card-title">
+            <span class="placeholder-icon"><i class="bi bi-router-fill"></i></span>
+            <div>
+              <span class="section-kicker">IPs</span>
+              <h2>IPs de acesso</h2>
+            </div>
+          </div>
+        </div>
+        <p class="text-body-secondary mb-4">Consulte os acessos mais recentes, acompanhe sessoes abertas e veja quem entrou e saiu do sistema.</p>
+        {% if summary.top_ip_addresses %}
+          <div class="table-responsive mb-4">
+            <table class="table table-clean align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>IP</th>
+                  <th class="text-end">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in summary.top_ip_addresses %}
+                  <tr>
+                    <td>{{ item.ip_address }}</td>
+                    <td class="text-end">{{ item.total }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+        <a href="{% url 'admin_panel:ip_logs' %}" class="btn btn-brand">Abrir listagem de IPs</a>
+      </div>
+    </div>
+  </section>
+{% endblock %}
+

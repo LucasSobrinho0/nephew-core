@@ -1,6 +1,11 @@
 from django import forms
 
-from apollo_integration.constants import APOLLO_EMPLOYEE_RANGE_CHOICES
+from apollo_integration.constants import (
+    APOLLO_COUNTRY_CHOICES,
+    APOLLO_EMPLOYEE_RANGE_CHOICES,
+    APOLLO_INDUSTRY_CHOICES,
+    APOLLO_PERSON_TITLE_CHOICES,
+)
 from common.forms import BootstrapFormMixin
 
 
@@ -20,21 +25,33 @@ class ApolloOrganizationSearchForm(BootstrapFormMixin, forms.Form):
         required=False,
         widget=forms.TextInput(attrs={'placeholder': 'empresa.com, outra.com'}),
     )
-    organization_locations = forms.CharField(
-        label='Paises ou regioes',
+    organization_locations = forms.ChoiceField(
+        label='Pais',
         required=False,
-        widget=forms.TextInput(attrs={'placeholder': 'Brazil, Mexico'}),
+        choices=APOLLO_COUNTRY_CHOICES,
+        widget=forms.Select(),
     )
-    organization_industries = forms.CharField(
+    organization_industries = forms.MultipleChoiceField(
         label='Segmentos',
         required=False,
-        widget=forms.TextInput(attrs={'placeholder': 'environmental services, logistics'}),
+        choices=APOLLO_INDUSTRY_CHOICES,
+        widget=forms.SelectMultiple(
+            attrs={
+                'data-enhanced-multiselect': 'true',
+                'data-placeholder': 'Pesquisar segmentos',
+            }
+        ),
     )
     organization_num_employees_ranges = forms.MultipleChoiceField(
         label='Faixas de funcionarios',
         required=False,
         choices=APOLLO_EMPLOYEE_RANGE_CHOICES,
-        widget=forms.SelectMultiple(),
+        widget=forms.SelectMultiple(
+            attrs={
+                'data-enhanced-multiselect': 'true',
+                'data-placeholder': 'Pesquisar faixas de funcionarios',
+            }
+        ),
     )
     page = forms.IntegerField(required=False, min_value=1, initial=1, widget=forms.HiddenInput())
     per_page = forms.ChoiceField(
@@ -51,10 +68,11 @@ class ApolloOrganizationSearchForm(BootstrapFormMixin, forms.Form):
         return self._split_csv_values(self.cleaned_data.get('q_organization_domains', ''))
 
     def clean_organization_locations(self):
-        return self._split_csv_values(self.cleaned_data.get('organization_locations', ''))
+        selected_location = (self.cleaned_data.get('organization_locations') or '').strip()
+        return [selected_location] if selected_location else []
 
     def clean_organization_industries(self):
-        return self._split_csv_values(self.cleaned_data.get('organization_industries', ''))
+        return self.cleaned_data.get('organization_industries') or []
 
     def clean_per_page(self):
         return int(self.cleaned_data.get('per_page') or 25)
@@ -112,10 +130,16 @@ class ApolloPeopleSearchForm(BootstrapFormMixin, forms.Form):
         required=False,
         widget=forms.TextInput(attrs={'placeholder': 'empresa.com, outra.com'}),
     )
-    person_titles = forms.CharField(
+    person_titles = forms.MultipleChoiceField(
         label='Cargos',
         required=False,
-        widget=forms.TextInput(attrs={'placeholder': 'financial supervisor, it manager'}),
+        choices=APOLLO_PERSON_TITLE_CHOICES,
+        widget=forms.SelectMultiple(
+            attrs={
+                'data-enhanced-multiselect': 'true',
+                'data-placeholder': 'Pesquisar cargos',
+            }
+        ),
     )
     q_keywords = forms.CharField(
         label='Nome ou palavra-chave',
@@ -152,7 +176,7 @@ class ApolloPeopleSearchForm(BootstrapFormMixin, forms.Form):
         return self._split_csv_values(self.cleaned_data.get('q_organization_domains', ''))
 
     def clean_person_titles(self):
-        return self._split_csv_values(self.cleaned_data.get('person_titles', ''))
+        return self.cleaned_data.get('person_titles') or []
 
     def clean_q_keywords(self):
         return (self.cleaned_data.get('q_keywords') or '').strip()

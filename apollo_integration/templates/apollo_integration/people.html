@@ -44,7 +44,15 @@
                   <tr data-filter-item data-filter-text="{{ row.person.full_name }} {{ row.person.email|default:'' }} {{ row.person.phone|default:'' }} {{ row.person.company.name|default:'Sem empresa' }} {% if row.is_apollo_synced %}Sincronizada{% else %}Pendente{% endif %}">
                     <td>{{ row.person.full_name }}<div class="text-body-secondary small">{{ row.person.email|default:row.person.phone|default:'-' }}</div></td>
                     <td>{{ row.person.company.name|default:'Sem empresa' }}</td>
-                    <td>{% if row.is_apollo_synced %}Sincronizada{% else %}Pendente{% endif %}</td>
+                    <td>
+                      {% if row.is_pending_enrichment %}
+                        Pendente de enrichment
+                      {% elif row.is_apollo_synced %}
+                        Sincronizada
+                      {% else %}
+                        Pendente
+                      {% endif %}
+                    </td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -62,9 +70,6 @@
       <div class="glass-card content-card h-100 scroll-card" id="apolloRemotePeopleCard">
         <div class="content-card-header">
           <div><span class="section-kicker">Apollo remoto</span><h2>Pessoas encontradas</h2></div>
-          {% if has_loaded_remote_people and can_manage_apollo and remote_people %}
-            <button type="submit" form="apolloBulkRemotePersonImportForm" class="btn btn-brand w-100 w-md-auto">Salvar selecionadas</button>
-          {% endif %}
         </div>
 
         <form method="get" action="{% url 'apollo_integration:people' %}" class="row g-3 align-items-end mb-4" data-async-list-form data-async-target="#apolloRemotePeopleCard" data-loading-text="Buscando pessoas...">
@@ -143,6 +148,11 @@
                 </tbody>
               </table>
             </div>
+            {% if can_manage_apollo and remote_people %}
+              <div class="d-flex justify-content-end mt-3">
+                <button type="submit" class="btn btn-brand w-100 w-md-auto">Salvar selecionadas</button>
+              </div>
+            {% endif %}
           </form>
           {% if pagination_links.total_pages %}
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mt-3">
@@ -179,4 +189,25 @@
       </div>
     </div>
   </section>
+
+  {% if show_pending_enrichment_prompt %}
+    {% include 'partials/confirmation_modal.html' with modal_id='apolloPendingEnrichmentModal' modal_kicker='Apollo' modal_title='Enriquecer dados das pessoas sincronizadas?' modal_message=pending_enrichment_prompt_message modal_warning='Este enrichment pode consumir creditos da sua conta Apollo.' modal_cancel_label='Nao' modal_confirm_label='Sim, enriquecer agora' modal_confirm_url=enrichment_prefill_url %}
+  {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+  {{ block.super }}
+  {% if show_pending_enrichment_prompt %}
+    <script>
+      (function () {
+        var modalElement = document.getElementById('apolloPendingEnrichmentModal');
+        if (!modalElement || typeof bootstrap === 'undefined') {
+          return;
+        }
+        window.setTimeout(function () {
+          bootstrap.Modal.getOrCreateInstance(modalElement).show();
+        }, 150);
+      }());
+    </script>
+  {% endif %}
 {% endblock %}

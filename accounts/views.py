@@ -8,6 +8,7 @@ from django.views.generic import FormView
 
 from accounts.forms import LoginForm, RegistrationForm
 from accounts.services import AccountService
+from admin_panel.services import AdminAccessAuditService
 from common.mixins import AnonymousOnlyMixin
 from organizations.services import ActiveOrganizationService
 
@@ -50,6 +51,7 @@ class RegisterView(AnonymousOnlyMixin, FormView):
 
 class LogoutView(LoginRequiredMixin, View):
     def post(self, request, *args, **kwargs):
+        AdminAccessAuditService.record_logout(request=request)
         logout(request)
         messages.info(request, 'Voce saiu da sua conta.')
         return redirect('accounts:login')

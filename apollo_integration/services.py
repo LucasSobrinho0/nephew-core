@@ -416,6 +416,27 @@ class ApolloCompanyService:
 
 class ApolloPersonService:
     @staticmethod
+    def has_censored_name(person):
+        return '***' in (person.full_name or '')
+
+    @staticmethod
+    def is_person_pending_enrichment(person):
+        if not person.apollo_person_id:
+            return False
+        return ApolloPersonService.has_censored_name(person)
+
+    @staticmethod
+    def build_enrichment_prefill_query(*, persons, fetch_phone=True):
+        person_public_ids = [str(person.public_id) for person in persons if person.apollo_person_id]
+        query_parts = []
+        for person_public_id in person_public_ids:
+            query_parts.append(f'person_public_ids={person_public_id}')
+        if fetch_phone:
+            query_parts.append('fetch_phone=1')
+        query_parts.append('prefill_enrichment=1')
+        return '&'.join(query_parts)
+
+    @staticmethod
     def build_person_rows(*, organization):
         persons = [
             person
@@ -426,6 +447,7 @@ class ApolloPersonService:
             {
                 'person': person,
                 'is_apollo_synced': bool(person.apollo_person_id),
+                'is_pending_enrichment': ApolloPersonService.is_person_pending_enrichment(person),
             }
             for person in persons
         ]
@@ -435,11 +457,11 @@ class ApolloPersonService:
         persons = [
             person
             for person in PersonRepository.list_for_organization(organization)
-            if person.apollo_person_id
+            if ApolloPersonService.is_person_pending_enrichment(person)
         ]
         rows = []
         for person in persons:
-            has_uncensored_last_name = bool(person.last_name and '*' not in person.last_name)
+            has_uncensored_last_name = not ApolloPersonService.has_censored_name(person)
             has_email = bool(person.email)
             rows.append(
                 {
@@ -766,24 +788,27 @@ class ApolloPersonService:
             raise ValidationError('Selecione pelo menos uma pessoa sincronizada com o Apollo para enriquecer.')
 
         synced_at = timezone.now()
-        enrichment_job = None
+        enrichment_job = ApolloPeopleEnrichmentJobRepository.create(
+            organization=organization,
+            installation=installation,
+            actor=user,
+            status=(
+                ApolloPeopleEnrichmentJob.Status.WEBHOOK_PENDING
+                if fetch_phone
+                else ApolloPeopleEnrichmentJob.Status.COMPLETED
+            ),
+            fetch_phone=fetch_phone,
+            webhook_token=secrets.token_urlsafe(32) if fetch_phone else '',
+            total_people=len(apollo_person_ids),
+            processed_people=0,
+            success_people=0,
+            failed_people=0,
+            started_at=synced_at,
+            request_payload={'apollo_person_ids': apollo_person_ids},
+        )
         webhook_url = ''
         if fetch_phone:
             ApolloPersonService.validate_phone_enrichment_target(request=request)
-            enrichment_job = ApolloPeopleEnrichmentJobRepository.create(
-                organization=organization,
-                installation=installation,
-                actor=user,
-                status=ApolloPeopleEnrichmentJob.Status.WEBHOOK_PENDING,
-                fetch_phone=True,
-                webhook_token=secrets.token_urlsafe(32),
-                total_people=len(apollo_person_ids),
-                processed_people=0,
-                success_people=0,
-                failed_people=0,
-                started_at=synced_at,
-                request_payload={'apollo_person_ids': apollo_person_ids},
-            )
             webhook_url = ApolloPersonService.build_webhook_url(job=enrichment_job, request=request)
 
         enriched_payload_by_apollo_id = {}
@@ -804,19 +829,22 @@ class ApolloPersonService:
                 reveal_phone_number=fetch_phone,
                 webhook_url=webhook_url,
             )
-            if enrichment_job is not None:
-                for detail in details:
-                    enrichment_items.append(
-                        ApolloPeopleEnrichmentItem(
-                            organization=organization,
-                            job=enrichment_job,
-                            person=people_by_apollo_id[detail['id']],
-                            apollo_person_id=detail['id'],
-                            status=ApolloPeopleEnrichmentItem.Status.WAITING_WEBHOOK,
-                            requested_phone=True,
-                            request_payload=detail,
-                        )
+            for detail in details:
+                enrichment_items.append(
+                    ApolloPeopleEnrichmentItem(
+                        organization=organization,
+                        job=enrichment_job,
+                        person=people_by_apollo_id[detail['id']],
+                        apollo_person_id=detail['id'],
+                        status=(
+                            ApolloPeopleEnrichmentItem.Status.WAITING_WEBHOOK
+                            if fetch_phone
+                            else ApolloPeopleEnrichmentItem.Status.COMPLETED
+                        ),
+                        requested_phone=fetch_phone,
+                        request_payload=detail,
                     )
+                )
             for remote_person in result['people']:
                 remote_apollo_person_id = remote_person.get('apollo_person_id', '')
                 if remote_apollo_person_id:
@@ -848,8 +876,7 @@ class ApolloPersonService:
 
         if enrichment_items:
             ApolloPeopleEnrichmentItemRepository.bulk_create(enrichment_items)
-        if enrichment_job is not None:
-            ApolloPersonService.refresh_enrichment_job(enrichment_job)
+        ApolloPersonService.refresh_enrichment_job(enrichment_job)
 
         return {
             'requested_count': len(apollo_person_ids),
@@ -902,6 +929,7 @@ class ApolloPersonService:
                         remote_person.get('personal_emails'),
                     ),
                 },
+                user=job.actor,
                 synced_at=synced_at,
             )
 
@@ -909,6 +937,8 @@ class ApolloPersonService:
                 phone_value = ApolloPersonService._extract_phone_from_remote_person(remote_person)
                 if phone_value and person.phone != phone_value:
                     person.phone = phone_value
+                    if job.actor is not None:
+                        person.updated_by = job.actor
                     person.updated_at = synced_at
                     ApolloBulkPreparationService.prepare_person(person)
                     person_changed = True
@@ -943,7 +973,7 @@ class ApolloPersonService:
                 unique_people.append(person)
             PersonRepository.bulk_update(
                 unique_people,
-                ['first_name', 'last_name', 'email', 'email_lookup', 'phone', 'normalized_phone', 'updated_at'],
+                ['first_name', 'last_name', 'email', 'email_lookup', 'phone', 'normalized_phone', 'updated_by', 'updated_at'],
             )
 
         ApolloPersonService.refresh_enrichment_job(job)

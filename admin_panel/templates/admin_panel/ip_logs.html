@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+
+{% block title %}IPs de Acesso{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Painel Admin</span>
+    <h1>IPs de acesso</h1>
+    <p class="text-body-secondary mb-0">Auditoria global de login e logout com IP, usuario, horario de entrada e horario de saida.</p>
+  </section>
+
+  <section class="glass-card bot-conversa-subnav mb-4">
+    {% for tab in admin_panel_tabs %}
+      <a href="{% url tab.route_name %}" class="bot-conversa-tab {% if admin_panel_active_tab == tab.key %}active{% endif %}">
+        <i class="{{ tab.icon_class }}"></i>
+        <span class="ms-2">{{ tab.label }}</span>
+      </a>
+    {% endfor %}
+  </section>
+
+  <section class="glass-card content-card">
+    <div class="content-card-header">
+      <div>
+        <span class="section-kicker">Auditoria</span>
+        <h2>Historico de acessos</h2>
+        <p class="text-body-secondary mb-0">Resultados carregados com keyset pagination no backend e navegacao por cursor entre registros mais recentes e mais antigos.</p>
+      </div>
+      <span class="status-badge status-available">{{ pagination.total_count }} registro{{ pagination.total_count|pluralize }}</span>
+    </div>
+
+    <form method="get" class="row g-3 align-items-end mb-4">
+      <div class="col-sm-3 col-lg-2">
+        <label for="{{ filter_form.per_page.id_for_label }}" class="form-label">{{ filter_form.per_page.label }}</label>
+        {{ filter_form.per_page }}
+      </div>
+      <div class="col-sm-3 col-lg-2">
+        <button type="submit" class="btn btn-outline-secondary">Aplicar</button>
+      </div>
+    </form>
+
+    {% if ip_logs %}
+      <div class="table-responsive">
+        <table class="table table-clean align-middle mb-0">
+          <thead>
+            <tr>
+              <th>IP</th>
+              <th>Quem entrou</th>
+              <th>Entrou em</th>
+              <th>Quem saiu</th>
+              <th>Saiu em</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for access_log in ip_logs %}
+              <tr>
+                <td>{{ access_log.ip_address|default:'Nao informado' }}</td>
+                <td>
+                  {% if access_log.logged_in_by %}
+                    {{ access_log.logged_in_by.full_name }}
+                  {% elif access_log.user %}
+                    {{ access_log.user.full_name }}
+                  {% else %}
+                    Nao identificado
+                  {% endif %}
+                </td>
+                <td>{{ access_log.logged_in_at|date:'d/m/Y H:i:s' }}</td>
+                <td>
+                  {% if access_log.logged_out_by %}
+                    {{ access_log.logged_out_by.full_name }}
+                  {% elif access_log.logged_out_at %}
+                    Usuario indisponivel
+                  {% else %}
+                    Sessao aberta
+                  {% endif %}
+                </td>
+                <td>
+                  {% if access_log.logged_out_at %}
+                    {{ access_log.logged_out_at|date:'d/m/Y H:i:s' }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if pagination.previous_url or pagination.next_url %}
+        <div class="d-flex flex-wrap justify-content-end align-items-center gap-2 mt-4">
+          {% if pagination.previous_url %}
+            <a href="{{ pagination.previous_url }}" class="btn btn-outline-secondary btn-sm">Anterior</a>
+          {% endif %}
+          {% if pagination.next_url %}
+            <a href="{{ pagination.next_url }}" class="btn btn-outline-secondary btn-sm">Proxima</a>
+          {% endif %}
+        </div>
+      {% endif %}
+    {% else %}
+      <div class="soft-empty text-start px-0 pb-0">
+        <p class="mb-0">Ainda nao existe nenhum acesso registrado no sistema.</p>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

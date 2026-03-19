@@ -1,3 +1,4 @@
+from admin_panel.services import AdminAuthorizationService
 from integrations.services import InstalledAppNavigationService
 
 
@@ -10,4 +11,5 @@ def active_organization(request):
         'sidebar_installed_apps': InstalledAppNavigationService.build_navigation_items(
             organization=active_organization,
         ),
+        'has_admin_panel_access': AdminAuthorizationService.has_panel_access(getattr(request, 'user', None)),
     }

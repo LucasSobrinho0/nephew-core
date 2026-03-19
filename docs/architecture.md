@@ -7,6 +7,7 @@
 - `accounts`: custom user model, registration, login, logout, and account-focused services.
 - `organizations`: tenant domain, memberships, invite codes, onboarding, organization switching, and permission-sensitive services.
 - `dashboard`: authenticated application pages that depend on the active organization context.
+- `admin_panel`: global administrative surface restricted by Django auth groups, with access-audit visibility outside tenant scope.
 - `companies`: tenant-scoped CRM companies.
 - `people`: tenant-scoped CRM persons and contact identity.
 - `integrations`: app catalog, tenant installations, encrypted credentials, and credential access audit.
@@ -69,6 +70,12 @@ NephewCRM/
 - Uses unique codes with `ADM XXXXXXXX` and `USR XXXXXXXX` patterns.
 - Includes `public_id`, `created_at`, and `updated_at`.
 
+### `admin_panel.AdminAccessLog`
+
+- Global audit table for authenticated session access.
+- Stores `user`, `logged_in_by`, `logged_out_by`, `session_key`, `ip_address`, `user_agent`, `logged_in_at`, and `logged_out_at`.
+- Supports administrative visibility of who entered and left the system and from which IP.
+
 ### `companies.Company`
 
 - Tenant-scoped CRM company table.
@@ -84,18 +91,26 @@ NephewCRM/
 
 ## Roles and permissions
 
+- System role source:
+  Django `auth_group`, using global groups such as `Admin` and `User`.
 - `owner`
   Highest organization role. Can manage invites, members, integrations, and organization-level actions.
 - `admin`
   Can manage invites and tenant-scoped operational actions inside the active organization.
 - `user`
   Can access tenant-safe workspace modules but cannot execute manager-only actions.
+- `Admin` group
+  Can access the global `Painel Admin`, including the IP access audit screens.
+- `User` group
+  Default global system group without access to `Painel Admin`.
 
 ## Multi-tenancy decisions
 
 - Strategy: shared schema with row-level tenant isolation.
 - Active tenant source: `active_organization_id` in session.
 - Request resolution: middleware loads `request.active_organization` and `request.active_membership`.
+- Global administrative authorization is independent from tenant membership and is validated by Django auth group membership.
+- Authenticated requests also pass through a global access-audit middleware that guarantees the current session IP is persisted, even when the session was already active before the request.
 - Safe switching: only via POST to `organizations/switch/` after validating membership.
 - Fallback behavior: when a user has memberships but no active organization in session, the middleware selects the first valid membership.
 - No access: when a user has no memberships, dashboard renders an empty state instead of tenant data.
@@ -114,6 +129,8 @@ NephewCRM/
   Encapsulates tenant-scoped company reads and writes.
 - `people.repositories.PersonRepository`
   Encapsulates tenant-scoped person reads and writes.
+- `admin_panel.repositories.AdminAccessLogRepository`
+  Encapsulates global access-audit reads, counts, and keyset-based page retrieval.
 
 ## Services
 
@@ -131,6 +148,14 @@ NephewCRM/
   Creates and updates tenant-scoped companies.
 - `people.services.PersonService`
   Creates and updates tenant-scoped persons with normalized contact data.
+- `admin_panel.services.AdminAuthorizationService`
+  Validates membership in the global `Admin` auth group.
+- `admin_panel.services.AdminAccessAuditService`
+  Records login and logout events with IP address, session key, and actor.
+- `admin_panel.middleware.AdminAccessAuditMiddleware`
+  Ensures every authenticated session has a current IP audit record and opens a new record when the session IP changes.
+- `admin_panel.services.AdminAccessLogPaginationService`
+  Resolves keyset-based access log pages with cursor navigation for previous and next slices.
 - `bot_conversa.services.*`
   Encapsulates Bot Conversa installation resolution, remote contact sync, tag cache refresh, tag assignment, flow cache refresh, and dispatch processing.
 - `hubspot_integration.services.*`
@@ -149,6 +174,8 @@ NephewCRM/
 - `/onboarding/create/`
 - `/onboarding/join/`
 - `/dashboard/`
+- `/admin-panel/`
+- `/admin-panel/ips/`
 - `/organizations/`
 - `/organizations/switch/`
 - `/invites/`
@@ -185,6 +212,8 @@ NephewCRM/
 - Invite generation requires both:
   a valid active organization,
   and a role of `owner` or `admin`.
+- `Painel Admin` access requires backend validation that the authenticated user belongs to Django auth group `Admin`.
+- Login and logout events are stored in the database with session key, IP, actor, and timestamps for administrative audit.
 - Bot Conversa, HubSpot, Gmail, and API key mutation flows require both:
   a valid active organization,
   and a manager-capable membership.

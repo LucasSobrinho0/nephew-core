@@ -205,7 +205,7 @@ class ApolloModuleTests(TestCase):
                 'q_organization_name': 'Apollo',
                 'q_organization_domains': ['acme.io'],
                 'organization_locations': ['Brazil'],
-                'organization_industries': ['Software'],
+                'organization_industries': ['environmental services', 'retail'],
                 'organization_num_employees_ranges': ['101,200'],
                 'per_page': 25,
             },
@@ -216,7 +216,7 @@ class ApolloModuleTests(TestCase):
         self.assertEqual(fake_client.last_search_payload['q_organization_name'], 'Apollo')
         self.assertEqual(fake_client.last_search_payload['q_organization_domains_list'], ['acme.io'])
         self.assertEqual(fake_client.last_search_payload['organization_locations'], ['Brazil'])
-        self.assertEqual(fake_client.last_search_payload['organization_industries'], ['Software'])
+        self.assertEqual(fake_client.last_search_payload['organization_industries'], ['environmental services', 'retail'])
         self.assertEqual(fake_client.last_search_payload['organization_num_employees_ranges'], ['101,200'])
 
     def test_import_remote_companies_persists_apollo_fields(self):
@@ -302,6 +302,8 @@ class ApolloModuleTests(TestCase):
         self.assertContains(response, 'Filtrar empresas remotas')
         self.assertContains(response, 'Salvar selecionadas')
         self.assertNotContains(response, 'Salvar no CRM')
+        self.assertContains(response, 'Servicos ambientais')
+        self.assertContains(response, 'data-enhanced-multiselect="true"', html=False)
 
     @patch('apollo_integration.services.ApolloInstallationService.build_client')
     def test_remote_people_list_builds_apollo_payload_from_company_and_person_filters(self, build_client_mock):
@@ -319,7 +321,7 @@ class ApolloModuleTests(TestCase):
             organization=self.organization,
             filters={
                 'company_public_id': str(company.public_id),
-                'person_titles': ['financial supervisor'],
+                'person_titles': ['fp&a manager', 'financial supervisor'],
                 'q_keywords': 'Carla',
                 'contact_email_status': 'verified',
                 'per_page': 25,
@@ -329,7 +331,7 @@ class ApolloModuleTests(TestCase):
         self.assertEqual(response['pagination']['total_entries'], 1)
         self.assertEqual(len(response['people']), 1)
         self.assertEqual(fake_client.last_people_payload['q_organization_domains_list'], ['acme.io'])
-        self.assertEqual(fake_client.last_people_payload['person_titles'], ['financial supervisor'])
+        self.assertEqual(fake_client.last_people_payload['person_titles'], ['fp&a manager', 'financial supervisor'])
         self.assertEqual(fake_client.last_people_payload['q_keywords'], 'Carla')
         self.assertEqual(fake_client.last_people_payload['contact_email_status'], 'verified')
 
@@ -400,6 +402,8 @@ class ApolloModuleTests(TestCase):
         self.assertContains(response, 'Filtrar pessoas remotas')
         self.assertContains(response, 'Salvar selecionadas')
         self.assertNotContains(response, 'Salvar no CRM')
+        self.assertContains(response, 'Supervisor Financeiro')
+        self.assertContains(response, 'Pesquisar cargos')
 
     def test_people_page_local_list_shows_only_apollo_synced_people(self):
         synced_person = Person.objects.create(
@@ -426,6 +430,73 @@ class ApolloModuleTests(TestCase):
 
         self.assertContains(response, synced_person.full_name)
         self.assertNotContains(response, 'Pessoa Sem Apollo')
+
+    def test_people_page_shows_enrichment_prompt_for_pending_apollo_people(self):
+        pending_person = Person.objects.create(
+            organization=self.organization,
+            first_name='Arghie',
+            last_name='Gu***s',
+            apollo_person_id='apollo-person-pending',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.get(reverse('apollo_integration:people'), {'load_local': '1'})
+
+        self.assertContains(response, 'Enriquecer dados das pessoas sincronizadas?')
+        self.assertContains(response, 'pessoa(s) sincronizada(s) com o Apollo ainda pendente(s) de enrichment')
+        self.assertContains(response, str(pending_person.public_id))
+        self.assertContains(response, 'fetch_phone=1')
+
+    def test_enrichment_page_lists_only_pending_people_and_prefills_selection(self):
+        pending_person = Person.objects.create(
+            organization=self.organization,
+            first_name='Ashraf',
+            last_name='Ha***n',
+            apollo_person_id='apollo-person-pending',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        enriched_person = Person.objects.create(
+            organization=self.organization,
+            first_name='Carla',
+            last_name='Souza',
+            email='carla.souza@example.com',
+            phone='+55 11 98888-7777',
+            apollo_person_id='apollo-person-enriched',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.get(
+            reverse('apollo_integration:enrichment'),
+            {
+                'person_public_ids': [str(pending_person.public_id)],
+                'fetch_phone': '1',
+                'prefill_enrichment': '1',
+            },
+        )
+
+        self.assertContains(response, pending_person.full_name)
+        self.assertNotContains(response, enriched_person.full_name)
+        self.assertContains(response, 'checked', count=2)
+        self.assertContains(response, 'Esta operacao pode consumir creditos do Apollo.')
+
+    def test_person_without_censored_name_is_not_pending_enrichment_without_email_or_phone(self):
+        person = Person.objects.create(
+            organization=self.organization,
+            first_name='Carla',
+            last_name='Souza',
+            apollo_person_id='apollo-person-clean',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+
+        self.assertFalse(ApolloPersonService.is_person_pending_enrichment(person))
 
     @patch('apollo_integration.services.ApolloInstallationService.build_client')
     def test_enrichment_updates_local_person_name_and_email(self, build_client_mock):
@@ -519,6 +590,31 @@ class ApolloModuleTests(TestCase):
         self.assertTrue(result['fetch_phone'])
         self.assertIsNotNone(result['enrichment_job'])
         self.assertEqual(result['enrichment_job'].status, ApolloPeopleEnrichmentJob.Status.WEBHOOK_PENDING)
+        self.assertEqual(result['enrichment_job'].actor, self.owner)
+
+    @patch('apollo_integration.services.ApolloInstallationService.build_client')
+    def test_enrichment_without_phone_still_creates_job_with_actor_and_updates_person_actor(self, build_client_mock):
+        build_client_mock.return_value = FakeApolloClient()
+        person = Person.objects.create(
+            organization=self.organization,
+            first_name='Carla',
+            last_name='So***a',
+            apollo_person_id='apollo-person-1',
+            created_by=self.owner,
+            updated_by=self.user,
+        )
+
+        result = ApolloPersonService.enrich_people(
+            user=self.owner,
+            organization=self.organization,
+            people=[person],
+            fetch_phone=False,
+        )
+
+        person.refresh_from_db()
+        self.assertIsNotNone(result['enrichment_job'])
+        self.assertEqual(result['enrichment_job'].actor, self.owner)
+        self.assertEqual(person.updated_by, self.owner)
 
     @patch('apollo_integration.services.ApolloInstallationService.build_client')
     def test_people_page_renders_remote_people(self, build_client_mock):

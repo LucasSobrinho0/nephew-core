@@ -1,5 +1,6 @@
 from django.contrib.auth import login
 
+from admin_panel.services import AdminAccessAuditService
 from accounts.repositories import UserRepository
 
 
@@ -17,3 +18,4 @@ class AccountService:
         login(request, user)
         if not remember_me:
             request.session.set_expiry(0)
+        AdminAccessAuditService.record_login(request=request, user=user)

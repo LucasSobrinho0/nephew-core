@@ -274,6 +274,17 @@ class ApolloPeopleView(ApolloAccessMixin, TemplateView):
         if has_loaded_local_people:
             person_rows = ApolloPersonService.build_person_rows(organization=self.active_organization)
 
+        pending_enrichment_rows = [row for row in person_rows if row['is_pending_enrichment']]
+        enrichment_prefill_url = ''
+        if pending_enrichment_rows:
+            enrichment_prefill_url = self.build_url_with_query(
+                'apollo_integration:enrichment',
+                ApolloPersonService.build_enrichment_prefill_query(
+                    persons=[row['person'] for row in pending_enrichment_rows],
+                    fetch_phone=True,
+                ),
+            )
+
         if has_loaded_remote_people and search_form.is_valid():
             try:
                 remote_result = ApolloPersonService.list_remote_people(
@@ -303,6 +314,12 @@ class ApolloPeopleView(ApolloAccessMixin, TemplateView):
                 'has_loaded_local_people': has_loaded_local_people,
                 'has_loaded_remote_people': has_loaded_remote_people,
                 'current_remote_query': self.request.GET.urlencode(),
+                'pending_enrichment_count': len(pending_enrichment_rows),
+                'show_pending_enrichment_prompt': has_loaded_local_people and bool(pending_enrichment_rows),
+                'enrichment_prefill_url': enrichment_prefill_url,
+                'pending_enrichment_prompt_message': (
+                    f'Encontramos {len(pending_enrichment_rows)} pessoa(s) sincronizada(s) com o Apollo ainda pendente(s) de enrichment. Deseja enriquecer esses dados agora?'
+                ),
             }
         )
         return context
@@ -314,16 +331,31 @@ class ApolloPeopleEnrichmentView(ApolloAccessMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         enrichment_rows = ApolloPersonService.build_enrichment_rows(organization=self.active_organization)
+        selected_public_ids = [value.strip() for value in self.request.GET.getlist('person_public_ids') if value.strip()]
+        selected_public_ids = {
+            value
+            for value in selected_public_ids
+            if any(str(row['person'].public_id) == value for row in enrichment_rows)
+        }
+        for row in enrichment_rows:
+            row['is_preselected'] = str(row['person'].public_id) in selected_public_ids
+        fetch_phone_initial = self.request.GET.get('fetch_phone') == '1'
         context.update(self.build_base_context(active_tab='enrichment'))
         context.update(
             {
                 'enrichment_rows': enrichment_rows,
                 'enrichment_form': kwargs.get('enrichment_form') or ApolloPeopleEnrichmentForm(
+                    initial={
+                        'person_public_ids': list(selected_public_ids),
+                        'fetch_phone': fetch_phone_initial,
+                    },
                     person_choices=[(str(row['person'].public_id), row['person'].full_name) for row in enrichment_rows]
                 ),
                 'recent_enrichment_jobs': ApolloPersonService.build_recent_enrichment_jobs(
                     organization=self.active_organization
                 ),
+                'selected_enrichment_public_ids': selected_public_ids,
+                'prefill_enrichment': self.request.GET.get('prefill_enrichment') == '1',
             }
         )
         return context

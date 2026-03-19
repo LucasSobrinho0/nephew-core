@@ -15,6 +15,12 @@
     <i class="bi bi-people-fill"></i>
     <span>Pessoas</span>
   </a>
+  {% if has_admin_panel_access %}
+    <a href="{% url 'admin_panel:index' %}" class="nav-link crm-nav-link {% if request.resolver_match.namespace == 'admin_panel' %}active{% endif %}">
+      <i class="bi bi-shield-lock-fill"></i>
+      <span>Painel Admin</span>
+    </a>
+  {% endif %}
   <button
     class="nav-link crm-nav-link crm-nav-dropdown-button {% if request.resolver_match.namespace == 'bot_conversa' or request.resolver_match.namespace == 'integrations' or request.resolver_match.namespace == 'gmail_integration' or request.resolver_match.namespace == 'hubspot_integration' or request.resolver_match.namespace == 'apollo_integration' %}active{% endif %}"
     type="button"
