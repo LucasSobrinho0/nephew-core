@@ -4,9 +4,18 @@
 
 {% block content %}
   <section class="page-header mb-4">
-    <span class="section-kicker">CRM</span>
-    <h1>Empresas da organizacao</h1>
-    <p class="text-body-secondary mb-0">Cadastre e mantenha as empresas da base ativa. Campos de integracao aparecem somente quando o app correspondente estiver instalado.</p>
+    <div class="d-flex flex-column flex-lg-row gap-3 align-items-lg-start justify-content-between">
+      <div>
+        <span class="section-kicker">CRM</span>
+        <h1>Empresas da organizacao</h1>
+        <p class="text-body-secondary mb-0">Cadastre e mantenha as empresas da base ativa. Campos de integracao aparecem somente quando o app correspondente estiver instalado.</p>
+      </div>
+      {% if can_manage_company_import %}
+        <div class="pt-lg-2">
+          <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#companiesImportModal">Importar planilha</button>
+        </div>
+      {% endif %}
+    </div>
   </section>
 
   <section class="row g-4">
@@ -44,9 +53,6 @@
             <p class="text-body-secondary mb-0">Todas as empresas abaixo pertencem somente a organizacao ativa.</p>
           </div>
           <div class="d-flex flex-wrap gap-2 align-items-center">
-            {% if can_manage_company_import %}
-              <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#companiesImportModal">Importar planilha</button>
-            {% endif %}
             {% if has_loaded_companies %}
               <span class="status-badge status-available">{{ company_rows|length }} registro{{ company_rows|length|pluralize }}</span>
             {% else %}

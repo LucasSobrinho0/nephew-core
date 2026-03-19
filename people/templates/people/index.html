@@ -4,9 +4,18 @@
 
 {% block content %}
   <section class="page-header mb-4">
-    <span class="section-kicker">CRM</span>
-    <h1>Pessoas da organização</h1>
-    <p class="text-body-secondary mb-0">Cadastre, consulte e mantenha atualizados os contatos que poderão ser usados nos aplicativos instalados.</p>
+    <div class="d-flex flex-column flex-lg-row gap-3 align-items-lg-start justify-content-between">
+      <div>
+        <span class="section-kicker">CRM</span>
+        <h1>Pessoas da organização</h1>
+        <p class="text-body-secondary mb-0">Cadastre, consulte e mantenha atualizados os contatos que poderão ser usados nos aplicativos instalados.</p>
+      </div>
+      {% if can_manage_people_import %}
+        <div class="pt-lg-2">
+          <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#peopleImportModal">Importar planilha</button>
+        </div>
+      {% endif %}
+    </div>
   </section>
 
   <section class="row g-4">
@@ -44,9 +53,6 @@
             <p class="text-body-secondary mb-0">Todas as pessoas abaixo pertencem somente à organização ativa.</p>
           </div>
           <div class="d-flex flex-wrap gap-2 align-items-center">
-            {% if can_manage_people_import %}
-              <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#peopleImportModal">Importar planilha</button>
-            {% endif %}
             {% if has_loaded_people %}
               <span class="status-badge status-available">{{ person_rows|length }} registro{{ person_rows|length|pluralize }}</span>
             {% else %}

@@ -29,7 +29,7 @@ class ImportTemplateService:
 
     @staticmethod
     def build_template_filename(entity_type):
-        return 'person_import.xlsx' if entity_type == ImportJob.EntityType.PEOPLE else 'company_import.xlsx'
+        return 'person.xlsx' if entity_type == ImportJob.EntityType.PEOPLE else 'companie.xlsx'
 
     @staticmethod
     def ensure_template_file(entity_type):
