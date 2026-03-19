@@ -3,17 +3,17 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404, JsonResponse
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
 from django.views.generic import TemplateView
 
 from gmail_integration.exceptions import GmailApiError, GmailConfigurationError
-from gmail_integration.forms import GmailCredentialSaveForm, GmailDispatchCreateForm, GmailTemplateForm
+from gmail_integration.forms import GmailCredentialSaveForm, GmailTemplateForm
 from gmail_integration.repositories import (
     GmailCredentialRepository,
     GmailDispatchRepository,
-    GmailDispatchRecipientRepository,
     GmailTemplateRepository,
 )
 from gmail_integration.services import (
@@ -21,6 +21,7 @@ from gmail_integration.services import (
     GmailCredentialService,
     GmailDashboardService,
     GmailDispatchService,
+    GmailDispatchWorkspaceService,
     GmailInstallationService,
     GmailTemplateService,
 )
@@ -64,59 +65,24 @@ class GmailAccessMixin(LoginRequiredMixin):
         return super().dispatch(request, *args, **kwargs)
 
     def build_person_choices(self, *, only_unsent=False):
-        persons = [
-            person
-            for person in PersonRepository.list_for_organization(self.active_organization)
-            if person.email
-        ]
-
-        if only_unsent:
-            sent_person_ids = set(
-                GmailDispatchRecipientRepository.list_sent_person_ids_for_organization(
-                    self.active_organization,
-                )
-            )
-            persons = [person for person in persons if person.id not in sent_person_ids]
-
-        return [
-            (str(person.public_id), f'{person.full_name} - {person.email}')
-            for person in persons
-        ]
+        return GmailDispatchWorkspaceService.build_person_choices(
+            organization=self.active_organization,
+            only_unsent=only_unsent,
+        )
 
     def build_template_choices(self):
-        return [
-            (str(template.public_id), template.name)
-            for template in GmailTemplateRepository.list_active_for_organization(self.active_organization)
-        ]
+        return GmailDispatchWorkspaceService.build_template_choices(
+            organization=self.active_organization,
+        )
 
     @staticmethod
     def build_template_variables():
-        return [
-            {
-                'token': '${nome}',
-                'label': 'Nome',
-                'description': 'Primeiro nome da pessoa.',
-                'example': 'Ola ${nome}, tudo bem?',
-            },
-            {
-                'token': '${sobrenome}',
-                'label': 'Sobrenome',
-                'description': 'Sobrenome da pessoa.',
-                'example': 'Equipe ${sobrenome}',
-            },
-            {
-                'token': '${email}',
-                'label': 'E-mail',
-                'description': 'E-mail cadastrado no CRM.',
-                'example': 'Estamos escrevendo para ${email}.',
-            },
-        ]
+        return GmailDispatchWorkspaceService.build_template_variables()
 
     def build_dispatch_form(self, *args, **kwargs):
-        return GmailDispatchCreateForm(
+        return GmailDispatchWorkspaceService.build_dispatch_form(
             *args,
-            template_choices=self.build_template_choices(),
-            person_choices=self.build_person_choices(),
+            organization=self.active_organization,
             **kwargs,
         )
 
@@ -134,7 +100,6 @@ class GmailAccessMixin(LoginRequiredMixin):
             'gmail_tabs': self.get_module_tabs(),
             'gmail_active_tab': active_tab,
             'can_manage_gmail': self.active_membership.can_manage_integrations,
-            'gmail_template_variables': self.build_template_variables(),
         }
 
 
@@ -338,7 +303,7 @@ class GmailDispatchesView(GmailAccessMixin, TemplateView):
             {
                 'dispatches': GmailDispatchRepository.list_for_organization(self.active_organization),
                 'dispatch_form': kwargs.get('dispatch_form') or self.build_dispatch_form(),
-                'available_variables': [variable['token'] for variable in self.build_template_variables()],
+                'gmail_dispatch_action_url': reverse('gmail_integration:create_dispatch'),
                 'initial_gmail_audience_count': len(self.build_person_choices()),
             }
         )

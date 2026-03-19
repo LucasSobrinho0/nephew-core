@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'organizations',
     'dashboard',
     'admin_panel',
+    'dispatch_flow',
     'integrations',
     'companies',
     'people',

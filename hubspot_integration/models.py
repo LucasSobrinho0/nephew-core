@@ -20,7 +20,14 @@ class HubSpotPipelineCacheQuerySet(OrganizationScopedQuerySet):
 
 class HubSpotDealQuerySet(OrganizationScopedQuerySet):
     def with_related_objects(self):
-        return self.select_related('organization', 'installation', 'company', 'pipeline', 'created_by', 'updated_by')
+        return self.select_related(
+            'organization',
+            'installation',
+            'company',
+            'pipeline',
+            'created_by',
+            'updated_by',
+        ).prefetch_related('persons')
 
 
 class HubSpotSyncLogQuerySet(OrganizationScopedQuerySet):
@@ -79,6 +86,11 @@ class HubSpotDeal(PublicIdentifierMixin, TimeStampedModel):
         Company,
         related_name='hubspot_deals',
         on_delete=models.PROTECT,
+    )
+    persons = models.ManyToManyField(
+        Person,
+        related_name='hubspot_deals',
+        blank=True,
     )
     pipeline = models.ForeignKey(
         HubSpotPipelineCache,

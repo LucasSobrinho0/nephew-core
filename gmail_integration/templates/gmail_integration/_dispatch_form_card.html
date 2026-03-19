@@ -1,0 +1,113 @@
+<div class="glass-card content-card h-100">
+  <div class="content-card-header">
+    <div>
+      <span class="section-kicker">Novo disparo</span>
+      <h2>Preparar publico</h2>
+    </div>
+  </div>
+  {% if can_manage_gmail %}
+    <form method="post" action="{{ gmail_dispatch_action_url }}" class="row g-3">
+      {% csrf_token %}
+      <div class="col-12">
+        <label for="{{ gmail_dispatch_form.template_public_id.id_for_label }}" class="form-label">Template salvo</label>
+        {{ gmail_dispatch_form.template_public_id }}
+        {% for error in gmail_dispatch_form.template_public_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+      </div>
+      <div class="col-12">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <label class="form-label mb-0">Selecionar pessoas</label>
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <span class="small text-body-secondary" id="gmailAudienceCount">{{ initial_gmail_audience_count }} disponiveis</span>
+            <label class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 mb-0">
+              <input
+                type="checkbox"
+                class="form-check-input m-0"
+                data-select-all="gmail-dispatch-selection"
+              >
+              Selecionar todas
+            </label>
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm"
+              data-checkbox-selection-action="clear"
+              data-checkbox-selection-target="#gmailDispatchSelectionList"
+              data-checkbox-selection-name="person_public_ids"
+              data-checkbox-selection-group="gmail-dispatch-selection"
+            >
+              Limpar selecao
+            </button>
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm"
+              data-audience-url="{% url 'gmail_integration:dispatch_audience' %}"
+              data-audience-target="#gmailDispatchSelectionList"
+              data-empty-target="#gmailDispatchSelectionEmpty"
+              data-count-target="#gmailAudienceCount"
+              data-channel-label="Gmail"
+              data-only-unsent="false"
+            >
+              Mostrar apenas nao enviados
+            </button>
+          </div>
+        </div>
+        <input type="search" class="form-control mb-3" placeholder="Buscar pessoa por nome, e-mail ou empresa" data-filter-target="#gmailDispatchSelectionList" data-filter-item="label">
+        <div class="bot-checkbox-shell">
+          {% if gmail_dispatch_form.person_public_ids %}
+            <div class="bot-selection-list" id="gmailDispatchSelectionList" data-checkbox-group="gmail-dispatch-selection">
+              {% for option in gmail_dispatch_form.person_public_ids %}
+                <label class="bot-selection-card" data-filter-item data-filter-text="{{ option.choice_label }}">
+                  {{ option.tag }}
+                  <span class="bot-selection-text">{{ option.choice_label }}</span>
+                </label>
+              {% endfor %}
+            </div>
+            <div class="soft-empty text-start p-0 d-none" id="gmailDispatchSelectionEmpty">
+              <p class="mb-0">Nenhuma pessoa com e-mail cadastrado esta disponivel para este disparo.</p>
+            </div>
+          {% else %}
+            <div class="bot-selection-list d-none" id="gmailDispatchSelectionList"></div>
+            <div class="soft-empty text-start p-0" id="gmailDispatchSelectionEmpty">
+              <p class="mb-0">Nenhuma pessoa com e-mail cadastrado esta disponivel para este disparo.</p>
+            </div>
+          {% endif %}
+        </div>
+        <div class="form-text">Clique no filtro para alternar entre toda a base elegivel e quem ainda nao recebeu envio por Gmail.</div>
+        {% for error in gmail_dispatch_form.person_public_ids.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+      </div>
+      <div class="col-12">
+        <label for="{{ gmail_dispatch_form.cc_emails.id_for_label }}" class="form-label">Copias</label>
+        {{ gmail_dispatch_form.cc_emails }}
+        <div class="form-text">Informe um ou mais e-mails separados por virgula, ponto e virgula ou quebra de linha.</div>
+        {% for error in gmail_dispatch_form.cc_emails.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+      </div>
+      <div class="col-md-6">
+        <label for="{{ gmail_dispatch_form.min_delay_seconds.id_for_label }}" class="form-label">Delay minimo</label>
+        <div class="input-group">
+          {{ gmail_dispatch_form.min_delay_seconds }}
+          <span class="input-group-text">seg</span>
+        </div>
+        <div class="form-text">Menor intervalo entre os envios de e-mail.</div>
+        {% for error in gmail_dispatch_form.min_delay_seconds.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+      </div>
+      <div class="col-md-6">
+        <label for="{{ gmail_dispatch_form.max_delay_seconds.id_for_label }}" class="form-label">Delay maximo</label>
+        <div class="input-group">
+          {{ gmail_dispatch_form.max_delay_seconds }}
+          <span class="input-group-text">seg</span>
+        </div>
+        <div class="form-text">O valor maximo nao pode ser menor que o minimo.</div>
+        {% for error in gmail_dispatch_form.max_delay_seconds.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+      </div>
+      {% if gmail_dispatch_form.non_field_errors %}
+        <div class="col-12 text-danger small">{{ gmail_dispatch_form.non_field_errors|join:', ' }}</div>
+      {% endif %}
+      <div class="col-12">
+        <button type="submit" class="btn btn-brand w-100">Criar disparo</button>
+      </div>
+    </form>
+  {% else %}
+    <div class="soft-empty text-start p-0">
+      <p class="mb-0">Somente proprietarios e administradores podem criar disparos do Gmail.</p>
+    </div>
+  {% endif %}
+</div>

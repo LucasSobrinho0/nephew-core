@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from gmail_integration.constants import GMAIL_APP_CODE, GMAIL_SEND_SCOPE
 from gmail_integration.exceptions import GmailApiError, GmailConfigurationError
+from gmail_integration.forms import GmailDispatchCreateForm
 from gmail_integration.gmail_client import GmailApiGateway
 from gmail_integration.models import GmailDispatch, GmailDispatchRecipient
 from gmail_integration.repositories import (
@@ -250,6 +251,71 @@ class GmailTemplateService:
             raise ValidationError('Ja existe um template com este nome na organizacao ativa.') from exc
 
         return template
+
+
+class GmailDispatchWorkspaceService:
+    @staticmethod
+    def build_template_variables():
+        return [
+            {
+                'token': '${nome}',
+                'label': 'Nome',
+                'description': 'Primeiro nome da pessoa.',
+                'example': 'Ola ${nome}, tudo bem?',
+            },
+            {
+                'token': '${sobrenome}',
+                'label': 'Sobrenome',
+                'description': 'Sobrenome da pessoa.',
+                'example': 'Equipe ${sobrenome}',
+            },
+            {
+                'token': '${email}',
+                'label': 'E-mail',
+                'description': 'E-mail cadastrado no CRM.',
+                'example': 'Estamos escrevendo para ${email}.',
+            },
+        ]
+
+    @staticmethod
+    def build_person_choices(*, organization, only_unsent=False):
+        persons = [
+            person
+            for person in PersonRepository.list_for_organization(organization)
+            if person.email
+        ]
+
+        if only_unsent:
+            sent_person_ids = set(
+                GmailDispatchRecipientRepository.list_sent_person_ids_for_organization(
+                    organization,
+                )
+            )
+            persons = [person for person in persons if person.id not in sent_person_ids]
+
+        return [
+            (str(person.public_id), f'{person.full_name} - {person.email}')
+            for person in persons
+        ]
+
+    @staticmethod
+    def build_template_choices(*, organization):
+        return [
+            (str(template.public_id), template.name)
+            for template in GmailTemplateRepository.list_active_for_organization(organization)
+        ]
+
+    @staticmethod
+    def build_dispatch_form(*, organization, **kwargs):
+        return GmailDispatchCreateForm(
+            template_choices=GmailDispatchWorkspaceService.build_template_choices(
+                organization=organization,
+            ),
+            person_choices=GmailDispatchWorkspaceService.build_person_choices(
+                organization=organization,
+            ),
+            **kwargs,
+        )
 
 
 class GmailDispatchService:

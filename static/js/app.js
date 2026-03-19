@@ -191,6 +191,7 @@
             initLoadingForms();
             initAsyncListForms();
             initEnhancedMultiSelects();
+            initRemoteSelects();
             initAutoOpenModals();
           })
           .catch(function () {
@@ -259,6 +260,67 @@
         closeAfterSelect: false,
         maxOptions: null,
         placeholder: select.getAttribute('data-placeholder') || 'Pesquisar',
+        render: {
+          no_results: function (data, escape) {
+            return '<div class="no-results">Nenhum resultado para "' + escape(data.input) + '".</div>';
+          }
+        }
+      });
+    });
+  }
+
+  function initRemoteSelects() {
+    if (typeof TomSelect === 'undefined') {
+      return;
+    }
+
+    document.querySelectorAll('select[data-remote-select="true"]').forEach(function (select) {
+      if (select.tomselect) {
+        return;
+      }
+
+      var remoteUrl = select.getAttribute('data-remote-url');
+      var minChars = parseInt(select.getAttribute('data-remote-min-chars') || '1', 10);
+
+      if (!remoteUrl) {
+        return;
+      }
+
+      new TomSelect(select, {
+        valueField: 'value',
+        labelField: 'label',
+        searchField: 'label',
+        create: false,
+        maxItems: 1,
+        allowEmptyOption: true,
+        preload: minChars === 0,
+        placeholder: select.getAttribute('data-placeholder') || 'Pesquisar',
+        load: function (query, callback) {
+          if (query.length < minChars && !(minChars === 0 && query.length === 0)) {
+            callback();
+            return;
+          }
+
+          fetch(remoteUrl + '?q=' + encodeURIComponent(query), {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest'
+            }
+          })
+            .then(function (response) {
+              if (!response.ok) {
+                throw new Error('Falha ao carregar opcoes.');
+              }
+              return response.json();
+            })
+            .then(function (payload) {
+              callback(payload.results || []);
+            })
+            .catch(function () {
+              callback();
+            });
+        },
         render: {
           no_results: function (data, escape) {
             return '<div class="no-results">Nenhum resultado para "' + escape(data.input) + '".</div>';
@@ -1033,6 +1095,7 @@
   initAsyncListForms();
   initDispatchAudienceFilters();
   initEnhancedMultiSelects();
+  initRemoteSelects();
   initAutoOpenModals();
   applyTheme(getTheme());
 }());

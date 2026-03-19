@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.views import View
@@ -16,6 +17,7 @@ from hubspot_integration.forms import (
     HubSpotContactCompanySyncForm,
     HubSpotCompanySyncForm,
     HubSpotDealCreateForm,
+    HubSpotPersonCreateForm,
     HubSpotPersonSyncForm,
     HubSpotPipelineRefreshForm,
     HubSpotRemoteCompanyImportForm,
@@ -86,6 +88,9 @@ class HubSpotAccessMixin(LoginRequiredMixin, TemplateView):
             for pipeline in HubSpotPipelineRepository.list_for_organization(self.active_organization)
         ]
 
+    def build_stage_choices(self):
+        return HubSpotPipelineService.build_stage_choices(organization=self.active_organization)
+
     def build_base_context(self, *, active_tab):
         return {
             'hubspot_tabs': [
@@ -93,7 +98,7 @@ class HubSpotAccessMixin(LoginRequiredMixin, TemplateView):
                 {'label': 'Empresas', 'url': 'hubspot_integration:companies', 'key': 'companies'},
                 {'label': 'Pessoas', 'url': 'hubspot_integration:people', 'key': 'people'},
                 {'label': 'Pipelines', 'url': 'hubspot_integration:pipelines', 'key': 'pipelines'},
-                {'label': 'Deals', 'url': 'hubspot_integration:deals', 'key': 'deals'},
+                {'label': 'Negócios', 'url': 'hubspot_integration:deals', 'key': 'deals'},
             ],
             'hubspot_active_tab': active_tab,
             'can_manage_hubspot': self.active_membership.can_manage_integrations,
@@ -145,7 +150,10 @@ class HubSpotCompaniesView(HubSpotAccessMixin):
                 'remote_companies': remote_companies,
                 'has_loaded_remote_companies': has_loaded_remote_companies,
                 'remote_list_form': load_form,
-                'create_form': kwargs.get('create_form') or HubSpotCompanyCreateForm(),
+                'create_form': kwargs.get('create_form') or HubSpotCompanyCreateForm(
+                    pipeline_choices=self.build_pipeline_choices(),
+                    stage_choices=self.build_stage_choices(),
+                ),
             }
         )
         return context
@@ -153,7 +161,11 @@ class HubSpotCompaniesView(HubSpotAccessMixin):
 
 class HubSpotCompanyCreateView(HubSpotAccessMixin, View):
     def post(self, request, *args, **kwargs):
-        form = HubSpotCompanyCreateForm(request.POST)
+        form = HubSpotCompanyCreateForm(
+            request.POST,
+            pipeline_choices=self.build_pipeline_choices(),
+            stage_choices=self.build_stage_choices(),
+        )
         if not form.is_valid():
             view = HubSpotCompaniesView()
             view.request = request
@@ -162,17 +174,34 @@ class HubSpotCompanyCreateView(HubSpotAccessMixin, View):
             view.active_membership = self.active_membership
             return view.render_to_response(view.get_context_data(create_form=form))
         try:
-            HubSpotCompanyService.create_local_company(
+            pipeline = None
+            if form.cleaned_data.get('create_deal_now'):
+                pipeline = HubSpotPipelineRepository.get_for_organization_and_public_id(
+                    self.active_organization,
+                    form.cleaned_data['pipeline_public_id'],
+                )
+                if pipeline is None:
+                    raise ValidationError('O pipeline selecionado nao foi encontrado.')
+
+            _company, deal = HubSpotCompanyService.create_local_company_with_business(
                 user=request.user,
                 organization=self.active_organization,
                 name=form.cleaned_data['name'],
                 website=form.cleaned_data['website'],
                 phone=form.cleaned_data['phone'],
+                create_deal_now=form.cleaned_data.get('create_deal_now', False),
+                deal_name=form.cleaned_data.get('deal_name', ''),
+                pipeline=pipeline,
+                stage_id=form.cleaned_data.get('stage_id', ''),
+                amount=form.cleaned_data.get('amount', ''),
             )
         except (PermissionDenied, ValidationError) as exc:
             messages.error(request, str(exc))
             return redirect('hubspot_integration:companies')
-        messages.success(request, 'Empresa cadastrada com sucesso.')
+        if deal is not None:
+            messages.success(request, 'Empresa e negocio cadastrados com sucesso.')
+        else:
+            messages.success(request, 'Empresa cadastrada com sucesso.')
         return redirect('hubspot_integration:companies')
 
 
@@ -312,9 +341,77 @@ class HubSpotPeopleView(HubSpotAccessMixin):
                 'has_loaded_remote_contacts': has_loaded_remote_contacts,
                 'remote_list_form': load_form,
                 'company_sync_form': HubSpotContactCompanySyncForm(),
+                'create_form': kwargs.get('create_form') or HubSpotPersonCreateForm(
+                    company_choices=self.build_company_choices(),
+                    deal_search_url=reverse('hubspot_integration:deal_search'),
+                ),
             }
         )
         return context
+
+
+class HubSpotPersonCreateView(HubSpotAccessMixin, View):
+    def post(self, request, *args, **kwargs):
+        raw_deal_public_id = (request.POST.get('deal_public_id') or '').strip()
+        selected_deal = None
+        selected_deal_choice = None
+
+        if raw_deal_public_id:
+            selected_deal = HubSpotDealRepository.get_for_organization_and_public_id(
+                self.active_organization,
+                raw_deal_public_id,
+            )
+            if selected_deal is not None:
+                selected_deal_choice = (
+                    str(selected_deal.public_id),
+                    f'{selected_deal.name} | {selected_deal.company.name}',
+                )
+
+        form = HubSpotPersonCreateForm(
+            request.POST,
+            company_choices=self.build_company_choices(),
+            deal_search_url=reverse('hubspot_integration:deal_search'),
+            selected_deal_choice=selected_deal_choice,
+        )
+        if not form.is_valid():
+            view = HubSpotPeopleView()
+            view.request = request
+            view.installation = self.installation
+            view.active_organization = self.active_organization
+            view.active_membership = self.active_membership
+            return view.render_to_response(view.get_context_data(create_form=form))
+
+        company = None
+        if form.cleaned_data['company_public_id']:
+            company = CompanyRepository.get_for_organization_and_public_id(
+                self.active_organization,
+                form.cleaned_data['company_public_id'],
+            )
+
+        if raw_deal_public_id and selected_deal is None:
+            messages.error(request, 'O negocio selecionado nao foi encontrado.')
+            return redirect('hubspot_integration:people')
+
+        try:
+            HubSpotContactService.create_local_person(
+                user=request.user,
+                organization=self.active_organization,
+                first_name=form.cleaned_data['first_name'],
+                last_name=form.cleaned_data['last_name'],
+                email=form.cleaned_data['email'],
+                phone=form.cleaned_data['phone'],
+                company=company,
+                deal=selected_deal,
+            )
+        except (PermissionDenied, ValidationError) as exc:
+            messages.error(request, str(exc))
+            return redirect('hubspot_integration:people')
+
+        if selected_deal is not None:
+            messages.success(request, 'Pessoa cadastrada e vinculada ao negocio com sucesso.')
+        else:
+            messages.success(request, 'Pessoa cadastrada com sucesso.')
+        return redirect('hubspot_integration:people')
 
 
 class HubSpotPersonSyncView(HubSpotAccessMixin, View):
@@ -496,6 +593,7 @@ class HubSpotDealsView(HubSpotAccessMixin):
                 'deal_form': kwargs.get('deal_form') or HubSpotDealCreateForm(
                     company_choices=self.build_synced_company_choices(),
                     pipeline_choices=self.build_pipeline_choices(),
+                    stage_choices=self.build_stage_choices(),
                 ),
             }
         )
@@ -508,6 +606,7 @@ class HubSpotDealCreateView(HubSpotAccessMixin, View):
             request.POST,
             company_choices=self.build_synced_company_choices(),
             pipeline_choices=self.build_pipeline_choices(),
+            stage_choices=self.build_stage_choices(),
         )
         if not form.is_valid():
             view = HubSpotDealsView()
@@ -535,10 +634,26 @@ class HubSpotDealCreateView(HubSpotAccessMixin, View):
                 company=company,
                 pipeline=pipeline,
                 deal_name=form.cleaned_data['deal_name'],
+                stage_id=form.cleaned_data['stage_id'],
                 amount=form.cleaned_data['amount'],
             )
         except (PermissionDenied, ValidationError, Exception) as exc:
             messages.error(request, str(exc))
             return redirect('hubspot_integration:deals')
-        messages.success(request, 'Deal criado com sucesso no HubSpot.')
+        messages.success(request, 'Negocio criado com sucesso no HubSpot.')
         return redirect('hubspot_integration:deals')
+
+
+class HubSpotDealSearchView(HubSpotAccessMixin, View):
+    def get(self, request, *args, **kwargs):
+        if not self.active_membership.can_manage_integrations:
+            raise PermissionDenied('Somente proprietarios e administradores podem pesquisar negocios do HubSpot.')
+        query = (request.GET.get('q') or '').strip()
+        return JsonResponse(
+            {
+                'results': HubSpotDealService.build_deal_option_rows(
+                    organization=self.active_organization,
+                    query=query,
+                )
+            }
+        )

@@ -99,8 +99,10 @@ integrations/
 ## Integration interplay
 
 - `apollo_integration`, `hubspot_integration`, `bot_conversa`, and `gmail_integration` are independent operational modules. They do not need direct runtime calls into each other to work.
+- `hubspot_integration` now also keeps a local business layer for HubSpot deals, including pipeline-stage cache and local person associations per business.
 - The shared dependency is the tenant-scoped CRM core, especially `people.Person`, company relations, and the common matching helpers.
 - Apollo agora interage com o CRM por meio de `companies.Company` e `people.Person`.
+- `dispatch_flow` funciona como uma camada de orquestracao de tela: ele nao substitui `bot_conversa` nem `gmail_integration`, apenas reutiliza seus forms, templates e services para oferecer um workspace unico de disparo quando um ou ambos os apps estiverem instalados.
 - A busca de pessoas do Apollo salva resultados censurados no CRM por `apollo_person_id`, sem depender de enrichment nesta fase.
 - O enrichment de pessoas do Apollo opera sobre `people.Person` ja sincronizadas e atualiza nome completo e email no proprio registro local.
 - Quando o operador marca `Pegar telefone`, o Apollo passa a responder pelo webhook HTTPS do proprio Nephew CRM.
@@ -193,6 +195,7 @@ Templates:
 6. Each processing cycle sends a safe batch of pending recipients and updates terminal counters.
 7. When a delay interval is configured, the frontend waits a randomized value between the configured min and max before the next processing step.
 8. The dispatch creation screen can asynchronously filter the audience to only show people who have not yet received a Gmail send in that tenant.
+9. Template variables are documented only on the template authoring screens, not on the dispatch screens, to keep the send workflow focused on audience and pacing.
 
 ### Apollo company import flow
 

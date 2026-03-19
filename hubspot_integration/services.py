@@ -27,6 +27,7 @@ from integrations.repositories import AppCatalogRepository, AppCredentialReposit
 from organizations.repositories import MembershipRepository
 from people.models import Person
 from people.repositories import PersonRepository
+from people.services import PersonService
 
 
 class HubSpotAuthorizationService:
@@ -139,6 +140,49 @@ class HubSpotCompanyService:
             website=website,
             phone=phone,
         )
+
+    @staticmethod
+    @transaction.atomic
+    def create_local_company_with_business(
+        *,
+        user,
+        organization,
+        name,
+        website='',
+        phone='',
+        create_deal_now=False,
+        deal_name='',
+        pipeline=None,
+        stage_id='',
+        amount='',
+    ):
+        company = HubSpotCompanyService.create_local_company(
+            user=user,
+            organization=organization,
+            name=name,
+            website=website,
+            phone=phone,
+        )
+
+        if not create_deal_now:
+            return company, None
+
+        HubSpotCompanyService.sync_companies(
+            user=user,
+            organization=organization,
+            companies=[company],
+        )
+        deal = HubSpotDealService.create_deal(
+            user=user,
+            organization=organization,
+            company=company,
+            pipeline=pipeline,
+            deal_name=deal_name or company.name,
+            stage_id=stage_id,
+            amount=amount,
+            persons=[],
+        )
+        return company, deal
 
     @staticmethod
     def list_remote_companies(*, organization):
@@ -281,12 +325,55 @@ class HubSpotContactService:
 
     @staticmethod
     def build_person_rows(*, organization):
-        persons = list(PersonRepository.list_for_organization(organization))
+        persons = list(PersonRepository.list_for_organization(organization).prefetch_related('hubspot_deals'))
         return [{'person': person, 'is_synced': bool(person.hubspot_contact_id)} for person in persons]
 
     @staticmethod
     def build_person_choice_rows(*, organization):
         return [(str(person.public_id), person.full_name) for person in PersonRepository.list_for_organization(organization)]
+
+    @staticmethod
+    @transaction.atomic
+    def create_local_person(
+        *,
+        user,
+        organization,
+        first_name,
+        last_name,
+        phone,
+        email='',
+        company=None,
+        deal=None,
+    ):
+        HubSpotAuthorizationService.ensure_operator_access(user=user, organization=organization)
+
+        resolved_company = company
+        if deal is not None:
+            if deal.organization_id != organization.id:
+                raise ValidationError('O negocio selecionado nao pertence a organizacao ativa.')
+            if resolved_company is None:
+                resolved_company = deal.company
+            elif deal.company_id != resolved_company.id:
+                raise ValidationError('A pessoa precisa pertencer a mesma empresa do negocio selecionado.')
+
+        person = PersonService.create_person(
+            user=user,
+            organization=organization,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone=phone,
+            company=resolved_company,
+        )
+
+        if deal is not None:
+            HubSpotDealService.attach_person_to_deal(
+                user=user,
+                organization=organization,
+                deal=deal,
+                person=person,
+            )
+        return person
 
     @staticmethod
     def resolve_local_company_for_contact(*, organization, company_name='', company_hubspot_id=''):
@@ -531,6 +618,45 @@ class HubSpotContactService:
 
 class HubSpotPipelineService:
     @staticmethod
+    def build_stage_rows(*, organization):
+        stage_rows = []
+        for pipeline in HubSpotPipelineRepository.list_for_organization(organization):
+            for stage in (pipeline.raw_payload or {}).get('stages') or []:
+                stage_id = str(stage.get('id') or '').strip()
+                if not stage_id:
+                    continue
+                stage_rows.append(
+                    {
+                        'pipeline_public_id': str(pipeline.public_id),
+                        'pipeline_name': pipeline.name,
+                        'stage_id': stage_id,
+                        'stage_name': (stage.get('label') or stage_id).strip(),
+                    }
+                )
+        return stage_rows
+
+    @staticmethod
+    def build_stage_choices(*, organization):
+        return [
+            (row['stage_id'], f"{row['pipeline_name']} - {row['stage_name']}")
+            for row in HubSpotPipelineService.build_stage_rows(organization=organization)
+        ]
+
+    @staticmethod
+    def build_stage_map(*, organization):
+        stage_map = {}
+        for row in HubSpotPipelineService.build_stage_rows(organization=organization):
+            stage_map.setdefault(row['pipeline_public_id'], set()).add(row['stage_id'])
+        return stage_map
+
+    @staticmethod
+    def build_stage_label_map(*, organization):
+        return {
+            row['stage_id']: row['stage_name']
+            for row in HubSpotPipelineService.build_stage_rows(organization=organization)
+        }
+
+    @staticmethod
     @transaction.atomic
     def refresh_pipelines(*, user, organization):
         installation = HubSpotInstallationService.get_installation(organization=organization)
@@ -576,9 +702,29 @@ class HubSpotPipelineService:
 
 class HubSpotDealService:
     @staticmethod
+    def build_deal_option_rows(*, organization, query=''):
+        deals = HubSpotDealRepository.search_for_organization(
+            organization,
+            query=query,
+            limit=20,
+        )
+        return [
+            {
+                'value': str(deal.public_id),
+                'label': f'{deal.name} | {deal.company.name}',
+            }
+            for deal in deals
+        ]
+
+    @staticmethod
     def list_remote_deals(*, organization):
         client = HubSpotInstallationService.build_client(organization=organization)
         local_deals = list(HubSpotDealRepository.list_for_organization(organization))
+        pipeline_names = {
+            pipeline.hubspot_pipeline_id: pipeline.name
+            for pipeline in HubSpotPipelineRepository.list_for_organization(organization)
+        }
+        stage_names = HubSpotPipelineService.build_stage_label_map(organization=organization)
         local_by_hubspot_deal_id = {
             deal.hubspot_deal_id: deal
             for deal in local_deals
@@ -590,6 +736,8 @@ class HubSpotDealService:
             remote_deals.append(
                 {
                     **remote_deal,
+                    'pipeline_name': pipeline_names.get(remote_deal['pipeline_id'], remote_deal['pipeline_id']),
+                    'stage_name': stage_names.get(remote_deal['stage_id'], remote_deal['stage_id']),
                     'linked_deal': local_by_hubspot_deal_id.get(remote_deal['hubspot_deal_id']),
                 }
             )
@@ -597,7 +745,7 @@ class HubSpotDealService:
 
     @staticmethod
     @transaction.atomic
-    def create_deal(*, user, organization, company, pipeline, deal_name, amount=''):
+    def create_deal(*, user, organization, company, pipeline, deal_name, stage_id, amount='', persons=None):
         installation = HubSpotInstallationService.get_installation(organization=organization)
         HubSpotAuthorizationService.ensure_operator_access(user=user, organization=organization)
         if company.organization_id != organization.id:
@@ -605,18 +753,32 @@ class HubSpotDealService:
         if pipeline.organization_id != organization.id:
             raise ValidationError('O pipeline selecionado não pertence à organização ativa.')
         if not company.hubspot_company_id:
-            raise ValidationError('Sincronize a empresa com o HubSpot antes de criar um deal.')
+            raise ValidationError('Sincronize a empresa com o HubSpot antes de criar um negocio.')
 
-        persons = list(PersonRepository.list_for_organization(organization))
-        contact_ids = [
-            person.hubspot_contact_id
-            for person in persons
-            if person.company_id == company.id and person.hubspot_contact_id
-        ]
-        stage_id = ''
-        pipeline_stages = (pipeline.raw_payload or {}).get('stages') or []
-        if pipeline_stages:
-            stage_id = str(pipeline_stages[0].get('id') or '')
+        stage_map = HubSpotPipelineService.build_stage_map(organization=organization)
+        valid_stage_ids = stage_map.get(str(pipeline.public_id), set())
+        stage_id = str(stage_id or '').strip()
+        if not stage_id or stage_id not in valid_stage_ids:
+            raise ValidationError('Selecione uma coluna valida para o pipeline informado.')
+
+        resolved_persons = []
+        seen_person_ids = set()
+        source_persons = (
+            persons
+            if persons is not None
+            else [person for person in PersonRepository.list_for_organization(organization) if person.company_id == company.id]
+        )
+        for person in source_persons:
+            if person.organization_id != organization.id:
+                raise ValidationError('Uma ou mais pessoas selecionadas nao pertencem a organizacao ativa.')
+            if person.company_id != company.id:
+                raise ValidationError('Todas as pessoas do negocio precisam pertencer a empresa selecionada.')
+            if person.id in seen_person_ids:
+                continue
+            seen_person_ids.add(person.id)
+            resolved_persons.append(person)
+
+        contact_ids = [person.hubspot_contact_id for person in resolved_persons if person.hubspot_contact_id]
 
         client = HubSpotInstallationService.build_client(organization=organization)
         remote_deal = client.create_deal(
@@ -641,6 +803,8 @@ class HubSpotDealService:
             created_by=user,
             updated_by=user,
         )
+        if resolved_persons:
+            deal.persons.set(resolved_persons)
         HubSpotSyncLogRepository.create(
             organization=organization,
             installation=installation,
@@ -649,7 +813,64 @@ class HubSpotDealService:
             actor=user,
             entity_type=HubSpotSyncLog.EntityType.DEAL,
             outcome=HubSpotSyncLog.Outcome.SUCCESS,
-            message='Deal criado no HubSpot.',
+            message='Negocio criado no HubSpot.',
             remote_payload=remote_deal['raw_payload'],
+        )
+        return deal
+
+    @staticmethod
+    @transaction.atomic
+    def attach_person_to_deal(*, user, organization, deal, person):
+        installation = HubSpotInstallationService.get_installation(organization=organization)
+        HubSpotAuthorizationService.ensure_operator_access(user=user, organization=organization)
+        if deal.organization_id != organization.id:
+            raise ValidationError('O negocio selecionado nao pertence a organizacao ativa.')
+        if person.organization_id != organization.id:
+            raise ValidationError('A pessoa selecionada nao pertence a organizacao ativa.')
+
+        if person.company_id is None:
+            person.company = deal.company
+            person.updated_by = user
+            person.save(update_fields=['company', 'updated_by', 'updated_at'])
+        elif person.company_id != deal.company_id:
+            raise ValidationError('A pessoa precisa estar vinculada a mesma empresa do negocio selecionado.')
+
+        if not deal.company.hubspot_company_id:
+            HubSpotCompanyService.sync_companies(
+                user=user,
+                organization=organization,
+                companies=[deal.company],
+            )
+
+        if not person.hubspot_contact_id:
+            HubSpotContactService.sync_people(
+                user=user,
+                organization=organization,
+                persons=[person],
+            )
+            person = PersonRepository.get_for_organization_and_public_id(organization, person.public_id)
+
+        if deal.hubspot_deal_id and person.hubspot_contact_id:
+            client = HubSpotInstallationService.build_client(organization=organization)
+            client.associate_contact_to_deal(
+                contact_id=person.hubspot_contact_id,
+                deal_id=deal.hubspot_deal_id,
+            )
+
+        deal.persons.add(person)
+        HubSpotSyncLogRepository.create(
+            organization=organization,
+            installation=installation,
+            company=deal.company,
+            person=person,
+            deal=deal,
+            actor=user,
+            entity_type=HubSpotSyncLog.EntityType.DEAL,
+            outcome=HubSpotSyncLog.Outcome.SUCCESS,
+            message='Pessoa vinculada ao negocio no HubSpot.',
+            remote_payload={
+                'hubspot_deal_id': deal.hubspot_deal_id,
+                'hubspot_contact_id': person.hubspot_contact_id,
+            },
         )
         return deal

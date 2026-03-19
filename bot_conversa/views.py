@@ -3,6 +3,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404, JsonResponse
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
@@ -33,6 +34,7 @@ from bot_conversa.services import (
     BotConversaContactSyncService,
     BotConversaDashboardService,
     BotConversaDispatchService,
+    BotConversaDispatchWorkspaceService,
     BotConversaFlowService,
     BotConversaInstallationService,
     BotConversaPeopleService,
@@ -90,48 +92,21 @@ class BotConversaAccessMixin(LoginRequiredMixin):
         ]
 
     def build_person_choices(self, *, only_unsent=False, tag_public_ids=None):
-        persons = list(PersonRepository.list_for_organization(self.active_organization))
-        selected_tag_ids = []
-
-        if tag_public_ids:
-            selected_tag_ids = [
-                tag.id
-                for tag in BotConversaTagRepository.list_for_organization_and_public_ids(
-                    self.active_organization,
-                    tag_public_ids,
-                )
-            ]
-
-        if selected_tag_ids:
-            tagged_person_ids = set(
-                BotConversaTagService.list_person_ids_for_tags(
-                    organization=self.active_organization,
-                    tag_ids=selected_tag_ids,
-                )
-            )
-            persons = [person for person in persons if person.id in tagged_person_ids]
-
-        if only_unsent:
-            successful_person_ids = set(
-                BotConversaFlowDispatchItemRepository.list_success_person_ids_for_organization(
-                    self.active_organization,
-                )
-            )
-            persons = [person for person in persons if person.id not in successful_person_ids]
-
-        return [
-            (str(person.public_id), f'{person.full_name} - {person.phone}')
-            for person in persons
-        ]
+        return BotConversaDispatchWorkspaceService.build_person_choices(
+            organization=self.active_organization,
+            only_unsent=only_unsent,
+            tag_public_ids=tag_public_ids,
+        )
 
     def build_flow_choices(self):
-        return [
-            (str(flow.public_id), flow.name)
-            for flow in BotConversaFlowCacheRepository.list_selectable_for_organization(self.active_organization)
-        ]
+        return BotConversaDispatchWorkspaceService.build_flow_choices(
+            organization=self.active_organization,
+        )
 
     def build_tag_choices(self):
-        return BotConversaTagService.build_tag_choice_rows(organization=self.active_organization)
+        return BotConversaDispatchWorkspaceService.build_tag_choices(
+            organization=self.active_organization,
+        )
 
     def build_person_create_form(self, *args, **kwargs):
         return BotConversaPersonCreateForm(
@@ -141,15 +116,11 @@ class BotConversaAccessMixin(LoginRequiredMixin):
         )
 
     def build_dispatch_form(self, *args, **kwargs):
-        person_choices = self.build_person_choices(
-            tag_public_ids=kwargs.get('selected_tag_public_ids'),
-        )
-        kwargs.pop('selected_tag_public_ids', None)
-        return BotConversaDispatchCreateForm(
+        selected_tag_public_ids = kwargs.pop('selected_tag_public_ids', None)
+        return BotConversaDispatchWorkspaceService.build_dispatch_form(
             *args,
-            flow_choices=self.build_flow_choices(),
-            person_choices=person_choices,
-            tag_choices=self.build_tag_choices(),
+            organization=self.active_organization,
+            selected_tag_public_ids=selected_tag_public_ids,
             **kwargs,
         )
 
@@ -470,6 +441,7 @@ class BotConversaDispatchesView(BotConversaAccessMixin, TemplateView):
                     initial={'tag_public_ids': selected_tag_public_ids},
                     selected_tag_public_ids=selected_tag_public_ids,
                 ),
+                'bot_dispatch_action_url': reverse('bot_conversa:create_dispatch'),
                 'recent_dispatches': BotConversaFlowDispatchRepository.list_recent_for_organization(
                     self.active_organization,
                 ),

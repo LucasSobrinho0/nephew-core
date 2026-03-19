@@ -66,6 +66,12 @@
       {% endif %}
     </div>
   </div>
+  {% if has_dispatch_flow_access %}
+    <a href="{% url 'dispatch_flow:index' %}" class="nav-link crm-nav-link {% if request.resolver_match.namespace == 'dispatch_flow' %}active{% endif %}">
+      <i class="bi bi-send-check-fill"></i>
+      <span>Fluxo de disparo</span>
+    </a>
+  {% endif %}
   <a href="{% url 'organizations:invites' %}" class="nav-link crm-nav-link {% if request.resolver_match.namespace == 'organizations' and request.resolver_match.url_name == 'invites' %}active{% endif %}">
     <i class="bi bi-person-plus-fill"></i>
     <span>Convites</span>

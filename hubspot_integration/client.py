@@ -165,6 +165,13 @@ class HubSpotClient:
             'raw_payload': response_payload,
         }
 
+    def associate_contact_to_deal(self, *, contact_id, deal_id):
+        association_path = (
+            f'{HUBSPOT_DEALS_OBJECT_PATH}/{deal_id}/associations/contacts/'
+            f'{contact_id}/{DEAL_TO_CONTACT_ASSOCIATION_TYPE_ID}'
+        )
+        return self._request('PUT', association_path)
+
     def search_company_by_name_or_website(self, *, name, website=''):
         filters = []
         if website:

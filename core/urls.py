@@ -10,6 +10,7 @@ urlpatterns = [
     path('', include('organizations.urls')),
     path('', include('dashboard.urls')),
     path('', include('admin_panel.urls')),
+    path('', include('dispatch_flow.urls')),
     path('', include('integrations.urls')),
     path('', include('companies.urls')),
     path('', include('people.urls')),

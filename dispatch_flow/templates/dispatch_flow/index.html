@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block title %}Fluxo de disparo{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Fluxo de disparo</span>
+    <h1>Central de disparos</h1>
+    <p class="text-body-secondary mb-0">Concentre os envios disponiveis da organizacao em uma tela unica e escolha o canal que faz sentido para cada publico.</p>
+  </section>
+
+  <section class="row g-4">
+    {% if bot_conversa_enabled %}
+      <div class="col-12">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+          <div>
+            <span class="section-kicker mb-1">Bot Conversa</span>
+            <h2 class="h4 mb-0">WhatsApp</h2>
+          </div>
+        </div>
+        <div class="row g-4">
+          <div class="col-xl-5">
+            {% include 'bot_conversa/_dispatch_form_card.html' with bot_dispatch_form=bot_dispatch_form bot_dispatch_action_url=bot_dispatch_action_url %}
+          </div>
+          <div class="col-xl-7">
+            {% include 'bot_conversa/_dispatch_history_card.html' with bot_recent_dispatches=bot_recent_dispatches %}
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if gmail_enabled %}
+      <div class="col-12">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+          <div>
+            <span class="section-kicker mb-1">Gmail</span>
+            <h2 class="h4 mb-0">E-mail</h2>
+          </div>
+        </div>
+        <div class="row g-4">
+          <div class="col-xl-5">
+            {% include 'gmail_integration/_dispatch_form_card.html' with gmail_dispatch_form=gmail_dispatch_form gmail_dispatch_action_url=gmail_dispatch_action_url %}
+          </div>
+          <div class="col-xl-7">
+            {% include 'gmail_integration/_dispatch_history_card.html' with gmail_dispatches=gmail_dispatches %}
+          </div>
+        </div>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

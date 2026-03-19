@@ -8,12 +8,13 @@
 - `organizations`: tenant domain, memberships, invite codes, onboarding, organization switching, and permission-sensitive services.
 - `dashboard`: authenticated application pages that depend on the active organization context.
 - `admin_panel`: global administrative surface restricted by Django auth groups, with access-audit visibility outside tenant scope.
+- `dispatch_flow`: unified dispatch workspace that reuses Bot Conversa and Gmail dispatch components when those apps are installed, keeping the page focused on channel choice, audience, and send cadence.
 - `companies`: tenant-scoped CRM companies.
 - `people`: tenant-scoped CRM persons and contact identity.
 - `integrations`: app catalog, tenant installations, encrypted credentials, and credential access audit.
 - `apollo_integration`: Apollo API key wiring, remote company search, person search, synchronous person enrichment, webhook-backed phone reveal jobs, usage snapshots, bulk import, and optional company sync handoff to HubSpot.
 - `bot_conversa`: Bot Conversa contact linking, tag cache, flow cache, dispatching, and sync logs.
-- `hubspot_integration`: HubSpot company/contact/deal synchronization and pipeline cache.
+- `hubspot_integration`: HubSpot company/contact/business synchronization, deal-stage pipeline cache, local business-person associations, and async business selection helpers.
 - `gmail_integration`: Gmail credential management, templates, and email dispatches.
 
 ## Folder structure
@@ -25,6 +26,7 @@ NephewCRM/
 |-- accounts/
 |-- organizations/
 |-- dashboard/
+|-- dispatch_flow/
 |-- companies/
 |-- people/
 |-- integrations/
@@ -88,6 +90,18 @@ NephewCRM/
 - Stores `organization`, optional `company`, `phone`, `normalized_phone`, `email`, `email_lookup`, `first_name`, `last_name`, `apollo_person_id`, `hubspot_contact_id`, `bot_conversa_id`, active flag, and audit ownership fields.
 - Uses normalized phone and deterministic email lookup for uniqueness and matching.
 - Acts as the shared identity hub for Apollo, HubSpot, and Bot Conversa, so the integrations stay operationally independent while still converging into one tenant-scoped person when matching succeeds.
+
+### `hubspot_integration.HubSpotPipelineCache`
+
+- Tenant-scoped cache of remote HubSpot pipelines for object type `deals`.
+- Stores `hubspot_pipeline_id`, `name`, `object_type`, `raw_payload`, and `last_synced_at`.
+- Keeps stage metadata in `raw_payload` so the UI can offer valid HubSpot deal columns without hardcoding labels.
+
+### `hubspot_integration.HubSpotDeal`
+
+- Tenant-scoped local mirror of HubSpot deals, exposed in the UI as `Negócios`.
+- Stores `organization`, `installation`, `company`, `pipeline`, `persons`, `hubspot_deal_id`, `name`, `amount`, `stage_id`, `sync_status`, `raw_payload`, and audit ownership fields.
+- Supports associating one company and multiple local people to the same HubSpot business record.
 
 ## Roles and permissions
 
@@ -156,10 +170,16 @@ NephewCRM/
   Ensures every authenticated session has a current IP audit record and opens a new record when the session IP changes.
 - `admin_panel.services.AdminAccessLogPaginationService`
   Resolves keyset-based access log pages with cursor navigation for previous and next slices.
+- `dispatch_flow.services.DispatchFlowAccessService`
+  Validates whether the active organization has at least one supported dispatch app installed and controls sidebar/page visibility for the unified dispatch screen.
+- `dispatch_flow.services.DispatchFlowWorkspaceService`
+  Reuses Bot Conversa and Gmail dispatch builders to assemble the unified page without duplicating form logic.
+- `dispatch_flow.services.DispatchFlowActionService`
+  Delegates Bot Conversa and Gmail dispatch creation to the existing channel-specific business services.
 - `bot_conversa.services.*`
   Encapsulates Bot Conversa installation resolution, remote contact sync, tag cache refresh, tag assignment, flow cache refresh, and dispatch processing.
 - `hubspot_integration.services.*`
-  Encapsulates HubSpot installation resolution, company/contact sync, pipeline refresh, and deal creation.
+  Encapsulates HubSpot installation resolution, company/contact sync, pipeline refresh, business creation, business-person association, and async business search results for Tom Select.
 - `apollo_integration.services.*`
   Encapsulates Apollo installation resolution, remote company search, remote person search, person enrichment, usage snapshots, bulk import into CRM, and optional sync handoff to HubSpot.
 - `gmail_integration.services.*`
@@ -176,6 +196,7 @@ NephewCRM/
 - `/dashboard/`
 - `/admin-panel/`
 - `/admin-panel/ips/`
+- `/fluxo-disparo/`
 - `/organizations/`
 - `/organizations/switch/`
 - `/invites/`
@@ -235,6 +256,6 @@ NephewCRM/
 3. Integration platform
    App catalog, installations, encrypted credentials, secure reveal flow, and access audit.
 4. Operational modules
-   Apollo company search/import, Apollo person search/enrichment, Bot Conversa tag synchronization/assignment and flow dispatches, HubSpot sync/deals, and Gmail templates/dispatches with configurable pacing and async audience filters for people who have not yet received sends in each channel.
+   Apollo company search/import, Apollo person search/enrichment, Bot Conversa tag synchronization/assignment and flow dispatches, HubSpot sync/business workflows, and Gmail templates/dispatches with configurable pacing and async audience filters for people who have not yet received sends in each channel.
 5. Next evolution
    Stronger model-level tenant consistency guarantees, broader audit coverage, background processing options, and richer CRM workflows.

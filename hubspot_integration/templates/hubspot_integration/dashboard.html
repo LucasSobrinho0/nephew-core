@@ -5,8 +5,8 @@
 {% block content %}
   <section class="page-header mb-4">
     <span class="section-kicker">HubSpot</span>
-    <h1>Integração com empresas, pessoas, pipelines e deals</h1>
-    <p class="text-body-secondary mb-0">Sincronize os dados do CRM interno com o HubSpot e use os pipelines remotos para criar deals vinculados a empresas e contatos.</p>
+    <h1>Integracao com empresas, pessoas, pipelines e negocios</h1>
+    <p class="text-body-secondary mb-0">Sincronize os dados do CRM interno com o HubSpot e use os pipelines remotos para criar negocios vinculados a empresas e contatos.</p>
   </section>
 
   {% include 'hubspot_integration/_subnav.html' %}
@@ -43,14 +43,14 @@
       <div class="glass-card content-card h-100">
         <div class="content-card-header">
           <div>
-            <span class="section-kicker">Deals</span>
-            <h2>Deals recentes</h2>
+            <span class="section-kicker">Negocios</span>
+            <h2>Negocios recentes</h2>
           </div>
         </div>
         {% if summary.recent_deals %}
           <div class="table-responsive">
             <table class="table table-clean align-middle mb-0">
-              <thead><tr><th>Deal</th><th>Empresa</th><th>Status</th></tr></thead>
+              <thead><tr><th>Negocio</th><th>Empresa</th><th>Status</th></tr></thead>
               <tbody>
                 {% for deal in summary.recent_deals %}
                   <tr><td>{{ deal.name }}</td><td>{{ deal.company.name }}</td><td>{{ deal.get_sync_status_display }}</td></tr>
@@ -59,7 +59,7 @@
             </table>
           </div>
         {% else %}
-          <div class="soft-empty"><p class="mb-0">Nenhum deal foi criado ainda.</p></div>
+          <div class="soft-empty"><p class="mb-0">Nenhum negocio foi criado ainda.</p></div>
         {% endif %}
       </div>
     </div>

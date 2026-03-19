@@ -97,6 +97,7 @@ class HubSpotModuleTests(TestCase):
             {
                 'company_public_id': self.company.public_id,
                 'pipeline_public_id': self.pipeline.public_id,
+                'stage_id': 'appointmentscheduled',
                 'deal_name': 'ACME - Diagnóstico',
                 'amount': '10000',
             },
@@ -104,3 +105,97 @@ class HubSpotModuleTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertTrue(HubSpotDeal.objects.filter(hubspot_deal_id='deal-1').exists())
+
+    @patch('hubspot_integration.client.HubSpotClient.create_deal')
+    @patch('hubspot_integration.client.HubSpotClient.create_or_get_company')
+    def test_create_company_with_business_creates_company_and_deal(self, create_company_mock, create_deal_mock):
+        create_company_mock.return_value = {
+            'hubspot_company_id': 'company-99',
+            'raw_payload': {'id': 'company-99'},
+        }
+        create_deal_mock.return_value = {'hubspot_deal_id': 'deal-99', 'raw_payload': {'id': 'deal-99'}}
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.post(
+            reverse('hubspot_integration:create_company'),
+            {
+                'name': 'Beta',
+                'website': 'https://beta.test',
+                'phone': '+55 11 4000-1111',
+                'email': '',
+                'segment': '',
+                'employee_count': '',
+                'create_deal_now': 'on',
+                'pipeline_public_id': self.pipeline.public_id,
+                'stage_id': 'appointmentscheduled',
+                'deal_name': 'Beta - Novo negocio',
+                'amount': '20000',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(HubSpotDeal.objects.filter(hubspot_deal_id='deal-99', name='Beta - Novo negocio').exists())
+
+    @patch('hubspot_integration.client.HubSpotClient.associate_contact_to_deal')
+    @patch('hubspot_integration.client.HubSpotClient.create_or_get_contact')
+    def test_create_person_with_business_links_person_to_deal(self, create_contact_mock, associate_contact_mock):
+        create_contact_mock.return_value = {
+            'hubspot_contact_id': 'contact-99',
+            'raw_payload': {'id': 'contact-99'},
+        }
+        associate_contact_mock.return_value = {}
+        deal = HubSpotDeal.objects.create(
+            organization=self.organization,
+            installation=self.installation,
+            company=self.company,
+            pipeline=self.pipeline,
+            hubspot_deal_id='deal-55',
+            name='ACME - Expansao',
+            amount='5000',
+            stage_id='appointmentscheduled',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+
+        self.client.force_login(self.owner)
+        self.activate_organization()
+        response = self.client.post(
+            reverse('hubspot_integration:create_person'),
+            {
+                'first_name': 'Bruno',
+                'last_name': 'Sales',
+                'email': 'bruno@acme.test',
+                'phone': '+55 11 98888-7777',
+                'company_public_id': self.company.public_id,
+                'deal_public_id': deal.public_id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        person = self.organization.persons.get(first_name='Bruno', last_name='Sales')
+        self.assertEqual(person.hubspot_contact_id, 'contact-99')
+        self.assertTrue(deal.persons.filter(pk=person.pk).exists())
+        associate_contact_mock.assert_called_once_with(contact_id='contact-99', deal_id='deal-55')
+
+    def test_deal_search_returns_local_business_results(self):
+        deal = HubSpotDeal.objects.create(
+            organization=self.organization,
+            installation=self.installation,
+            company=self.company,
+            pipeline=self.pipeline,
+            hubspot_deal_id='deal-22',
+            name='ACME - Renovacao',
+            amount='3000',
+            stage_id='appointmentscheduled',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.get(reverse('hubspot_integration:deal_search'), {'q': 'Renova'})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['results'][0]['value'], str(deal.public_id))

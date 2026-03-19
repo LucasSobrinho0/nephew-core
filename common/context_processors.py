@@ -1,4 +1,5 @@
 from admin_panel.services import AdminAuthorizationService
+from dispatch_flow.services import DispatchFlowAccessService
 from integrations.services import InstalledAppNavigationService
 
 
@@ -12,4 +13,5 @@ def active_organization(request):
             organization=active_organization,
         ),
         'has_admin_panel_access': AdminAuthorizationService.has_panel_access(getattr(request, 'user', None)),
+        'has_dispatch_flow_access': DispatchFlowAccessService.has_access(organization=active_organization),
     }

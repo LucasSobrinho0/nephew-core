@@ -6,7 +6,7 @@
   <section class="page-header mb-4">
     <span class="section-kicker">HubSpot</span>
     <h1>Empresas</h1>
-    <p class="text-body-secondary mb-0">Cadastre empresas no CRM, sincronize em massa com o HubSpot e salve empresas remotas sem duplicar registros locais.</p>
+    <p class="text-body-secondary mb-0">Cadastre empresas no CRM, crie um negocio junto quando precisar e sincronize em massa com o HubSpot sem duplicar registros locais.</p>
   </section>
   {% include 'hubspot_integration/_subnav.html' %}
 
@@ -37,9 +37,7 @@
       <div class="glass-card content-card h-100 scroll-card" id="hubspotLocalCompaniesCard">
         <div class="content-card-header">
           <div><span class="section-kicker">CRM local</span><h2>Empresas cadastradas</h2></div>
-          {% if has_loaded_local_companies and can_manage_hubspot and company_rows %}
-            <button type="submit" form="hubspotBulkCompanySyncForm" class="btn btn-brand">Sincronizar selecionadas</button>
-          {% elif not has_loaded_local_companies %}
+          {% if not has_loaded_local_companies %}
             <form method="get" action="{% url 'hubspot_integration:companies' %}" data-async-list-form data-async-target="#hubspotLocalCompaniesCard" data-loading-text="Listando empresas...">
               <input type="hidden" name="load_local" value="1">
               <button type="submit" class="btn btn-outline-secondary">Listar empresas</button>
@@ -77,6 +75,11 @@
                 </tbody>
               </table>
             </div>
+            {% if can_manage_hubspot and company_rows %}
+              <div class="d-flex justify-content-end mt-3">
+                <button type="submit" class="btn btn-brand w-100 w-md-auto">Sincronizar selecionadas</button>
+              </div>
+            {% endif %}
           </form>
         {% elif has_loaded_local_companies %}
           <div class="soft-empty"><p class="mb-0">Nenhuma empresa cadastrada ainda.</p></div>
@@ -97,9 +100,6 @@
         {{ remote_list_form.load }}
         <button type="submit" class="btn btn-outline-secondary w-100">Listar empresas</button>
       </form>
-      {% if can_manage_hubspot and remote_companies %}
-        <button type="submit" form="hubspotBulkCompanyImportForm" class="btn btn-brand w-100 w-md-auto">Salvar selecionadas</button>
-      {% endif %}
     </div>
 
     {% if remote_companies %}
@@ -137,6 +137,11 @@
             </tbody>
           </table>
         </div>
+        {% if can_manage_hubspot and remote_companies %}
+          <div class="d-flex justify-content-end mt-3">
+            <button type="submit" class="btn btn-brand w-100 w-md-auto">Salvar selecionadas</button>
+          </div>
+        {% endif %}
       </form>
     {% elif has_loaded_remote_companies %}
       <div class="soft-empty"><p class="mb-0">Nenhuma empresa remota encontrada.</p></div>

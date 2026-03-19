@@ -1,3 +1,5 @@
+from django.db.models import Q
+
 from hubspot_integration.models import HubSpotDeal, HubSpotPipelineCache, HubSpotSyncLog
 
 
@@ -45,6 +47,30 @@ class HubSpotDealRepository:
     @staticmethod
     def list_recent_for_organization(organization, limit=5):
         return HubSpotDealRepository.list_for_organization(organization)[:limit]
+
+    @staticmethod
+    def get_for_organization_and_public_id(organization, public_id):
+        return (
+            HubSpotDeal.objects.for_organization(organization)
+            .with_related_objects()
+            .filter(public_id=public_id)
+            .first()
+        )
+
+    @staticmethod
+    def search_for_organization(organization, query='', limit=20):
+        queryset = (
+            HubSpotDeal.objects.for_organization(organization)
+            .with_related_objects()
+            .order_by('-created_at')
+        )
+        normalized_query = (query or '').strip()
+        if normalized_query:
+            queryset = queryset.filter(
+                Q(name__icontains=normalized_query)
+                | Q(company__name__icontains=normalized_query)
+            )
+        return queryset[:limit]
 
     @staticmethod
     def create(**kwargs):

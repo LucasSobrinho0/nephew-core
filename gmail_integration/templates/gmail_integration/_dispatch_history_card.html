@@ -1,0 +1,40 @@
+<div class="glass-card content-card h-100">
+  <div class="content-card-header">
+    <div>
+      <span class="section-kicker">Historico</span>
+      <h2>Disparos anteriores</h2>
+    </div>
+  </div>
+  {% if gmail_dispatches %}
+    <div class="table-responsive">
+      <table class="table table-clean align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Assunto</th>
+            <th>Status</th>
+            <th>Sucesso</th>
+            <th>Falhas</th>
+            <th class="text-end">Detalhe</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for dispatch in gmail_dispatches %}
+            <tr>
+              <td>{{ dispatch.subject_snapshot }}</td>
+              <td>{{ dispatch.get_status_display }}</td>
+              <td>{{ dispatch.success_recipients }}</td>
+              <td>{{ dispatch.failed_recipients }}</td>
+              <td class="text-end">
+                <a href="{% url 'gmail_integration:dispatch_detail' dispatch.public_id %}" class="btn btn-outline-secondary btn-sm">Abrir</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="soft-empty text-start px-0 pb-0">
+      <p class="mb-0">Nenhum disparo foi registrado ainda.</p>
+    </div>
+  {% endif %}
+</div>

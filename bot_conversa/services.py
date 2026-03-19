@@ -8,6 +8,7 @@ from django.utils import timezone
 from bot_conversa.client import BotConversaClient
 from bot_conversa.constants import BOT_CONVERSA_APP_CODE, DEFAULT_DISPATCH_BATCH_SIZE
 from bot_conversa.exceptions import BotConversaApiError, BotConversaConfigurationError
+from bot_conversa.forms import BotConversaDispatchCreateForm
 from bot_conversa.models import (
     BotConversaContact,
     BotConversaFlowCache,
@@ -95,6 +96,72 @@ class BotConversaDashboardService:
             'recent_dispatches': recent_dispatches,
             'recent_sync_logs': recent_sync_logs,
         }
+
+
+class BotConversaDispatchWorkspaceService:
+    @staticmethod
+    def build_person_choices(*, organization, only_unsent=False, tag_public_ids=None):
+        persons = list(PersonRepository.list_for_organization(organization))
+        selected_tag_ids = []
+
+        if tag_public_ids:
+            selected_tag_ids = [
+                tag.id
+                for tag in BotConversaTagRepository.list_for_organization_and_public_ids(
+                    organization,
+                    tag_public_ids,
+                )
+            ]
+
+        if selected_tag_ids:
+            tagged_person_ids = set(
+                BotConversaTagService.list_person_ids_for_tags(
+                    organization=organization,
+                    tag_ids=selected_tag_ids,
+                )
+            )
+            persons = [person for person in persons if person.id in tagged_person_ids]
+
+        if only_unsent:
+            successful_person_ids = set(
+                BotConversaFlowDispatchItemRepository.list_success_person_ids_for_organization(
+                    organization,
+                )
+            )
+            persons = [person for person in persons if person.id not in successful_person_ids]
+
+        return [
+            (str(person.public_id), f'{person.full_name} - {person.phone}')
+            for person in persons
+        ]
+
+    @staticmethod
+    def build_flow_choices(*, organization):
+        return [
+            (str(flow.public_id), flow.name)
+            for flow in BotConversaFlowCacheRepository.list_selectable_for_organization(organization)
+        ]
+
+    @staticmethod
+    def build_tag_choices(*, organization):
+        return BotConversaTagService.build_tag_choice_rows(organization=organization)
+
+    @staticmethod
+    def build_dispatch_form(*, organization, selected_tag_public_ids=None, **kwargs):
+        person_choices = BotConversaDispatchWorkspaceService.build_person_choices(
+            organization=organization,
+            tag_public_ids=selected_tag_public_ids,
+        )
+        return BotConversaDispatchCreateForm(
+            flow_choices=BotConversaDispatchWorkspaceService.build_flow_choices(
+                organization=organization,
+            ),
+            person_choices=person_choices,
+            tag_choices=BotConversaDispatchWorkspaceService.build_tag_choices(
+                organization=organization,
+            ),
+            **kwargs,
+        )
 
 
 class BotConversaPeopleService:

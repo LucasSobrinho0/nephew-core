@@ -2,6 +2,7 @@ from django import forms
 
 from common.forms import BootstrapFormMixin
 from companies.forms import CompanyCreateForm
+from people.forms import PersonCreateForm
 
 
 class HubSpotRemoteListForm(BootstrapFormMixin, forms.Form):
@@ -51,10 +52,11 @@ class HubSpotPipelineRefreshForm(BootstrapFormMixin, forms.Form):
 class HubSpotDealCreateForm(BootstrapFormMixin, forms.Form):
     company_public_id = forms.ChoiceField(label='Empresa', choices=())
     pipeline_public_id = forms.ChoiceField(label='Pipeline', choices=())
+    stage_id = forms.ChoiceField(label='Coluna do negocio', choices=())
     deal_name = forms.CharField(
-        label='Nome do deal',
+        label='Nome do negocio',
         max_length=255,
-        widget=forms.TextInput(attrs={'placeholder': 'Nome do deal'}),
+        widget=forms.TextInput(attrs={'placeholder': 'Nome do negocio'}),
     )
     amount = forms.CharField(
         label='Valor',
@@ -62,16 +64,20 @@ class HubSpotDealCreateForm(BootstrapFormMixin, forms.Form):
         widget=forms.TextInput(attrs={'placeholder': '15000'}),
     )
 
-    def __init__(self, *args, company_choices=(), pipeline_choices=(), **kwargs):
+    def __init__(self, *args, company_choices=(), pipeline_choices=(), stage_choices=(), **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['company_public_id'].choices = company_choices
         self.fields['pipeline_public_id'].choices = pipeline_choices
+        self.fields['stage_id'].choices = stage_choices
 
     def clean_deal_name(self):
         return self.cleaned_data['deal_name'].strip()
 
     def clean_amount(self):
         return self.cleaned_data.get('amount', '').strip()
+
+    def clean_stage_id(self):
+        return self.cleaned_data['stage_id'].strip()
 
 
 class HubSpotRemoteCompanyImportForm(BootstrapFormMixin, forms.Form):
@@ -124,4 +130,78 @@ class HubSpotContactCompanySyncForm(BootstrapFormMixin, forms.Form):
 
 
 class HubSpotCompanyCreateForm(CompanyCreateForm):
-    pass
+    create_deal_now = forms.BooleanField(
+        label='Criar negocio agora',
+        required=False,
+    )
+    pipeline_public_id = forms.ChoiceField(
+        label='Pipeline do negocio',
+        required=False,
+        choices=(),
+    )
+    stage_id = forms.ChoiceField(
+        label='Coluna do negocio',
+        required=False,
+        choices=(),
+    )
+    deal_name = forms.CharField(
+        label='Nome do negocio',
+        required=False,
+        max_length=255,
+        widget=forms.TextInput(attrs={'placeholder': 'Nome do negocio'}),
+    )
+    amount = forms.CharField(
+        label='Valor do negocio',
+        required=False,
+        widget=forms.TextInput(attrs={'placeholder': '15000'}),
+    )
+
+    def __init__(self, *args, pipeline_choices=(), stage_choices=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['pipeline_public_id'].choices = [('', 'Selecione')] + list(pipeline_choices)
+        self.fields['stage_id'].choices = [('', 'Selecione')] + list(stage_choices)
+
+    def clean_deal_name(self):
+        return self.cleaned_data.get('deal_name', '').strip()
+
+    def clean_amount(self):
+        return self.cleaned_data.get('amount', '').strip()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if not cleaned_data.get('create_deal_now'):
+            return cleaned_data
+
+        if not cleaned_data.get('pipeline_public_id'):
+            self.add_error('pipeline_public_id', 'Selecione um pipeline para criar o negocio.')
+        if not cleaned_data.get('stage_id'):
+            self.add_error('stage_id', 'Selecione a coluna do negocio.')
+        if not cleaned_data.get('deal_name'):
+            cleaned_data['deal_name'] = cleaned_data.get('name', '').strip()
+        return cleaned_data
+
+
+class HubSpotPersonCreateForm(PersonCreateForm):
+    deal_public_id = forms.ChoiceField(
+        label='Negocio',
+        required=False,
+        choices=(),
+    )
+
+    def __init__(self, *args, company_choices=(), deal_search_url='', selected_deal_choice=None, **kwargs):
+        super().__init__(*args, company_choices=company_choices, **kwargs)
+        base_choices = [('', 'Selecione')]
+        if selected_deal_choice:
+            base_choices.append(selected_deal_choice)
+        self.fields['deal_public_id'].choices = base_choices
+        self.fields['deal_public_id'].widget.attrs.update(
+            {
+                'data-remote-select': 'true',
+                'data-remote-url': deal_search_url,
+                'data-placeholder': 'Pesquisar negocio',
+                'data-remote-min-chars': '0',
+            }
+        )
+
+    def clean_deal_public_id(self):
+        return self.cleaned_data.get('deal_public_id', '').strip()

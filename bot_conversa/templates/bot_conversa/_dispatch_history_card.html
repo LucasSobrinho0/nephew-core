@@ -1,0 +1,41 @@
+<div class="glass-card content-card h-100">
+  <div class="content-card-header">
+    <div>
+      <span class="section-kicker">Historico</span>
+      <h2>Disparos recentes</h2>
+    </div>
+  </div>
+  {% if bot_recent_dispatches %}
+    <div class="table-responsive">
+      <table class="table table-clean align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Fluxo</th>
+            <th>Status</th>
+            <th>Processado</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for dispatch in bot_recent_dispatches %}
+            <tr>
+              <td>
+                <strong>{{ dispatch.flow_name }}</strong>
+                <div class="text-body-secondary small">{{ dispatch.created_at|date:'Y-m-d H:i' }}</div>
+              </td>
+              <td><span class="status-badge status-used">{{ dispatch.get_status_display }}</span></td>
+              <td>{{ dispatch.processed_items }}/{{ dispatch.total_items }}</td>
+              <td class="text-end">
+                <a href="{% url 'bot_conversa:dispatch_detail' dispatch.public_id %}" class="btn btn-outline-secondary btn-sm">Abrir</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="soft-empty">
+      <p class="mb-0">Nenhum disparo foi criado ainda. Atualize os fluxos e crie seu primeiro envio para um publico.</p>
+    </div>
+  {% endif %}
+</div>

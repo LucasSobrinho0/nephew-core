@@ -1,47 +1,53 @@
 {% extends 'base.html' %}
 
-{% block title %}Deals do HubSpot{% endblock %}
+{% block title %}Negocios do HubSpot{% endblock %}
 
 {% block content %}
   <section class="page-header mb-4">
     <span class="section-kicker">HubSpot</span>
-    <h1>Deals</h1>
-    <p class="text-body-secondary mb-0">Crie deals usando empresa sincronizada, pipeline remoto em cache e contatos já vinculados à empresa.</p>
+    <h1>Negocios</h1>
+    <p class="text-body-secondary mb-0">Crie negocios usando empresa sincronizada, escolha a coluna correta do pipeline e acompanhe os registros locais e remotos.</p>
   </section>
   {% include 'hubspot_integration/_subnav.html' %}
   <section class="row g-4">
     <div class="col-xl-5">
       <div class="glass-card content-card h-100">
-        <div class="content-card-header"><div><span class="section-kicker">Novo deal</span><h2>Criar deal</h2></div></div>
+        <div class="content-card-header"><div><span class="section-kicker">Novo negocio</span><h2>Criar negocio</h2></div></div>
         {% if can_manage_hubspot %}
           <form method="post" action="{% url 'hubspot_integration:create_deal' %}" class="row g-3">
             {% csrf_token %}
             {% for field in deal_form %}
               <div class="col-12"><label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>{{ field }}</div>
             {% endfor %}
-            <div class="col-12"><button type="submit" class="btn btn-brand">Criar deal</button></div>
+            <div class="col-12"><button type="submit" class="btn btn-brand">Criar negocio</button></div>
           </form>
         {% else %}
-          <div class="soft-empty"><p class="mb-0">Somente proprietários e administradores podem criar deals no HubSpot.</p></div>
+          <div class="soft-empty"><p class="mb-0">Somente proprietários e administradores podem criar negocios no HubSpot.</p></div>
         {% endif %}
       </div>
     </div>
     <div class="col-xl-7">
       <div class="glass-card content-card h-100">
-        <div class="content-card-header"><div><span class="section-kicker">Histórico</span><h2>Deals criados</h2></div></div>
+        <div class="content-card-header"><div><span class="section-kicker">Historico</span><h2>Negocios criados</h2></div></div>
         {% if deals %}
           <div class="table-responsive">
             <table class="table table-clean align-middle mb-0">
-              <thead><tr><th>Deal</th><th>Empresa</th><th>Pipeline</th><th>ID HubSpot</th></tr></thead>
+              <thead><tr><th>Negocio</th><th>Empresa</th><th>Pipeline</th><th>Contatos</th><th>ID HubSpot</th></tr></thead>
               <tbody>
                 {% for deal in deals %}
-                  <tr><td>{{ deal.name }}</td><td>{{ deal.company.name }}</td><td>{{ deal.pipeline.name }}</td><td>{{ deal.hubspot_deal_id|default:'-' }}</td></tr>
+                  <tr>
+                    <td>{{ deal.name }}</td>
+                    <td>{{ deal.company.name }}</td>
+                    <td>{{ deal.pipeline.name }}</td>
+                    <td>{{ deal.persons.count }}</td>
+                    <td>{{ deal.hubspot_deal_id|default:'-' }}</td>
+                  </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
         {% else %}
-          <div class="soft-empty"><p class="mb-0">Nenhum deal criado ainda.</p></div>
+          <div class="soft-empty"><p class="mb-0">Nenhum negocio criado ainda.</p></div>
         {% endif %}
       </div>
     </div>
@@ -49,26 +55,27 @@
 
   <section class="glass-card content-card mt-4 scroll-card">
     <div class="content-card-header">
-      <div><span class="section-kicker">HubSpot remoto</span><h2>Todos os deals</h2></div>
+      <div><span class="section-kicker">HubSpot remoto</span><h2>Todos os negocios</h2></div>
     </div>
     {% if remote_deals %}
       <div class="scroll-area scroll-area-table">
         <table class="table table-clean align-middle mb-0">
-          <thead><tr><th>Deal</th><th>Valor</th><th>Pipeline</th><th>Vínculo local</th></tr></thead>
+          <thead><tr><th>Negocio</th><th>Valor</th><th>Pipeline</th><th>Coluna</th><th>Vinculo local</th></tr></thead>
           <tbody>
             {% for deal in remote_deals %}
               <tr>
                 <td>{{ deal.name }}</td>
                 <td>{{ deal.amount|default:'-' }}</td>
-                <td>{{ deal.pipeline_id|default:'-' }}</td>
-                <td>{% if deal.linked_deal %}{{ deal.linked_deal.name }}{% else %}Não salvo{% endif %}</td>
+                <td>{{ deal.pipeline_name|default:deal.pipeline_id|default:'-' }}</td>
+                <td>{{ deal.stage_name|default:deal.stage_id|default:'-' }}</td>
+                <td>{% if deal.linked_deal %}{{ deal.linked_deal.name }}{% else %}Nao salvo{% endif %}</td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
     {% else %}
-      <div class="soft-empty"><p class="mb-0">Nenhum deal remoto encontrado.</p></div>
+      <div class="soft-empty"><p class="mb-0">Nenhum negocio remoto encontrado.</p></div>
     {% endif %}
   </section>
 {% endblock %}
