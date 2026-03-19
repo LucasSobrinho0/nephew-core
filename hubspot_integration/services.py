@@ -123,7 +123,21 @@ class HubSpotCompanyService:
     @staticmethod
     def build_company_rows(*, organization):
         companies = list(CompanyRepository.list_for_organization(organization))
-        return [{'company': company, 'is_synced': bool(company.hubspot_company_id)} for company in companies]
+        remote_summary_by_company_id = HubSpotRemoteAssociationService.build_company_summaries(
+            organization=organization,
+            companies=companies,
+        )
+        return [
+            {
+                'company': company,
+                'is_synced': bool(company.hubspot_company_id),
+                'has_local_deal': bool(company.hubspot_deals.exists()),
+                'local_deal_count': company.hubspot_deals.count(),
+                'has_remote_deal': remote_summary_by_company_id.get(company.id, {}).get('has_remote_deal', False),
+                'remote_deal_count': remote_summary_by_company_id.get(company.id, {}).get('remote_deal_count', 0),
+            }
+            for company in companies
+        ]
 
     @staticmethod
     def build_company_choice_rows(*, organization):
@@ -313,6 +327,51 @@ class HubSpotCompanyService:
 
         return persisted_companies
 
+    @staticmethod
+    @transaction.atomic
+    def sync_companies_with_optional_deal_creation(
+        *,
+        user,
+        organization,
+        companies,
+        create_deal_now=False,
+        pipeline=None,
+        stage_id='',
+    ):
+        synced_companies = HubSpotCompanyService.sync_companies(
+            user=user,
+            organization=organization,
+            companies=companies,
+        )
+        created_deals = []
+        if not create_deal_now:
+            return {
+                'companies': synced_companies,
+                'created_deals': created_deals,
+            }
+
+        if pipeline is None:
+            raise ValidationError('Selecione um pipeline para criar o negocio.')
+
+        for company in synced_companies:
+            created_deals.append(
+                HubSpotDealService.create_deal(
+                    user=user,
+                    organization=organization,
+                    company=company,
+                    pipeline=pipeline,
+                    deal_name=company.name,
+                    stage_id=stage_id,
+                    amount='',
+                    persons=[],
+                )
+            )
+
+        return {
+            'companies': synced_companies,
+            'created_deals': created_deals,
+        }
+
 
 class HubSpotContactService:
     @staticmethod
@@ -326,7 +385,21 @@ class HubSpotContactService:
     @staticmethod
     def build_person_rows(*, organization):
         persons = list(PersonRepository.list_for_organization(organization).prefetch_related('hubspot_deals'))
-        return [{'person': person, 'is_synced': bool(person.hubspot_contact_id)} for person in persons]
+        remote_summary_by_person_id = HubSpotRemoteAssociationService.build_person_summaries(
+            organization=organization,
+            persons=persons,
+        )
+        return [
+            {
+                'person': person,
+                'is_synced': bool(person.hubspot_contact_id),
+                'has_local_deal': bool(person.hubspot_deals.exists()),
+                'local_deal_count': person.hubspot_deals.count(),
+                'has_remote_deal': remote_summary_by_person_id.get(person.id, {}).get('has_remote_deal', False),
+                'remote_deal_count': remote_summary_by_person_id.get(person.id, {}).get('remote_deal_count', 0),
+            }
+            for person in persons
+        ]
 
     @staticmethod
     def build_person_choice_rows(*, organization):
@@ -614,6 +687,126 @@ class HubSpotContactService:
             PersonRepository.bulk_update(persons_to_update, ['hubspot_contact_id', 'email', 'email_lookup', 'company', 'updated_by', 'updated_at'])
 
         return persisted_persons
+
+
+class HubSpotRemoteAssociationService:
+    @staticmethod
+    def _resolve_remote_company(client, *, company):
+        if company.hubspot_company_id:
+            return {
+                'remote_company_id': company.hubspot_company_id,
+                'was_resolved': True,
+            }
+
+        remote_company = client.search_company_by_name_or_website(
+            name=company.name,
+            website=company.website,
+        )
+        if not remote_company:
+            return {
+                'remote_company_id': '',
+                'was_resolved': False,
+            }
+
+        return {
+            'remote_company_id': remote_company['hubspot_company_id'],
+            'was_resolved': True,
+        }
+
+    @staticmethod
+    def _resolve_remote_person(client, *, person):
+        if person.hubspot_contact_id:
+            return {
+                'remote_contact_id': person.hubspot_contact_id,
+                'was_resolved': True,
+            }
+
+        if not person.email:
+            return {
+                'remote_contact_id': '',
+                'was_resolved': False,
+            }
+
+        remote_contact = client.search_contact_by_email(email=person.email)
+        if not remote_contact:
+            return {
+                'remote_contact_id': '',
+                'was_resolved': False,
+            }
+
+        return {
+            'remote_contact_id': remote_contact['hubspot_contact_id'],
+            'was_resolved': True,
+        }
+
+    @staticmethod
+    def build_company_summaries(*, organization, companies):
+        client = HubSpotInstallationService.build_client(organization=organization)
+        summaries = {}
+        for company in companies:
+            resolved = HubSpotRemoteAssociationService._resolve_remote_company(client, company=company)
+            remote_company_id = resolved['remote_company_id']
+            if not remote_company_id:
+                summaries[company.id] = {
+                    'remote_company_id': '',
+                    'has_remote_deal': False,
+                    'remote_deal_count': 0,
+                    'remote_deal_ids': [],
+                }
+                continue
+
+            deal_summary = client.get_company_deal_summary(company_id=remote_company_id)
+            summaries[company.id] = {
+                'remote_company_id': remote_company_id,
+                'has_remote_deal': bool(deal_summary['deal_count']),
+                'remote_deal_count': deal_summary['deal_count'],
+                'remote_deal_ids': deal_summary['deal_ids'],
+            }
+        return summaries
+
+    @staticmethod
+    def build_person_summaries(*, organization, persons):
+        client = HubSpotInstallationService.build_client(organization=organization)
+        summaries = {}
+        for person in persons:
+            resolved = HubSpotRemoteAssociationService._resolve_remote_person(client, person=person)
+            remote_contact_id = resolved['remote_contact_id']
+            if not remote_contact_id:
+                summaries[person.id] = {
+                    'remote_contact_id': '',
+                    'has_remote_deal': False,
+                    'remote_deal_count': 0,
+                    'remote_deal_ids': [],
+                }
+                continue
+
+            deal_summary = client.get_contact_deal_summary(contact_id=remote_contact_id)
+            summaries[person.id] = {
+                'remote_contact_id': remote_contact_id,
+                'has_remote_deal': bool(deal_summary['deal_count']),
+                'remote_deal_count': deal_summary['deal_count'],
+                'remote_deal_ids': deal_summary['deal_ids'],
+            }
+        return summaries
+
+    @staticmethod
+    def build_selected_company_conflicts(*, organization, companies):
+        summaries = HubSpotRemoteAssociationService.build_company_summaries(
+            organization=organization,
+            companies=companies,
+        )
+        conflicts = []
+        for company in companies:
+            summary = summaries.get(company.id, {})
+            if summary.get('has_remote_deal'):
+                conflicts.append(
+                    {
+                        'company': company,
+                        'remote_company_id': summary.get('remote_company_id', ''),
+                        'remote_deal_count': summary.get('remote_deal_count', 0),
+                    }
+                )
+        return conflicts
 
 
 class HubSpotPipelineService:

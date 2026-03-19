@@ -16,7 +16,20 @@
       </div>
       <div class="modal-footer border-0 pt-0">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{{ modal_cancel_label }}</button>
-        <a href="{{ modal_confirm_url }}" class="btn btn-brand">{{ modal_confirm_label }}</a>
+        {% if modal_confirm_submit_target %}
+          <button
+            type="button"
+            class="btn btn-brand"
+            data-confirm-submit-target="{{ modal_confirm_submit_target }}"
+            {% if modal_confirm_set_field %}data-confirm-set-field="{{ modal_confirm_set_field }}"{% endif %}
+            {% if modal_confirm_set_value %}data-confirm-set-value="{{ modal_confirm_set_value }}"{% endif %}
+            data-bs-dismiss="modal"
+          >
+            {{ modal_confirm_label }}
+          </button>
+        {% else %}
+          <a href="{{ modal_confirm_url }}" class="btn btn-brand">{{ modal_confirm_label }}</a>
+        {% endif %}
       </div>
     </div>
   </div>

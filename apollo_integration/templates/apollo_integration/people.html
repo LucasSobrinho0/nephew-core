@@ -146,7 +146,7 @@
                       <td>{{ person.first_name }} {{ person.last_name_obfuscated|default:person.last_name }}<div class="small text-body-secondary">{{ person.title|default:'-' }}</div></td>
                       <td>{{ person.organization_name|default:'-' }}<div class="small text-body-secondary">{{ person.organization_website|default:'-' }}</div></td>
                       <td>{% if person.has_email %}Disponivel{% else %}Nao{% endif %}</td>
-                      <td>{% if person.has_direct_phone %}Disponivel{% else %}Nao{% endif %}</td>
+                      <td>{{ person.phone|default:'-' }}</td>
                       <td>{% if person.linked_person %}{{ person.linked_person.full_name }}{% else %}Nao salvo{% endif %}</td>
                     </tr>
                   {% endfor %}

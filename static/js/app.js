@@ -193,6 +193,7 @@
             initEnhancedMultiSelects();
             initRemoteSelects();
             initAutoOpenModals();
+            initConfirmationSubmitButtons();
           })
           .catch(function () {
             if (crmErrorModal) {
@@ -361,6 +362,35 @@
       window.setTimeout(function () {
         bootstrap.Modal.getOrCreateInstance(modalElement).show();
       }, 150);
+    });
+  }
+
+  function initConfirmationSubmitButtons() {
+    document.querySelectorAll('[data-confirm-submit-target]').forEach(function (button) {
+      if (button.dataset.confirmSubmitBound === 'true') {
+        return;
+      }
+
+      button.dataset.confirmSubmitBound = 'true';
+      button.addEventListener('click', function () {
+        var formSelector = button.getAttribute('data-confirm-submit-target');
+        var fieldSelector = button.getAttribute('data-confirm-set-field');
+        var fieldValue = button.getAttribute('data-confirm-set-value') || '1';
+        var form = formSelector ? document.querySelector(formSelector) : null;
+        var field = fieldSelector && form ? form.querySelector(fieldSelector) : null;
+
+        if (!form) {
+          return;
+        }
+
+        if (field) {
+          field.value = fieldValue;
+        }
+
+        window.setTimeout(function () {
+          form.requestSubmit();
+        }, 120);
+      });
     });
   }
 
@@ -1097,5 +1127,6 @@
   initEnhancedMultiSelects();
   initRemoteSelects();
   initAutoOpenModals();
+  initConfirmationSubmitButtons();
   applyTheme(getTheme());
 }());

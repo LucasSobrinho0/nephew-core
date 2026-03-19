@@ -179,7 +179,7 @@ NephewCRM/
 - `bot_conversa.services.*`
   Encapsulates Bot Conversa installation resolution, remote contact sync, tag cache refresh, tag assignment, flow cache refresh, and dispatch processing.
 - `hubspot_integration.services.*`
-  Encapsulates HubSpot installation resolution, company/contact sync, pipeline refresh, business creation, business-person association, and async business search results for Tom Select.
+  Encapsulates HubSpot installation resolution, remote funnel validation for companies and contacts, company/contact sync, pipeline refresh, business creation, business-person association, and async business search results for Tom Select.
 - `apollo_integration.services.*`
   Encapsulates Apollo installation resolution, remote company search, remote person search, person enrichment, usage snapshots, bulk import into CRM, and optional sync handoff to HubSpot.
 - `gmail_integration.services.*`

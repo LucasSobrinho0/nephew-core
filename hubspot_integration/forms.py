@@ -19,16 +19,44 @@ class HubSpotPersonSyncForm(BootstrapFormMixin, forms.Form):
 
 class HubSpotBulkCompanySyncForm(BootstrapFormMixin, forms.Form):
     company_public_ids = forms.MultipleChoiceField(required=False, widget=forms.MultipleHiddenInput())
+    create_deal_now = forms.BooleanField(
+        label='Criar negocio ao sincronizar',
+        required=False,
+    )
+    pipeline_public_id = forms.ChoiceField(
+        label='Pipeline do negocio',
+        required=False,
+        choices=(),
+    )
+    stage_id = forms.ChoiceField(
+        label='Coluna do negocio',
+        required=False,
+        choices=(),
+    )
+    confirm_existing_remote_deals = forms.BooleanField(required=False, widget=forms.HiddenInput())
 
-    def __init__(self, *args, company_choices=(), **kwargs):
+    def __init__(self, *args, company_choices=(), pipeline_choices=(), stage_choices=(), **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['company_public_ids'].choices = company_choices
+        self.fields['pipeline_public_id'].choices = [('', 'Selecione')] + list(pipeline_choices)
+        self.fields['stage_id'].choices = [('', 'Selecione')] + list(stage_choices)
 
     def clean_company_public_ids(self):
         company_public_ids = self.cleaned_data.get('company_public_ids') or []
         if not company_public_ids:
             raise forms.ValidationError('Selecione pelo menos uma empresa para sincronizar.')
         return company_public_ids
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if not cleaned_data.get('create_deal_now'):
+            return cleaned_data
+
+        if not cleaned_data.get('pipeline_public_id'):
+            self.add_error('pipeline_public_id', 'Selecione um pipeline para criar o negocio.')
+        if not cleaned_data.get('stage_id'):
+            self.add_error('stage_id', 'Selecione a coluna do negocio.')
+        return cleaned_data
 
 
 class HubSpotBulkPersonSyncForm(BootstrapFormMixin, forms.Form):
@@ -43,6 +71,40 @@ class HubSpotBulkPersonSyncForm(BootstrapFormMixin, forms.Form):
         if not person_public_ids:
             raise forms.ValidationError('Selecione pelo menos uma pessoa para sincronizar.')
         return person_public_ids
+
+
+class HubSpotAttachPersonToDealForm(BootstrapFormMixin, forms.Form):
+    person_public_id = forms.ChoiceField(
+        label='Pessoa',
+        choices=(),
+    )
+    deal_public_id = forms.ChoiceField(
+        label='Negocio',
+        required=False,
+        choices=(),
+    )
+
+    def __init__(self, *args, person_choices=(), deal_search_url='', selected_deal_choice=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['person_public_id'].choices = [('', 'Selecione')] + list(person_choices)
+        base_choices = [('', 'Selecione')]
+        if selected_deal_choice:
+            base_choices.append(selected_deal_choice)
+        self.fields['deal_public_id'].choices = base_choices
+        self.fields['deal_public_id'].widget.attrs.update(
+            {
+                'data-remote-select': 'true',
+                'data-remote-url': deal_search_url,
+                'data-placeholder': 'Pesquisar negocio',
+                'data-remote-min-chars': '0',
+            }
+        )
+
+    def clean_person_public_id(self):
+        return self.cleaned_data.get('person_public_id', '').strip()
+
+    def clean_deal_public_id(self):
+        return self.cleaned_data.get('deal_public_id', '').strip()
 
 
 class HubSpotPipelineRefreshForm(BootstrapFormMixin, forms.Form):

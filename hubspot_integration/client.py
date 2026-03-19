@@ -72,6 +72,46 @@ class HubSpotClient:
             if isinstance(item, dict)
         ]
 
+    def get_company_deal_summary(self, *, company_id):
+        if not company_id:
+            return {'remote_company_id': '', 'deal_ids': [], 'deal_count': 0, 'raw_payload': {}}
+
+        payload = self._request(
+            'GET',
+            f'{HUBSPOT_COMPANIES_OBJECT_PATH}/{company_id}',
+            query={
+                'properties': 'name,website,phone,domain',
+                'associations': 'deals',
+            },
+        )
+        deal_ids = self._extract_association_ids(payload=payload, association_key='deals')
+        return {
+            'remote_company_id': str(payload.get('id') or company_id),
+            'deal_ids': deal_ids,
+            'deal_count': len(deal_ids),
+            'raw_payload': payload,
+        }
+
+    def get_contact_deal_summary(self, *, contact_id):
+        if not contact_id:
+            return {'remote_contact_id': '', 'deal_ids': [], 'deal_count': 0, 'raw_payload': {}}
+
+        payload = self._request(
+            'GET',
+            f'{HUBSPOT_CONTACTS_OBJECT_PATH}/{contact_id}',
+            query={
+                'properties': 'firstname,lastname,email,phone,mobilephone,company,website',
+                'associations': 'deals',
+            },
+        )
+        deal_ids = self._extract_association_ids(payload=payload, association_key='deals')
+        return {
+            'remote_contact_id': str(payload.get('id') or contact_id),
+            'deal_ids': deal_ids,
+            'deal_count': len(deal_ids),
+            'raw_payload': payload,
+        }
+
     def create_or_get_company(self, *, name, website='', phone=''):
         search_result = self.search_company_by_name_or_website(name=name, website=website)
         if search_result is not None:
@@ -288,3 +328,14 @@ class HubSpotClient:
             'updated_at': properties.get('hs_lastmodifieddate') or '',
             'raw_payload': payload,
         }
+
+    @staticmethod
+    def _extract_association_ids(*, payload, association_key):
+        association_results = (
+            (payload.get('associations') or {}).get(association_key) or {}
+        ).get('results') or []
+        return [
+            str(item.get('id') or '').strip()
+            for item in association_results
+            if str(item.get('id') or '').strip()
+        ]

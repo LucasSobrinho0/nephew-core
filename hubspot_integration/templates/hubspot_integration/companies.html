@@ -49,8 +49,9 @@
             <label for="hubspotLocalCompaniesFilter" class="form-label">Filtrar empresas locais</label>
             <input id="hubspotLocalCompaniesFilter" type="search" class="form-control" placeholder="Buscar por nome, website ou telefone" data-filter-target="#hubspotLocalCompaniesTableBody" data-filter-item="tr">
           </div>
-          <form method="post" action="{% url 'hubspot_integration:sync_companies_bulk' %}" id="hubspotBulkCompanySyncForm">
+          <form method="post" action="{% url 'hubspot_integration:sync_companies_bulk' %}" id="hubspotBulkCompanySyncForm" class="row g-3">
             {% csrf_token %}
+            {{ sync_form.confirm_existing_remote_deals }}
             <div class="scroll-area scroll-area-table">
               <table class="table table-clean align-middle mb-0">
                 <thead>
@@ -58,17 +59,27 @@
                     {% if can_manage_hubspot %}<th style="width: 44px;"><input type="checkbox" data-select-all="hubspot-company-sync"></th>{% endif %}
                     <th>Empresa</th>
                     <th>Website</th>
+                    <th>Negocios locais</th>
+                    <th>Funil remoto</th>
                     <th>Status</th>
                   </tr>
                 </thead>
                 <tbody id="hubspotLocalCompaniesTableBody">
                   {% for row in company_rows %}
-                    <tr data-filter-item data-filter-text="{{ row.company.name }} {{ row.company.website|default:'' }} {{ row.company.phone|default:'' }} {% if row.is_synced %}Sincronizada{% else %}Pendente{% endif %}">
+                    <tr data-filter-item data-filter-text="{{ row.company.name }} {{ row.company.website|default:'' }} {{ row.company.phone|default:'' }} {% if row.is_synced %}Sincronizada{% else %}Pendente{% endif %} {% if row.has_remote_deal %}Em funil{% else %}Sem funil{% endif %}">
                       {% if can_manage_hubspot %}
-                        <td><input type="checkbox" name="company_public_ids" value="{{ row.company.public_id }}" data-checkbox-group="hubspot-company-sync"></td>
+                        <td><input type="checkbox" name="company_public_ids" value="{{ row.company.public_id }}" data-checkbox-group="hubspot-company-sync" {% if row.company.public_id|stringformat:'s' in selected_company_public_ids %}checked{% endif %}></td>
                       {% endif %}
                       <td>{{ row.company.name }}</td>
                       <td>{{ row.company.website|default:'-' }}</td>
+                      <td>{{ row.local_deal_count }}</td>
+                      <td>
+                        {% if row.has_remote_deal %}
+                          {{ row.remote_deal_count }} negocio(s)
+                        {% else %}
+                          <span class="text-body-secondary">Nao</span>
+                        {% endif %}
+                      </td>
                       <td>{% if row.is_synced %}Sincronizada{% else %}Pendente{% endif %}</td>
                     </tr>
                   {% endfor %}
@@ -76,7 +87,23 @@
               </table>
             </div>
             {% if can_manage_hubspot and company_rows %}
-              <div class="d-flex justify-content-end mt-3">
+              <div class="col-12">
+                <div class="form-check">
+                  {{ sync_form.create_deal_now }}
+                  <label class="form-check-label" for="{{ sync_form.create_deal_now.id_for_label }}">{{ sync_form.create_deal_now.label }}</label>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <label for="{{ sync_form.pipeline_public_id.id_for_label }}" class="form-label">{{ sync_form.pipeline_public_id.label }}</label>
+                {{ sync_form.pipeline_public_id }}
+                {% for error in sync_form.pipeline_public_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+              </div>
+              <div class="col-md-6">
+                <label for="{{ sync_form.stage_id.id_for_label }}" class="form-label">{{ sync_form.stage_id.label }}</label>
+                {{ sync_form.stage_id }}
+                {% for error in sync_form.stage_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+              </div>
+              <div class="col-12 d-flex justify-content-end mt-1">
                 <button type="submit" class="btn btn-brand w-100 w-md-auto">Sincronizar selecionadas</button>
               </div>
             {% endif %}
@@ -149,5 +176,10 @@
       <div class="soft-empty"><p class="mb-0">Clique em listar para carregar as empresas remotas do HubSpot.</p></div>
     {% endif %}
   </section>
+
+  {% if show_remote_deal_conflict_prompt %}
+    <div class="d-none" data-auto-open-modal="hubspotCompanyDealConflictModal" data-auto-open-modal-once="true"></div>
+    {% include 'partials/confirmation_modal.html' with modal_id='hubspotCompanyDealConflictModal' modal_kicker='HubSpot' modal_title='Empresas ja estao em funil remoto' modal_message=remote_deal_conflict_modal_message modal_warning='Se continuar, o sistema criara um novo negocio para as empresas selecionadas na coluna escolhida.' modal_cancel_label='Cancelar' modal_confirm_label='Continuar mesmo assim' modal_confirm_submit_target='#hubspotBulkCompanySyncForm' modal_confirm_set_field='input[name="confirm_existing_remote_deals"]' modal_confirm_set_value='1' %}
+  {% endif %}
 
 {% endblock %}

@@ -103,6 +103,7 @@ integrations/
 - The shared dependency is the tenant-scoped CRM core, especially `people.Person`, company relations, and the common matching helpers.
 - Apollo agora interage com o CRM por meio de `companies.Company` e `people.Person`.
 - `dispatch_flow` funciona como uma camada de orquestracao de tela: ele nao substitui `bot_conversa` nem `gmail_integration`, apenas reutiliza seus forms, templates e services para oferecer um workspace unico de disparo quando um ou ambos os apps estiverem instalados.
+- A camada de HubSpot valida remotamente se empresas e contatos ja estao associados a negocios antes de abrir fluxos de sincronizacao com criacao de novo negocio, para que o espelho local reflita o estado real do HubSpot.
 - A busca de pessoas do Apollo salva resultados censurados no CRM por `apollo_person_id`, sem depender de enrichment nesta fase.
 - O enrichment de pessoas do Apollo opera sobre `people.Person` ja sincronizadas e atualiza nome completo e email no proprio registro local.
 - Quando o operador marca `Pegar telefone`, o Apollo passa a responder pelo webhook HTTPS do proprio Nephew CRM.
@@ -196,6 +197,23 @@ Templates:
 7. When a delay interval is configured, the frontend waits a randomized value between the configured min and max before the next processing step.
 8. The dispatch creation screen can asynchronously filter the audience to only show people who have not yet received a Gmail send in that tenant.
 9. Template variables are documented only on the template authoring screens, not on the dispatch screens, to keep the send workflow focused on audience and pacing.
+
+### HubSpot company sync with remote funnel validation
+
+1. Owner or admin opens the HubSpot companies screen inside the active organization.
+2. The local company list resolves whether each company is already in a remote HubSpot funnel by checking remote deal associations for the matched or synced company.
+3. The operator can select one or more local companies and optionally request immediate business creation.
+4. When business creation is requested, the operator must choose a pipeline and a stage.
+5. If any selected company is already associated with one or more remote HubSpot deals, the backend prepares a confirmation step before continuing.
+6. After confirmation, the backend syncs the selected companies and then creates one new business per company in the chosen pipeline stage.
+
+### HubSpot person attach-to-business flow
+
+1. Owner or admin opens the HubSpot people screen inside the active organization.
+2. The local people list resolves whether each person is already in a remote HubSpot funnel by checking remote deal associations for the matched or synced contact.
+3. The operator can use the attach workflow to link an existing local person to an existing local HubSpot business.
+4. Backend validation ensures the person, business, and company all belong to the same tenant and remain company-consistent.
+5. If needed, the backend first syncs the company and the contact to HubSpot and only then creates the remote contact-to-business association.
 
 ### Apollo company import flow
 

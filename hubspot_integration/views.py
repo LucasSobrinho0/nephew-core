@@ -9,6 +9,7 @@ from django.views.generic import TemplateView
 
 from companies.repositories import CompanyRepository
 from hubspot_integration.forms import (
+    HubSpotAttachPersonToDealForm,
     HubSpotBulkCompanySyncForm,
     HubSpotBulkPersonSyncForm,
     HubSpotBulkRemoteCompanyImportForm,
@@ -32,6 +33,7 @@ from hubspot_integration.services import (
     HubSpotDealService,
     HubSpotInstallationService,
     HubSpotPipelineService,
+    HubSpotRemoteAssociationService,
 )
 from people.repositories import PersonRepository
 
@@ -127,15 +129,19 @@ class HubSpotCompaniesView(HubSpotAccessMixin):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         load_form = HubSpotRemoteListForm(self.request.GET or None)
-        remote_companies = []
-        company_rows = []
-        has_loaded_local_companies = self.request.GET.get('load_local') == '1'
-        has_loaded_remote_companies = False
+        remote_companies = kwargs.get('remote_companies') or []
+        company_rows = kwargs.get('company_rows') or []
+        has_loaded_local_companies = kwargs.get('has_loaded_local_companies', self.request.GET.get('load_local') == '1')
+        has_loaded_remote_companies = kwargs.get('has_loaded_remote_companies', False)
 
-        if has_loaded_local_companies:
-            company_rows = HubSpotCompanyService.build_company_rows(organization=self.active_organization)
+        if has_loaded_local_companies and not company_rows:
+            try:
+                company_rows = HubSpotCompanyService.build_company_rows(organization=self.active_organization)
+            except Exception as exc:
+                messages.error(self.request, str(exc))
+                company_rows = []
 
-        if self.request.GET.get('load') == '1' and load_form.is_valid():
+        if not remote_companies and self.request.GET.get('load') == '1' and load_form.is_valid():
             has_loaded_remote_companies = True
             try:
                 remote_companies = HubSpotCompanyService.list_remote_companies(organization=self.active_organization)
@@ -154,6 +160,13 @@ class HubSpotCompaniesView(HubSpotAccessMixin):
                     pipeline_choices=self.build_pipeline_choices(),
                     stage_choices=self.build_stage_choices(),
                 ),
+                'sync_form': kwargs.get('sync_form') or HubSpotBulkCompanySyncForm(
+                    pipeline_choices=self.build_pipeline_choices(),
+                    stage_choices=self.build_stage_choices(),
+                ),
+                'selected_company_public_ids': kwargs.get('selected_company_public_ids') or [],
+                'show_remote_deal_conflict_prompt': kwargs.get('show_remote_deal_conflict_prompt', False),
+                'remote_deal_conflict_modal_message': kwargs.get('remote_deal_conflict_modal_message', ''),
             }
         )
         return context
@@ -233,10 +246,25 @@ class HubSpotCompanySyncView(HubSpotAccessMixin, View):
 
 class HubSpotBulkCompanySyncView(HubSpotAccessMixin, View):
     def post(self, request, *args, **kwargs):
-        form = HubSpotBulkCompanySyncForm(request.POST, company_choices=self.build_company_choices())
+        form = HubSpotBulkCompanySyncForm(
+            request.POST,
+            company_choices=self.build_company_choices(),
+            pipeline_choices=self.build_pipeline_choices(),
+            stage_choices=self.build_stage_choices(),
+        )
         if not form.is_valid():
-            messages.error(request, form.errors.get('company_public_ids', ['Selecione empresas válidas.'])[0])
-            return redirect('hubspot_integration:companies')
+            view = HubSpotCompaniesView()
+            view.request = request
+            view.installation = self.installation
+            view.active_organization = self.active_organization
+            view.active_membership = self.active_membership
+            return view.render_to_response(
+                view.get_context_data(
+                    sync_form=form,
+                    has_loaded_local_companies=True,
+                    selected_company_public_ids=request.POST.getlist('company_public_ids'),
+                )
+            )
 
         companies = list(
             CompanyRepository.list_for_organization_and_public_ids(
@@ -245,15 +273,63 @@ class HubSpotBulkCompanySyncView(HubSpotAccessMixin, View):
             )
         )
         try:
-            HubSpotCompanyService.sync_companies(
+            pipeline = None
+            if form.cleaned_data.get('create_deal_now'):
+                pipeline = HubSpotPipelineRepository.get_for_organization_and_public_id(
+                    self.active_organization,
+                    form.cleaned_data['pipeline_public_id'],
+                )
+                if pipeline is None:
+                    raise ValidationError('O pipeline selecionado nao foi encontrado.')
+
+                remote_conflicts = HubSpotRemoteAssociationService.build_selected_company_conflicts(
+                    organization=self.active_organization,
+                    companies=companies,
+                )
+                if remote_conflicts and not form.cleaned_data.get('confirm_existing_remote_deals'):
+                    conflict_lines = [
+                        f"{row['company'].name} ({row['remote_deal_count']} negocio(s) remoto(s))"
+                        for row in remote_conflicts
+                    ]
+                    view = HubSpotCompaniesView()
+                    view.request = request
+                    view.installation = self.installation
+                    view.active_organization = self.active_organization
+                    view.active_membership = self.active_membership
+                    return view.render_to_response(
+                        view.get_context_data(
+                            sync_form=form,
+                            has_loaded_local_companies=True,
+                            selected_company_public_ids=form.cleaned_data['company_public_ids'],
+                            show_remote_deal_conflict_prompt=True,
+                            remote_deal_conflict_modal_message=(
+                                'As seguintes empresas ja estao em funil remoto no HubSpot: '
+                                + '; '.join(conflict_lines)
+                                + '. Deseja continuar mesmo assim?'
+                            ),
+                        )
+                    )
+
+            result = HubSpotCompanyService.sync_companies_with_optional_deal_creation(
                 user=request.user,
                 organization=self.active_organization,
                 companies=companies,
+                create_deal_now=form.cleaned_data.get('create_deal_now', False),
+                pipeline=pipeline,
+                stage_id=form.cleaned_data.get('stage_id', ''),
             )
         except (PermissionDenied, ValidationError, Exception) as exc:
             messages.error(request, str(exc))
             return redirect('hubspot_integration:companies')
-        messages.success(request, f'{len(companies)} empresas foram sincronizadas com o HubSpot.')
+
+        created_deals = result['created_deals']
+        if created_deals:
+            messages.success(
+                request,
+                f"{len(result['companies'])} empresas foram sincronizadas e {len(created_deals)} negocio(s) foram criados no HubSpot.",
+            )
+        else:
+            messages.success(request, f"{len(result['companies'])} empresas foram sincronizadas com o HubSpot.")
         return redirect('hubspot_integration:companies')
 
 
@@ -317,15 +393,23 @@ class HubSpotPeopleView(HubSpotAccessMixin):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         load_form = HubSpotRemoteListForm(self.request.GET or None)
-        remote_contacts = []
-        person_rows = []
-        has_loaded_local_people = self.request.GET.get('load_local') == '1'
-        has_loaded_remote_contacts = False
+        remote_contacts = kwargs.get('remote_contacts') or []
+        person_rows = kwargs.get('person_rows') or []
+        has_loaded_local_people = kwargs.get('has_loaded_local_people', self.request.GET.get('load_local') == '1')
+        has_loaded_remote_contacts = kwargs.get('has_loaded_remote_contacts', False)
+        attach_person_public_id = kwargs.get('attach_person_public_id') or (self.request.GET.get('attach_person_public_id') or '').strip()
+        attach_form_initial = kwargs.get('attach_form_initial') or {}
+        if attach_person_public_id and not attach_form_initial.get('person_public_id'):
+            attach_form_initial['person_public_id'] = attach_person_public_id
 
-        if has_loaded_local_people:
-            person_rows = HubSpotContactService.build_person_rows(organization=self.active_organization)
+        if has_loaded_local_people and not person_rows:
+            try:
+                person_rows = HubSpotContactService.build_person_rows(organization=self.active_organization)
+            except Exception as exc:
+                messages.error(self.request, str(exc))
+                person_rows = []
 
-        if self.request.GET.get('load') == '1' and load_form.is_valid():
+        if not remote_contacts and self.request.GET.get('load') == '1' and load_form.is_valid():
             has_loaded_remote_contacts = True
             try:
                 remote_contacts = HubSpotContactService.list_remote_contacts(organization=self.active_organization)
@@ -344,6 +428,12 @@ class HubSpotPeopleView(HubSpotAccessMixin):
                 'create_form': kwargs.get('create_form') or HubSpotPersonCreateForm(
                     company_choices=self.build_company_choices(),
                     deal_search_url=reverse('hubspot_integration:deal_search'),
+                ),
+                'attach_form': kwargs.get('attach_form') or HubSpotAttachPersonToDealForm(
+                    person_choices=self.build_person_choices(),
+                    deal_search_url=reverse('hubspot_integration:deal_search'),
+                    selected_deal_choice=kwargs.get('selected_attach_deal_choice'),
+                    initial=attach_form_initial,
                 ),
             }
         )
@@ -463,6 +553,70 @@ class HubSpotBulkPersonSyncView(HubSpotAccessMixin, View):
             messages.error(request, str(exc))
             return redirect('hubspot_integration:people')
         messages.success(request, f'{len(persons)} pessoas foram sincronizadas com o HubSpot.')
+        return redirect('hubspot_integration:people')
+
+
+class HubSpotPersonAttachDealView(HubSpotAccessMixin, View):
+    def post(self, request, *args, **kwargs):
+        raw_deal_public_id = (request.POST.get('deal_public_id') or '').strip()
+        selected_deal = None
+        selected_deal_choice = None
+
+        if raw_deal_public_id:
+            selected_deal = HubSpotDealRepository.get_for_organization_and_public_id(
+                self.active_organization,
+                raw_deal_public_id,
+            )
+            if selected_deal is not None:
+                selected_deal_choice = (
+                    str(selected_deal.public_id),
+                    f'{selected_deal.name} | {selected_deal.company.name}',
+                )
+
+        form = HubSpotAttachPersonToDealForm(
+            request.POST,
+            person_choices=self.build_person_choices(),
+            deal_search_url=reverse('hubspot_integration:deal_search'),
+            selected_deal_choice=selected_deal_choice,
+        )
+        if not form.is_valid():
+            view = HubSpotPeopleView()
+            view.request = request
+            view.installation = self.installation
+            view.active_organization = self.active_organization
+            view.active_membership = self.active_membership
+            return view.render_to_response(
+                view.get_context_data(
+                    attach_form=form,
+                    has_loaded_local_people=True,
+                    selected_attach_deal_choice=selected_deal_choice,
+                )
+            )
+
+        person = PersonRepository.get_for_organization_and_public_id(
+            self.active_organization,
+            form.cleaned_data['person_public_id'],
+        )
+        if person is None:
+            messages.error(request, 'A pessoa selecionada nao foi encontrada.')
+            return redirect('hubspot_integration:people')
+
+        if selected_deal is None:
+            messages.error(request, 'O negocio selecionado nao foi encontrado.')
+            return redirect('hubspot_integration:people')
+
+        try:
+            HubSpotDealService.attach_person_to_deal(
+                user=request.user,
+                organization=self.active_organization,
+                deal=selected_deal,
+                person=person,
+            )
+        except (PermissionDenied, ValidationError, Exception) as exc:
+            messages.error(request, str(exc))
+            return redirect('hubspot_integration:people')
+
+        messages.success(request, 'Pessoa vinculada ao negocio com sucesso.')
         return redirect('hubspot_integration:people')
 
 
