@@ -102,7 +102,7 @@ integrations/
 - `hubspot_integration` now also keeps a local business layer for HubSpot deals, including pipeline-stage cache and local person associations per business.
 - The shared dependency is the tenant-scoped CRM core, especially `people.Person`, company relations, and the common matching helpers.
 - Apollo agora interage com o CRM por meio de `companies.Company` e `people.Person`.
-- `dispatch_flow` funciona como uma camada de orquestracao de tela: ele nao substitui `bot_conversa` nem `gmail_integration`, apenas reutiliza seus forms, templates e services para oferecer um workspace unico de disparo quando um ou ambos os apps estiverem instalados.
+- `dispatch_flow` funciona como uma camada de orquestracao de tela com audiencia unica do CRM, selecao por canal, validacao de elegibilidade por pessoa, preservacao da mesma selecao em erros de contato e criacao multicanal de disparos quando um ou ambos os apps estiverem instalados.
 - A camada de HubSpot valida remotamente se empresas e contatos ja estao associados a negocios antes de abrir fluxos de sincronizacao com criacao de novo negocio, para que o espelho local reflita o estado real do HubSpot.
 - A busca de pessoas do Apollo salva resultados censurados no CRM por `apollo_person_id`, sem depender de enrichment nesta fase.
 - O enrichment de pessoas do Apollo opera sobre `people.Person` ja sincronizadas e atualiza nome completo e email no proprio registro local.
@@ -115,6 +115,7 @@ integrations/
   - `common.matching` can reconcile by provider id, normalized email, normalized phone, `name + email`, and `name + phone`
   - fallback matching by name alone still exists, which helps reduce duplicates but is a weaker merge signal
 - This means the modules are independent as apps, but not independent as tenant data.
+- O processamento de disparos do Bot Conversa pode ser executado em background pela management command `run_bot_conversa_dispatch_worker`, sem depender de manter a tela de status aberta.
 
 ## Repositories
 
@@ -251,10 +252,20 @@ Templates:
 2. User selects a cached flow and one or more tenant-scoped persons.
 3. User can define a configurable min/max delay interval for pacing the sends.
 4. Backend creates one dispatch record and one item record per selected person.
-5. The dispatch detail page polls a backend endpoint.
+5. A dedicated worker command can process pending and running dispatches without requiring the detail page to stay open.
 6. Each processing cycle claims a safe batch of pending items, ensures a remote subscriber exists, and triggers the flow.
-7. `running` items are not counted as complete, which avoids premature dispatch completion under concurrent polling.
-8. The dispatch creation screen can asynchronously filter the audience to only show people who have not yet received a successful WhatsApp send in that tenant.
+7. When the dispatch has a configured delay interval, the backend stores the next eligible processing time and the worker respects that schedule.
+8. `running` items are not counted as complete, which avoids premature dispatch completion under concurrent polling.
+9. The dispatch creation screen can asynchronously filter the audience to only show people who have not yet received a successful WhatsApp send in that tenant.
+
+### Unified dispatch flow
+
+1. Owner or admin opens the shared dispatch-flow screen inside the active organization.
+2. The screen renders one shared audience list from the local CRM, with delivery eligibility for Gmail and WhatsApp on each person.
+3. The operator can filter the audience by people who have not yet received e-mail, WhatsApp, or either channel.
+4. The operator selects one list of people and then enables one or both channels.
+5. Backend validation blocks the chosen channel if any selected person lacks the required contact data, while preserving the same selected audience on the form.
+6. If validation passes, the backend creates one Bot Conversa dispatch, one Gmail dispatch, or both from that same audience selection.
 
 ### Bot Conversa tags flow
 

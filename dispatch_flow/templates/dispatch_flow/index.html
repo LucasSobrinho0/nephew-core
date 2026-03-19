@@ -5,47 +5,211 @@
 {% block content %}
   <section class="page-header mb-4">
     <span class="section-kicker">Fluxo de disparo</span>
-    <h1>Central de disparos</h1>
-    <p class="text-body-secondary mb-0">Concentre os envios disponiveis da organizacao em uma tela unica e escolha o canal que faz sentido para cada publico.</p>
+    <h1>Central unificada de envio</h1>
+    <p class="text-body-secondary mb-0">Selecione uma unica audiencia do CRM, escolha os canais disponiveis e dispare por WhatsApp, Gmail ou pelos dois ao mesmo tempo.</p>
   </section>
 
-  <section class="row g-4">
-    {% if bot_conversa_enabled %}
-      <div class="col-12">
-        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-          <div>
-            <span class="section-kicker mb-1">Bot Conversa</span>
-            <h2 class="h4 mb-0">WhatsApp</h2>
-          </div>
-        </div>
-        <div class="row g-4">
-          <div class="col-xl-5">
-            {% include 'bot_conversa/_dispatch_form_card.html' with bot_dispatch_form=bot_dispatch_form bot_dispatch_action_url=bot_dispatch_action_url %}
-          </div>
-          <div class="col-xl-7">
-            {% include 'bot_conversa/_dispatch_history_card.html' with bot_recent_dispatches=bot_recent_dispatches %}
-          </div>
-        </div>
+  <section class="glass-card content-card mb-4">
+    <div class="content-card-header">
+      <div>
+        <span class="section-kicker">Filtros</span>
+        <h2 class="h4 mb-0">Refinar audiencia</h2>
       </div>
-    {% endif %}
-
-    {% if gmail_enabled %}
-      <div class="col-12">
-        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-          <div>
-            <span class="section-kicker mb-1">Gmail</span>
-            <h2 class="h4 mb-0">E-mail</h2>
-          </div>
-        </div>
-        <div class="row g-4">
-          <div class="col-xl-5">
-            {% include 'gmail_integration/_dispatch_form_card.html' with gmail_dispatch_form=gmail_dispatch_form gmail_dispatch_action_url=gmail_dispatch_action_url %}
-          </div>
-          <div class="col-xl-7">
-            {% include 'gmail_integration/_dispatch_history_card.html' with gmail_dispatches=gmail_dispatches %}
-          </div>
-        </div>
+    </div>
+    <form method="get" action="{% url 'dispatch_flow:index' %}" class="row g-3">
+      {{ filter_form.load }}
+      <div class="col-md-4">
+        <label for="{{ filter_form.audience_filter.id_for_label }}" class="form-label">{{ filter_form.audience_filter.label }}</label>
+        {{ filter_form.audience_filter }}
       </div>
-    {% endif %}
+      <div class="col-md-8 d-flex align-items-end justify-content-md-end">
+        <button type="submit" class="btn btn-outline-secondary w-100 w-md-auto">Aplicar filtro</button>
+      </div>
+    </form>
   </section>
+
+  <form method="post" action="{% url 'dispatch_flow:create_dispatch' %}" class="row g-4">
+    {% csrf_token %}
+    <input type="hidden" name="audience_filter" value="{{ filter_form.audience_filter.value|default:'all' }}">
+
+    <div class="col-xl-8">
+      <section class="glass-card content-card h-100">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Audiencia</span>
+            <h2 class="h4 mb-0">Pessoas elegiveis</h2>
+          </div>
+          <span class="status-badge status-available">{{ audience_rows|length }} pessoa{{ audience_rows|length|pluralize }}</span>
+        </div>
+
+        {% if audience_rows %}
+          <div class="mb-3">
+            <label for="dispatchFlowAudienceFilter" class="form-label">Buscar na audiencia</label>
+            <input id="dispatchFlowAudienceFilter" type="search" class="form-control" placeholder="Buscar por nome, e-mail, telefone ou empresa" data-filter-target="#dispatchFlowAudienceTableBody" data-filter-item="tr">
+          </div>
+          <div class="scroll-area scroll-area-table">
+            <table class="table table-clean align-middle mb-0">
+              <thead>
+                <tr>
+                  <th style="width: 44px;"><input type="checkbox" data-select-all="dispatch-flow-selection"></th>
+                  <th>Pessoa</th>
+                  <th>Empresa</th>
+                  <th>Gmail</th>
+                  <th>WhatsApp</th>
+                  <th>Historico</th>
+                </tr>
+              </thead>
+              <tbody id="dispatchFlowAudienceTableBody">
+                {% for row in audience_rows %}
+                  <tr data-filter-item data-filter-text="{{ row.person.full_name }} {{ row.person.email|default:'' }} {{ row.person.phone|default:'' }} {{ row.person.company.name|default:'Sem empresa' }}">
+                    <td>
+                      <input type="checkbox" name="person_public_ids" value="{{ row.person.public_id }}" data-checkbox-group="dispatch-flow-selection" {% if row.person.public_id|stringformat:'s' in dispatch_form.person_public_ids.value %}checked{% endif %}>
+                    </td>
+                    <td>
+                      {{ row.person.full_name }}
+                      <div class="small text-body-secondary">{{ row.person.email|default:row.person.phone|default:'Sem contato' }}</div>
+                    </td>
+                    <td>{{ row.person.company.name|default:'Sem empresa' }}</td>
+                    <td>
+                      {% if row.can_send_gmail %}
+                        <span class="status-badge status-available">Pronto</span>
+                      {% else %}
+                        <span class="status-badge status-expired">Sem e-mail</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if row.can_send_bot_conversa %}
+                        <span class="status-badge status-available">Pronto</span>
+                      {% else %}
+                        <span class="status-badge status-expired">Sem telefone</span>
+                      {% endif %}
+                    </td>
+                    <td class="small text-body-secondary">
+                      E-mail: {% if row.email_sent %}ja enviado{% else %}nao enviado{% endif %}
+                      <br>
+                      WhatsApp: {% if row.whatsapp_sent %}ja enviado{% else %}nao enviado{% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% for error in dispatch_form.person_public_ids.errors %}<div class="invalid-feedback d-block mt-3">{{ error }}</div>{% endfor %}
+        {% else %}
+          <div class="soft-empty"><p class="mb-0">Nenhuma pessoa elegivel foi encontrada com o filtro atual.</p></div>
+        {% endif %}
+      </section>
+    </div>
+
+    <div class="col-xl-4">
+      <section class="glass-card content-card">
+        <div class="content-card-header">
+          <div>
+            <span class="section-kicker">Canais</span>
+            <h2 class="h4 mb-0">Configurar envios</h2>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          {% if bot_conversa_enabled %}
+            <div class="col-12">
+              <div class="form-check">
+                {{ dispatch_form.send_bot_conversa }}
+                <label class="form-check-label" for="{{ dispatch_form.send_bot_conversa.id_for_label }}">{{ dispatch_form.send_bot_conversa.label }}</label>
+              </div>
+              {% for error in dispatch_form.send_bot_conversa.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12">
+              <label for="{{ dispatch_form.flow_public_id.id_for_label }}" class="form-label">{{ dispatch_form.flow_public_id.label }}</label>
+              {{ dispatch_form.flow_public_id }}
+              {% for error in dispatch_form.flow_public_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-md-6">
+              <label for="{{ dispatch_form.bot_min_delay_seconds.id_for_label }}" class="form-label">{{ dispatch_form.bot_min_delay_seconds.label }}</label>
+              {{ dispatch_form.bot_min_delay_seconds }}
+            </div>
+            <div class="col-md-6">
+              <label for="{{ dispatch_form.bot_max_delay_seconds.id_for_label }}" class="form-label">{{ dispatch_form.bot_max_delay_seconds.label }}</label>
+              {{ dispatch_form.bot_max_delay_seconds }}
+              {% for error in dispatch_form.bot_max_delay_seconds.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+          {% endif %}
+
+          {% if gmail_enabled %}
+            <div class="col-12 pt-2">
+              <div class="form-check">
+                {{ dispatch_form.send_gmail }}
+                <label class="form-check-label" for="{{ dispatch_form.send_gmail.id_for_label }}">{{ dispatch_form.send_gmail.label }}</label>
+              </div>
+              {% for error in dispatch_form.send_gmail.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12">
+              <label for="{{ dispatch_form.gmail_template_public_id.id_for_label }}" class="form-label">{{ dispatch_form.gmail_template_public_id.label }}</label>
+              {{ dispatch_form.gmail_template_public_id }}
+              {% for error in dispatch_form.gmail_template_public_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12">
+              <label for="{{ dispatch_form.gmail_cc_emails.id_for_label }}" class="form-label">{{ dispatch_form.gmail_cc_emails.label }}</label>
+              {{ dispatch_form.gmail_cc_emails }}
+              {% for error in dispatch_form.gmail_cc_emails.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-md-6">
+              <label for="{{ dispatch_form.gmail_min_delay_seconds.id_for_label }}" class="form-label">{{ dispatch_form.gmail_min_delay_seconds.label }}</label>
+              {{ dispatch_form.gmail_min_delay_seconds }}
+            </div>
+            <div class="col-md-6">
+              <label for="{{ dispatch_form.gmail_max_delay_seconds.id_for_label }}" class="form-label">{{ dispatch_form.gmail_max_delay_seconds.label }}</label>
+              {{ dispatch_form.gmail_max_delay_seconds }}
+              {% for error in dispatch_form.gmail_max_delay_seconds.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+          {% endif %}
+
+          {% if dispatch_form.non_field_errors %}
+            <div class="col-12">
+              {% for error in dispatch_form.non_field_errors %}
+                <div class="alert alert-danger mb-2" role="alert">{{ error }}</div>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          <div class="col-12">
+            <button type="submit" class="btn btn-brand w-100">Criar disparo</button>
+          </div>
+        </div>
+      </section>
+
+      {% if bot_conversa_enabled or gmail_enabled %}
+        <section class="glass-card content-card mt-4">
+          <div class="content-card-header">
+            <div>
+              <span class="section-kicker">Historico</span>
+              <h2 class="h4 mb-0">Ultimos envios</h2>
+            </div>
+          </div>
+          <div class="d-grid gap-3">
+            {% if bot_conversa_enabled %}
+              <div>
+                <strong class="d-block mb-2">WhatsApp</strong>
+                {% for dispatch in bot_recent_dispatches|slice:":3" %}
+                  <div class="small mb-2">{{ dispatch.flow_name }} - {{ dispatch.get_status_display }}</div>
+                {% empty %}
+                  <div class="small text-body-secondary">Nenhum disparo recente.</div>
+                {% endfor %}
+              </div>
+            {% endif %}
+            {% if gmail_enabled %}
+              <div>
+                <strong class="d-block mb-2">Gmail</strong>
+                {% for dispatch in gmail_dispatches|slice:":3" %}
+                  <div class="small mb-2">{{ dispatch.subject_snapshot|default:dispatch.template.name|default:'Disparo' }} - {{ dispatch.get_status_display }}</div>
+                {% empty %}
+                  <div class="small text-body-secondary">Nenhum disparo recente.</div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        </section>
+      {% endif %}
+    </div>
+  </form>
 {% endblock %}

@@ -2,9 +2,12 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import User
+from bot_conversa.models import BotConversaFlowCache
 from common.constants import ACTIVE_ORGANIZATION_SESSION_KEY
+from gmail_integration.models import GmailTemplate
 from integrations.models import AppCatalog, OrganizationAppInstallation
 from organizations.models import Organization, OrganizationMembership
+from people.models import Person
 
 
 class DispatchFlowModuleTests(TestCase):
@@ -70,8 +73,9 @@ class DispatchFlowModuleTests(TestCase):
         response = self.client.get(reverse('dispatch_flow:index'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Disparo de e-mail')
-        self.assertNotContains(response, 'Disparo de fluxo')
+        self.assertContains(response, 'Central unificada de envio')
+        self.assertContains(response, 'Enviar por Gmail')
+        self.assertNotContains(response, 'Enviar por WhatsApp')
 
     def test_dispatch_flow_loads_when_bot_conversa_is_installed(self):
         self.install_app(self.bot_conversa_app)
@@ -81,4 +85,82 @@ class DispatchFlowModuleTests(TestCase):
         response = self.client.get(reverse('dispatch_flow:index'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Disparo de fluxo')
+        self.assertContains(response, 'Central unificada de envio')
+        self.assertContains(response, 'Enviar por WhatsApp')
+
+    def test_dispatch_flow_preserves_selected_people_when_channel_contact_data_is_missing(self):
+        self.install_app(self.gmail_app)
+        bot_installation = self.install_app(self.bot_conversa_app)
+        template = GmailTemplate.objects.create(
+            organization=self.organization,
+            name='Primeiro contato',
+            subject='Ola',
+            body='Mensagem',
+            is_active=True,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        flow = BotConversaFlowCache.objects.create(
+            organization=self.organization,
+            installation=bot_installation,
+            external_flow_id='flow-001',
+            name='Fluxo principal',
+            status=BotConversaFlowCache.Status.ACTIVE,
+            last_synced_at=self.organization.created_at,
+        )
+        person_without_email = Person.objects.create(
+            organization=self.organization,
+            first_name='Ana',
+            last_name='Sem Email',
+            phone='+5511999999999',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        person_without_phone = Person.objects.create(
+            organization=self.organization,
+            first_name='Bruno',
+            last_name='Sem Telefone',
+            email='bruno@example.com',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.post(
+            reverse('dispatch_flow:create_dispatch'),
+            {
+                'audience_filter': 'all',
+                'person_public_ids': [
+                    str(person_without_email.public_id),
+                    str(person_without_phone.public_id),
+                ],
+                'send_bot_conversa': 'on',
+                'send_gmail': 'on',
+                'flow_public_id': str(flow.public_id),
+                'gmail_template_public_id': str(template.public_id),
+                'bot_min_delay_seconds': '0',
+                'bot_max_delay_seconds': '0',
+                'gmail_min_delay_seconds': '0',
+                'gmail_max_delay_seconds': '0',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Ana Sem Email')
+        self.assertContains(response, 'Bruno Sem Telefone')
+        self.assertContains(response, 'nao possuem e-mail para Gmail')
+        self.assertContains(response, 'nao possuem telefone para WhatsApp')
+        self.assertContains(response, f'value="{person_without_email.public_id}"', html=False)
+        self.assertContains(response, f'value="{person_without_phone.public_id}"', html=False)
+        self.assertContains(
+            response,
+            f'name="person_public_ids" value="{person_without_email.public_id}" data-checkbox-group="dispatch-flow-selection" checked',
+            html=False,
+        )
+        self.assertContains(
+            response,
+            f'name="person_public_ids" value="{person_without_phone.public_id}" data-checkbox-group="dispatch-flow-selection" checked',
+            html=False,
+        )

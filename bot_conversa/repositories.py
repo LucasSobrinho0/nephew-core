@@ -1,3 +1,5 @@
+from django.db.models import Q
+
 from bot_conversa.models import (
     BotConversaContact,
     BotConversaFlowCache,
@@ -271,6 +273,25 @@ class BotConversaFlowDispatchRepository:
     @staticmethod
     def create(**kwargs):
         return BotConversaFlowDispatch.objects.create(**kwargs)
+
+    @staticmethod
+    def list_runnable_dispatches(*, limit=20, current_time=None):
+        from django.utils import timezone
+
+        current_time = current_time or timezone.now()
+        return (
+            BotConversaFlowDispatch.objects.with_related_objects()
+            .filter(
+                status__in=[
+                    BotConversaFlowDispatch.Status.PENDING,
+                    BotConversaFlowDispatch.Status.RUNNING,
+                ]
+            )
+            .filter(
+                Q(next_process_after__isnull=True) | Q(next_process_after__lte=current_time)
+            )
+            .order_by('next_process_after', 'created_at')[:limit]
+        )
 
 
 class BotConversaFlowDispatchItemRepository:

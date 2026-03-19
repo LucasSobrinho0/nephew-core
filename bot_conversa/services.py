@@ -1134,6 +1134,7 @@ class BotConversaDispatchService:
             total_items=len(unique_persons),
             min_delay_seconds=min_delay_seconds,
             max_delay_seconds=max_delay_seconds,
+            next_process_after=timezone.now(),
             created_by=user,
             updated_by=user,
         )
@@ -1156,8 +1157,16 @@ class BotConversaDispatchService:
 
     @staticmethod
     @transaction.atomic
-    def process_pending_items(*, user, organization, dispatch, batch_size=DEFAULT_DISPATCH_BATCH_SIZE):
-        BotConversaAuthorizationService.ensure_operator_access(user=user, organization=organization)
+    def process_pending_items(
+        *,
+        user,
+        organization,
+        dispatch,
+        batch_size=DEFAULT_DISPATCH_BATCH_SIZE,
+        skip_authorization=False,
+    ):
+        if not skip_authorization:
+            BotConversaAuthorizationService.ensure_operator_access(user=user, organization=organization)
         if dispatch.organization_id != organization.id:
             raise PermissionDenied('O disparo selecionado não pertence à organização ativa.')
 
@@ -1170,11 +1179,16 @@ class BotConversaDispatchService:
             return dispatch
 
         client = BotConversaInstallationService.build_client(organization=organization)
+        current_time = timezone.now()
+
+        if dispatch.next_process_after and dispatch.next_process_after > current_time:
+            return dispatch
 
         if dispatch.status == BotConversaFlowDispatch.Status.PENDING:
             dispatch.status = BotConversaFlowDispatch.Status.RUNNING
             dispatch.started_at = dispatch.started_at or timezone.now()
-            dispatch.updated_by = user
+            if user is not None:
+                dispatch.updated_by = user
             dispatch.save(update_fields=['status', 'started_at', 'updated_by', 'updated_at'])
 
         BotConversaDispatchService.requeue_stale_running_items(dispatch=dispatch)
@@ -1240,6 +1254,7 @@ class BotConversaDispatchService:
                 item.response_payload = {}
                 item.save(update_fields=['status', 'error_message', 'response_payload', 'updated_at'])
 
+        BotConversaDispatchService.schedule_next_processing(dispatch=dispatch, user=user)
         BotConversaDispatchService.refresh_dispatch_counters(dispatch=dispatch, user=user)
         return dispatch
 
@@ -1267,8 +1282,9 @@ class BotConversaDispatchService:
             return dispatch
 
         dispatch.status = BotConversaFlowDispatch.Status.PAUSED
+        dispatch.next_process_after = None
         dispatch.updated_by = user
-        dispatch.save(update_fields=['status', 'updated_by', 'updated_at'])
+        dispatch.save(update_fields=['status', 'next_process_after', 'updated_by', 'updated_at'])
         return dispatch
 
     @staticmethod
@@ -1285,8 +1301,9 @@ class BotConversaDispatchService:
             raise ValidationError('Nao e possivel continuar um disparo ja finalizado.')
 
         dispatch.status = BotConversaFlowDispatch.Status.PENDING
+        dispatch.next_process_after = timezone.now()
         dispatch.updated_by = user
-        dispatch.save(update_fields=['status', 'updated_by', 'updated_at'])
+        dispatch.save(update_fields=['status', 'next_process_after', 'updated_by', 'updated_at'])
         return dispatch
 
     @staticmethod
@@ -1305,8 +1322,9 @@ class BotConversaDispatchService:
         requeued_count = BotConversaFlowDispatchItemRepository.requeue_all_running_for_dispatch(dispatch)
         if dispatch.status != BotConversaFlowDispatch.Status.PAUSED:
             dispatch.status = BotConversaFlowDispatch.Status.PENDING
+            dispatch.next_process_after = timezone.now()
             dispatch.updated_by = user
-            dispatch.save(update_fields=['status', 'updated_by', 'updated_at'])
+            dispatch.save(update_fields=['status', 'next_process_after', 'updated_by', 'updated_at'])
         return requeued_count
 
     @staticmethod
@@ -1327,7 +1345,8 @@ class BotConversaDispatchService:
         dispatch.processed_items = processed_items
         dispatch.success_items = success_items
         dispatch.failed_items = failed_items
-        dispatch.updated_by = user
+        if user is not None:
+            dispatch.updated_by = user
         dispatch.save(
             update_fields=[
                 'processed_items',
@@ -1343,9 +1362,26 @@ class BotConversaDispatchService:
 
     @staticmethod
     def build_next_poll_delay_ms(*, dispatch):
+        if dispatch.next_process_after:
+            remaining_ms = int((dispatch.next_process_after - timezone.now()).total_seconds() * 1000)
+            if remaining_ms > 0:
+                return remaining_ms
         if dispatch.max_delay_seconds > 0:
-            return random.randint(dispatch.min_delay_seconds, dispatch.max_delay_seconds) * 1000
+            return dispatch.max_delay_seconds * 1000
         return 1600
+
+    @staticmethod
+    def schedule_next_processing(*, dispatch, user=None):
+        if dispatch.max_delay_seconds > 0:
+            delay_seconds = random.randint(dispatch.min_delay_seconds, dispatch.max_delay_seconds)
+            dispatch.next_process_after = timezone.now() + timedelta(seconds=delay_seconds)
+        else:
+            dispatch.next_process_after = timezone.now()
+
+        if user is not None:
+            dispatch.updated_by = user
+
+        dispatch.save(update_fields=['next_process_after', 'updated_by', 'updated_at'])
 
     @staticmethod
     def finalize_dispatch(*, dispatch, user):
@@ -1357,9 +1393,10 @@ class BotConversaDispatchService:
             dispatch.status = BotConversaFlowDispatch.Status.COMPLETED
 
         dispatch.finished_at = timezone.now()
+        dispatch.next_process_after = None
         dispatch.updated_by = user
         dispatch.error_summary = 'Alguns contatos nao puderam receber o fluxo.' if dispatch.failed_items else ''
-        dispatch.save(update_fields=['status', 'finished_at', 'updated_by', 'error_summary', 'updated_at'])
+        dispatch.save(update_fields=['status', 'finished_at', 'next_process_after', 'updated_by', 'error_summary', 'updated_at'])
 
     @staticmethod
     def build_dispatch_payload(*, dispatch):
@@ -1394,3 +1431,19 @@ class BotConversaDispatchService:
                 ],
             },
         }
+
+
+class BotConversaDispatchWorkerService:
+    @staticmethod
+    def run_cycle(*, limit=20):
+        dispatches = list(BotConversaFlowDispatchRepository.list_runnable_dispatches(limit=limit))
+        processed_count = 0
+        for dispatch in dispatches:
+            BotConversaDispatchService.process_pending_items(
+                user=dispatch.updated_by or dispatch.created_by,
+                organization=dispatch.organization,
+                dispatch=dispatch,
+                skip_authorization=True,
+            )
+            processed_count += 1
+        return processed_count

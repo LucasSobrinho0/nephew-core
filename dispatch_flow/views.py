@@ -1,17 +1,16 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import redirect
-from django.urls import reverse
 from django.views import View
 from django.views.generic import TemplateView
 
-from bot_conversa.services import BotConversaDispatchWorkspaceService
 from dispatch_flow.services import (
     DispatchFlowAccessService,
     DispatchFlowActionService,
+    DispatchFlowAudienceService,
     DispatchFlowWorkspaceService,
 )
-from gmail_integration.services import GmailDispatchWorkspaceService
+
 
 class DispatchFlowAccessMixin(LoginRequiredMixin):
     missing_organization_redirect_url = 'dashboard:home'
@@ -59,95 +58,105 @@ class DispatchFlowView(DispatchFlowAccessMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        filter_form = kwargs.get('filter_form') or DispatchFlowWorkspaceService.build_filter_form(self.request.GET or None)
+        audience_filter = 'all'
+        if filter_form.is_bound and filter_form.is_valid():
+            audience_filter = filter_form.cleaned_data.get('audience_filter') or 'all'
+
+        audience_rows = kwargs.get('audience_rows') or DispatchFlowAudienceService.build_rows(
+            organization=self.active_organization,
+            audience_filter=audience_filter,
+        )
+        dispatch_form = kwargs.get('dispatch_form') or DispatchFlowWorkspaceService.build_dispatch_form(
+            organization=self.active_organization,
+            audience_rows=audience_rows,
+        )
+
         context.update(self.build_base_context())
         context.update(
             DispatchFlowWorkspaceService.build_page_state(
                 organization=self.active_organization,
-                bot_dispatch_form=kwargs.get('bot_dispatch_form'),
-                gmail_dispatch_form=kwargs.get('gmail_dispatch_form'),
+                filter_form=filter_form,
+                dispatch_form=dispatch_form,
+                audience_rows=audience_rows,
             )
-        )
-        context.update(
-            {
-                'bot_dispatch_action_url': reverse('dispatch_flow:create_bot_conversa_dispatch'),
-                'gmail_dispatch_action_url': reverse('dispatch_flow:create_gmail_dispatch'),
-            }
         )
         return context
 
 
-class DispatchFlowBotConversaCreateView(DispatchFlowAccessMixin, View):
+class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
     def post(self, request, *args, **kwargs):
-        if not DispatchFlowAccessService.is_app_installed(
-            organization=self.active_organization,
-            app_code=DispatchFlowAccessService.BOT_CONVERSA_CODE,
-        ):
-            messages.error(request, 'O Bot Conversa nao esta instalado na organizacao ativa.')
-            return redirect('dispatch_flow:index')
-
-        form = BotConversaDispatchWorkspaceService.build_dispatch_form(
-            request.POST,
-            organization=self.active_organization,
-            selected_tag_public_ids=request.POST.getlist('tag_public_ids'),
+        filter_form = DispatchFlowWorkspaceService.build_filter_form(
+            {
+                'load': '1',
+                'audience_filter': request.POST.get('audience_filter', 'all'),
+            }
         )
-        if not form.is_valid():
+        audience_filter = 'all'
+        if filter_form.is_valid():
+            audience_filter = filter_form.cleaned_data.get('audience_filter') or 'all'
+        audience_rows = DispatchFlowAudienceService.build_rows(
+            organization=self.active_organization,
+            audience_filter=audience_filter,
+        )
+
+        dispatch_form = DispatchFlowWorkspaceService.build_dispatch_form(
+            organization=self.active_organization,
+            audience_rows=audience_rows,
+            data=request.POST,
+        )
+        if not dispatch_form.is_valid():
             view = DispatchFlowView()
             view.request = request
             view.active_organization = self.active_organization
             view.active_membership = self.active_membership
-            return view.render_to_response(view.get_context_data(bot_dispatch_form=form))
+            return view.render_to_response(
+                view.get_context_data(
+                    filter_form=filter_form,
+                    dispatch_form=dispatch_form,
+                    audience_rows=audience_rows,
+                )
+            )
 
         try:
-            dispatch = DispatchFlowActionService.create_bot_conversa_dispatch(
+            result = DispatchFlowActionService.create_multichannel_dispatch(
                 user=request.user,
                 organization=self.active_organization,
-                flow_public_id=form.cleaned_data['flow_public_id'],
-                person_public_ids=form.cleaned_data['person_public_ids'],
-                tag_public_ids=form.cleaned_data['tag_public_ids'],
-                min_delay_seconds=form.cleaned_data['min_delay_seconds'],
-                max_delay_seconds=form.cleaned_data['max_delay_seconds'],
+                person_public_ids=dispatch_form.cleaned_data['person_public_ids'],
+                send_bot_conversa=dispatch_form.cleaned_data['send_bot_conversa'],
+                flow_public_id=dispatch_form.cleaned_data['flow_public_id'],
+                bot_min_delay_seconds=dispatch_form.cleaned_data['bot_min_delay_seconds'],
+                bot_max_delay_seconds=dispatch_form.cleaned_data['bot_max_delay_seconds'],
+                send_gmail=dispatch_form.cleaned_data['send_gmail'],
+                gmail_template_public_id=dispatch_form.cleaned_data['gmail_template_public_id'],
+                gmail_cc_emails=dispatch_form.cleaned_data['gmail_cc_emails'],
+                gmail_min_delay_seconds=dispatch_form.cleaned_data['gmail_min_delay_seconds'],
+                gmail_max_delay_seconds=dispatch_form.cleaned_data['gmail_max_delay_seconds'],
             )
         except DispatchFlowActionService.handled_exceptions() as exc:
-            messages.error(request, str(exc))
-            return redirect('dispatch_flow:index')
+            if hasattr(exc, 'messages') and exc.messages:
+                for message in exc.messages:
+                    messages.error(request, message)
+            else:
+                messages.error(request, str(exc))
 
-        messages.success(request, 'Disparo do fluxo criado. O processamento continuara na tela de status.')
-        return redirect('bot_conversa:dispatch_detail', dispatch_public_id=dispatch.public_id)
-
-
-class DispatchFlowGmailCreateView(DispatchFlowAccessMixin, View):
-    def post(self, request, *args, **kwargs):
-        if not DispatchFlowAccessService.is_app_installed(
-            organization=self.active_organization,
-            app_code=DispatchFlowAccessService.GMAIL_CODE,
-        ):
-            messages.error(request, 'O Gmail nao esta instalado na organizacao ativa.')
-            return redirect('dispatch_flow:index')
-
-        form = GmailDispatchWorkspaceService.build_dispatch_form(
-            request.POST,
-            organization=self.active_organization,
-        )
-        if not form.is_valid():
             view = DispatchFlowView()
             view.request = request
             view.active_organization = self.active_organization
             view.active_membership = self.active_membership
-            return view.render_to_response(view.get_context_data(gmail_dispatch_form=form))
-
-        try:
-            dispatch = DispatchFlowActionService.create_gmail_dispatch(
-                user=request.user,
-                organization=self.active_organization,
-                template_public_id=form.cleaned_data['template_public_id'],
-                person_public_ids=form.cleaned_data['person_public_ids'],
-                cc_emails=form.cleaned_data['cc_emails'],
-                min_delay_seconds=form.cleaned_data['min_delay_seconds'],
-                max_delay_seconds=form.cleaned_data['max_delay_seconds'],
+            return view.render_to_response(
+                view.get_context_data(
+                    filter_form=filter_form,
+                    dispatch_form=dispatch_form,
+                    audience_rows=audience_rows,
+                )
             )
-        except DispatchFlowActionService.handled_exceptions() as exc:
-            messages.error(request, str(exc))
-            return redirect('dispatch_flow:index')
 
-        messages.success(request, 'Disparo do Gmail criado. O processamento continuara na tela de status.')
-        return redirect('gmail_integration:dispatch_detail', dispatch_public_id=dispatch.public_id)
+        if result['bot_dispatch'] and result['gmail_dispatch']:
+            messages.success(request, 'Disparos de WhatsApp e Gmail foram criados com sucesso.')
+        elif result['bot_dispatch']:
+            messages.success(request, 'Disparo de WhatsApp criado com sucesso.')
+        elif result['gmail_dispatch']:
+            messages.success(request, 'Disparo de Gmail criado com sucesso.')
+
+        return redirect('dispatch_flow:index')

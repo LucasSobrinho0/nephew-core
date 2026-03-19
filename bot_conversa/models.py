@@ -358,6 +358,7 @@ class BotConversaFlowDispatch(PublicIdentifierMixin, TimeStampedModel):
     failed_items = models.PositiveIntegerField(default=0)
     min_delay_seconds = models.PositiveIntegerField(default=0)
     max_delay_seconds = models.PositiveIntegerField(default=0)
+    next_process_after = models.DateTimeField(null=True, blank=True)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
     error_summary = models.CharField(max_length=255, blank=True)
