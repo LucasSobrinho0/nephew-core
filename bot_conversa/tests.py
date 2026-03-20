@@ -700,6 +700,49 @@ class BotConversaModuleTests(TestCase):
         self.assertEqual(fake_client.assigned_tag_payloads[0]['tag_id'], 'tag-1')
 
     @patch('bot_conversa.services.BotConversaInstallationService.build_client')
+    def test_assign_tag_to_people_reuses_existing_local_link(self, build_client_mock):
+        fake_client = FakeBotConversaClient()
+        build_client_mock.return_value = fake_client
+        tag = BotConversaTag.objects.create(
+            organization=self.organization,
+            installation=self.installation,
+            external_tag_id='tag-1',
+            name='VIP',
+            last_synced_at=self.installation.created_at,
+            raw_payload={'id': 'tag-1', 'name': 'VIP'},
+        )
+        person_tag = BotConversaPersonTag.objects.create(
+            organization=self.organization,
+            installation=self.installation,
+            person=self.person,
+            tag=tag,
+            external_subscriber_id='subscriber-001',
+            sync_status=BotConversaPersonTag.SyncStatus.SYNCED,
+            last_synced_at=timezone.now(),
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+
+        linked_people = BotConversaTagService.assign_tag_to_people(
+            user=self.owner,
+            organization=self.organization,
+            tag=tag,
+            persons=[self.person],
+        )
+
+        self.assertEqual(linked_people, [self.person])
+        person_tag.refresh_from_db()
+        self.assertEqual(person_tag.person_id, self.person.id)
+        self.assertEqual(
+            BotConversaPersonTag.objects.filter(
+                organization=self.organization,
+                person=self.person,
+                tag=tag,
+            ).count(),
+            1,
+        )
+
+    @patch('bot_conversa.services.BotConversaInstallationService.build_client')
     def test_create_person_can_assign_selected_tags_during_creation(self, build_client_mock):
         fake_client = FakeBotConversaClient()
         build_client_mock.return_value = fake_client

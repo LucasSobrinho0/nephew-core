@@ -435,15 +435,16 @@ class BotConversaTagService:
         if not unique_persons:
             raise ValidationError('Selecione pelo menos uma pessoa para vincular a etiqueta.')
 
+        existing_person_tag_links = {
+            person_tag.person_id: person_tag
+            for person_tag in BotConversaPersonTagRepository.list_for_organization_and_tag(tag)
+            if person_tag.person_id is not None
+        }
         person_tags_to_create = []
         person_tags_to_update = []
 
         for person in unique_persons:
-            person_tag_link = BotConversaPersonTagRepository.get_for_organization_and_person_and_tag(
-                organization,
-                person,
-                tag,
-            )
+            person_tag_link = existing_person_tag_links.get(person.id)
             contact_link = BotConversaContactSyncService.ensure_remote_contact(
                 user=user,
                 organization=organization,
@@ -474,6 +475,7 @@ class BotConversaTagService:
                     updated_by=user,
                 )
                 person_tags_to_create.append(person_tag_link)
+                existing_person_tag_links[person.id] = person_tag_link
             else:
                 person_tag_link.contact_link = contact_link
                 person_tag_link.external_subscriber_id = contact_link.external_subscriber_id
