@@ -85,6 +85,7 @@ class DispatchFlowView(DispatchFlowAccessMixin, TemplateView):
             {
                 'bot_tag_preflight_modal_open': kwargs.get('bot_tag_preflight_modal_open', False),
                 'bot_tag_preflight_people': kwargs.get('bot_tag_preflight_people', []),
+                'bot_tag_preflight_modal_errors': kwargs.get('bot_tag_preflight_modal_errors', []),
             }
         )
         return context
@@ -195,11 +196,15 @@ class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
                 gmail_max_delay_seconds=dispatch_form.cleaned_data['gmail_max_delay_seconds'],
             )
         except DispatchFlowActionService.handled_exceptions() as exc:
+            error_messages = []
             if hasattr(exc, 'messages') and exc.messages:
                 for message in exc.messages:
+                    error_messages.append(message)
                     messages.error(request, message)
             else:
-                messages.error(request, str(exc))
+                fallback_message = str(exc)
+                error_messages.append(fallback_message)
+                messages.error(request, fallback_message)
 
             view = DispatchFlowView()
             view.request = request
@@ -215,6 +220,7 @@ class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
                         organization=self.active_organization,
                         persons=persons,
                     )['untagged_people'],
+                    bot_tag_preflight_modal_errors=error_messages,
                 )
             )
 
