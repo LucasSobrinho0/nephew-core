@@ -640,7 +640,7 @@ class BotConversaDispatchCreateView(BotConversaOperatorRequiredMixin, View):
             post_data['skip_tag_preflight'] = '1'
             post_data['tag_preflight_action'] = 'apply' if modal_submit_action == 'apply' else ''
 
-        form = self.build_dispatch_form(post_data)
+        form = self.build_dispatch_form(data=post_data)
         if not form.is_valid():
             view = BotConversaDispatchesView()
             view.request = request
