@@ -10,6 +10,7 @@ from django.views.decorators.cache import never_cache
 from django.views.generic import TemplateView
 
 from bot_conversa.exceptions import BotConversaApiError, BotConversaConfigurationError
+from hubspot_integration.exceptions import HubSpotApiError, HubSpotConfigurationError
 from bot_conversa.forms import (
     BotConversaBulkPersonSyncForm,
     BotConversaPersonCreateForm,
@@ -42,6 +43,7 @@ from bot_conversa.services import (
     BotConversaTagPreflightService,
     BotConversaTagService,
 )
+from dispatch_flow.services import DispatchFlowAccessService, DispatchFlowActionService, DispatchFlowWorkspaceService
 from people.repositories import PersonRepository
 
 
@@ -118,10 +120,52 @@ class BotConversaAccessMixin(LoginRequiredMixin):
 
     def build_dispatch_form(self, *args, **kwargs):
         selected_tag_public_ids = kwargs.pop('selected_tag_public_ids', None)
+        data = kwargs.get('data')
+        hubspot_enabled = DispatchFlowAccessService.is_app_installed(
+            organization=self.active_organization,
+            app_code=DispatchFlowAccessService.HUBSPOT_CODE,
+        )
+        hubspot_preflight_state = {
+            'company_choices': [],
+            'person_choices': [],
+            'deal_person_choices': [],
+            'pipeline_choices': [],
+            'stage_choices': [],
+            'default_target_type': '',
+            'default_company_public_id': '',
+            'default_person_public_id': '',
+            'default_deal_person_public_ids': [],
+            'company_contact_warning': '',
+            'allow_manual_company_contacts': False,
+        }
+        if hubspot_enabled and data is not None:
+            selected_people = list(
+                PersonRepository.list_for_organization_and_public_ids(
+                    self.active_organization,
+                    data.getlist('person_public_ids') if hasattr(data, 'getlist') else data.get('person_public_ids', []),
+                )
+            )
+            hubspot_preflight_state = DispatchFlowWorkspaceService.build_hubspot_preflight_state(
+                organization=self.active_organization,
+                selected_people=selected_people,
+                data=data,
+            )
         return BotConversaDispatchWorkspaceService.build_dispatch_form(
             *args,
             organization=self.active_organization,
             selected_tag_public_ids=selected_tag_public_ids,
+            hubspot_enabled=hubspot_enabled,
+            hubspot_company_choices=hubspot_preflight_state['company_choices'],
+            hubspot_person_choices=hubspot_preflight_state['person_choices'],
+            hubspot_deal_person_choices=hubspot_preflight_state['deal_person_choices'],
+            hubspot_pipeline_choices=hubspot_preflight_state['pipeline_choices'],
+            hubspot_stage_choices=hubspot_preflight_state['stage_choices'],
+            hubspot_default_target_type=hubspot_preflight_state['default_target_type'],
+            hubspot_default_company_public_id=hubspot_preflight_state['default_company_public_id'],
+            hubspot_default_person_public_id=hubspot_preflight_state['default_person_public_id'],
+            hubspot_default_deal_person_public_ids=hubspot_preflight_state['default_deal_person_public_ids'],
+            hubspot_company_contact_warning=hubspot_preflight_state['company_contact_warning'],
+            hubspot_allow_manual_company_contacts=hubspot_preflight_state['allow_manual_company_contacts'],
             **kwargs,
         )
 
@@ -521,6 +565,13 @@ class BotConversaDispatchesView(BotConversaAccessMixin, TemplateView):
                 'initial_bot_conversa_audience_count': len(
                     self.build_person_choices(tag_public_ids=selected_tag_public_ids)
                 ),
+                'hubspot_enabled': DispatchFlowAccessService.is_app_installed(
+                    organization=self.active_organization,
+                    app_code=DispatchFlowAccessService.HUBSPOT_CODE,
+                ),
+                'hubspot_preflight_modal_open': kwargs.get('hubspot_preflight_modal_open', False),
+                'hubspot_preflight_people': kwargs.get('hubspot_preflight_people', []),
+                'hubspot_preflight_modal_errors': kwargs.get('hubspot_preflight_modal_errors', []),
                 'dispatch_tag_preflight_modal_open': kwargs.get('dispatch_tag_preflight_modal_open', False),
                 'dispatch_tag_preflight_people': kwargs.get('dispatch_tag_preflight_people', []),
                 'dispatch_tag_preflight_modal_errors': kwargs.get('dispatch_tag_preflight_modal_errors', []),
@@ -639,6 +690,10 @@ class BotConversaDispatchCreateView(BotConversaOperatorRequiredMixin, View):
         if modal_submit_action in {'skip', 'apply'}:
             post_data['skip_tag_preflight'] = '1'
             post_data['tag_preflight_action'] = 'apply' if modal_submit_action == 'apply' else ''
+        hubspot_modal_submit = post_data.get('hubspot_preflight_modal_submit')
+        if hubspot_modal_submit in {'skip', 'apply'}:
+            post_data['skip_hubspot_preflight'] = '1'
+            post_data['hubspot_preflight_action'] = hubspot_modal_submit
 
         form = self.build_dispatch_form(data=post_data)
         if not form.is_valid():
@@ -729,6 +784,48 @@ class BotConversaDispatchCreateView(BotConversaOperatorRequiredMixin, View):
                     tag_public_ids=form.cleaned_data['preflight_tag_public_ids'],
                 )
 
+            if (
+                DispatchFlowAccessService.is_app_installed(
+                    organization=self.active_organization,
+                    app_code=DispatchFlowAccessService.HUBSPOT_CODE,
+                )
+                and not form.cleaned_data['skip_hubspot_preflight']
+            ):
+                hubspot_preflight = DispatchFlowActionService.build_hubspot_preflight(
+                    organization=self.active_organization,
+                    persons=persons,
+                )
+                if hubspot_preflight['should_prompt']:
+                    view = BotConversaDispatchesView()
+                    view.request = request
+                    view.args = args
+                    view.kwargs = kwargs
+                    view.installation = self.installation
+                    view.active_organization = self.active_organization
+                    view.active_membership = self.active_membership
+                    return view.render_to_response(
+                        view.get_context_data(
+                            dispatch_form=form,
+                            selected_tag_public_ids=post_data.getlist('tag_public_ids'),
+                            hubspot_preflight_modal_open=True,
+                            hubspot_preflight_people=hubspot_preflight['selected_people'],
+                        ),
+                    )
+
+            DispatchFlowActionService.apply_hubspot_actions_if_requested(
+                user=request.user,
+                organization=self.active_organization,
+                persons=persons,
+                preflight_action=form.cleaned_data['hubspot_preflight_action'],
+                create_deal_now=form.cleaned_data['hubspot_create_deal_now'],
+                target_type=form.cleaned_data['hubspot_deal_target_type'],
+                target_company_public_id=form.cleaned_data['hubspot_target_company_public_id'],
+                target_person_public_id=form.cleaned_data['hubspot_target_person_public_id'],
+                deal_person_public_ids=form.cleaned_data['hubspot_deal_person_public_ids'],
+                pipeline_public_id=form.cleaned_data['hubspot_pipeline_public_id'],
+                stage_id=form.cleaned_data['hubspot_stage_id'],
+            )
+
             dispatch = BotConversaDispatchService.create_dispatch(
                 user=request.user,
                 organization=self.active_organization,
@@ -738,7 +835,7 @@ class BotConversaDispatchCreateView(BotConversaOperatorRequiredMixin, View):
                 min_delay_seconds=form.cleaned_data['min_delay_seconds'],
                 max_delay_seconds=form.cleaned_data['max_delay_seconds'],
             )
-        except (PermissionDenied, ValidationError) as exc:
+        except (PermissionDenied, ValidationError, HubSpotApiError, HubSpotConfigurationError) as exc:
             view = BotConversaDispatchesView()
             view.request = request
             view.args = args
@@ -756,6 +853,9 @@ class BotConversaDispatchCreateView(BotConversaOperatorRequiredMixin, View):
                         persons=persons,
                     ),
                     dispatch_tag_preflight_modal_errors=[str(exc)],
+                    hubspot_preflight_modal_open=post_data.get('hubspot_preflight_modal_submit') in {'apply', 'skip'},
+                    hubspot_preflight_people=persons,
+                    hubspot_preflight_modal_errors=[str(exc)] if 'HubSpot' in str(exc) or 'hubspot' in str(exc).lower() else [],
                 ),
             )
 

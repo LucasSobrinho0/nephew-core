@@ -10,6 +10,7 @@ from django.views.decorators.cache import never_cache
 from django.views.generic import TemplateView
 
 from gmail_integration.exceptions import GmailApiError, GmailConfigurationError
+from hubspot_integration.exceptions import HubSpotApiError, HubSpotConfigurationError
 from gmail_integration.forms import GmailCredentialSaveForm, GmailTemplateForm
 from gmail_integration.repositories import (
     GmailCredentialRepository,
@@ -25,6 +26,7 @@ from gmail_integration.services import (
     GmailInstallationService,
     GmailTemplateService,
 )
+from dispatch_flow.services import DispatchFlowAccessService, DispatchFlowActionService, DispatchFlowWorkspaceService
 from people.repositories import PersonRepository
 
 
@@ -80,9 +82,51 @@ class GmailAccessMixin(LoginRequiredMixin):
         return GmailDispatchWorkspaceService.build_template_variables()
 
     def build_dispatch_form(self, *args, **kwargs):
+        data = kwargs.get('data')
+        hubspot_enabled = DispatchFlowAccessService.is_app_installed(
+            organization=self.active_organization,
+            app_code=DispatchFlowAccessService.HUBSPOT_CODE,
+        )
+        hubspot_preflight_state = {
+            'company_choices': [],
+            'person_choices': [],
+            'deal_person_choices': [],
+            'pipeline_choices': [],
+            'stage_choices': [],
+            'default_target_type': '',
+            'default_company_public_id': '',
+            'default_person_public_id': '',
+            'default_deal_person_public_ids': [],
+            'company_contact_warning': '',
+            'allow_manual_company_contacts': False,
+        }
+        if hubspot_enabled and data is not None:
+            selected_people = list(
+                PersonRepository.list_for_organization_and_public_ids(
+                    self.active_organization,
+                    data.getlist('person_public_ids') if hasattr(data, 'getlist') else data.get('person_public_ids', []),
+                )
+            )
+            hubspot_preflight_state = DispatchFlowWorkspaceService.build_hubspot_preflight_state(
+                organization=self.active_organization,
+                selected_people=selected_people,
+                data=data,
+            )
         return GmailDispatchWorkspaceService.build_dispatch_form(
             *args,
             organization=self.active_organization,
+            hubspot_enabled=hubspot_enabled,
+            hubspot_company_choices=hubspot_preflight_state['company_choices'],
+            hubspot_person_choices=hubspot_preflight_state['person_choices'],
+            hubspot_deal_person_choices=hubspot_preflight_state['deal_person_choices'],
+            hubspot_pipeline_choices=hubspot_preflight_state['pipeline_choices'],
+            hubspot_stage_choices=hubspot_preflight_state['stage_choices'],
+            hubspot_default_target_type=hubspot_preflight_state['default_target_type'],
+            hubspot_default_company_public_id=hubspot_preflight_state['default_company_public_id'],
+            hubspot_default_person_public_id=hubspot_preflight_state['default_person_public_id'],
+            hubspot_default_deal_person_public_ids=hubspot_preflight_state['default_deal_person_public_ids'],
+            hubspot_company_contact_warning=hubspot_preflight_state['company_contact_warning'],
+            hubspot_allow_manual_company_contacts=hubspot_preflight_state['allow_manual_company_contacts'],
             **kwargs,
         )
 
@@ -305,6 +349,13 @@ class GmailDispatchesView(GmailAccessMixin, TemplateView):
                 'dispatch_form': kwargs.get('dispatch_form') or self.build_dispatch_form(),
                 'gmail_dispatch_action_url': reverse('gmail_integration:create_dispatch'),
                 'initial_gmail_audience_count': len(self.build_person_choices()),
+                'hubspot_enabled': DispatchFlowAccessService.is_app_installed(
+                    organization=self.active_organization,
+                    app_code=DispatchFlowAccessService.HUBSPOT_CODE,
+                ),
+                'hubspot_preflight_modal_open': kwargs.get('hubspot_preflight_modal_open', False),
+                'hubspot_preflight_people': kwargs.get('hubspot_preflight_people', []),
+                'hubspot_preflight_modal_errors': kwargs.get('hubspot_preflight_modal_errors', []),
             }
         )
         return context
@@ -312,7 +363,13 @@ class GmailDispatchesView(GmailAccessMixin, TemplateView):
 
 class GmailDispatchCreateView(GmailOperatorRequiredMixin, View):
     def post(self, request, *args, **kwargs):
-        form = self.build_dispatch_form(request.POST)
+        post_data = request.POST.copy()
+        hubspot_modal_submit = post_data.get('hubspot_preflight_modal_submit')
+        if hubspot_modal_submit in {'skip', 'apply'}:
+            post_data['skip_hubspot_preflight'] = '1'
+            post_data['hubspot_preflight_action'] = hubspot_modal_submit
+
+        form = self.build_dispatch_form(data=post_data)
         if not form.is_valid():
             view = GmailDispatchesView()
             view.request = request
@@ -340,6 +397,46 @@ class GmailDispatchCreateView(GmailOperatorRequiredMixin, View):
             )
         )
         try:
+            if (
+                DispatchFlowAccessService.is_app_installed(
+                    organization=self.active_organization,
+                    app_code=DispatchFlowAccessService.HUBSPOT_CODE,
+                )
+                and not form.cleaned_data['skip_hubspot_preflight']
+            ):
+                hubspot_preflight = DispatchFlowActionService.build_hubspot_preflight(
+                    organization=self.active_organization,
+                    persons=to_people,
+                )
+                if hubspot_preflight['should_prompt']:
+                    view = GmailDispatchesView()
+                    view.request = request
+                    view.args = args
+                    view.kwargs = kwargs
+                    view.installation = self.installation
+                    view.active_organization = self.active_organization
+                    view.active_membership = self.active_membership
+                    return view.render_to_response(
+                        view.get_context_data(
+                            dispatch_form=form,
+                            hubspot_preflight_modal_open=True,
+                            hubspot_preflight_people=hubspot_preflight['selected_people'],
+                        )
+                    )
+
+            DispatchFlowActionService.apply_hubspot_actions_if_requested(
+                user=request.user,
+                organization=self.active_organization,
+                persons=to_people,
+                preflight_action=form.cleaned_data['hubspot_preflight_action'],
+                create_deal_now=form.cleaned_data['hubspot_create_deal_now'],
+                target_type=form.cleaned_data['hubspot_deal_target_type'],
+                target_company_public_id=form.cleaned_data['hubspot_target_company_public_id'],
+                target_person_public_id=form.cleaned_data['hubspot_target_person_public_id'],
+                deal_person_public_ids=form.cleaned_data['hubspot_deal_person_public_ids'],
+                pipeline_public_id=form.cleaned_data['hubspot_pipeline_public_id'],
+                stage_id=form.cleaned_data['hubspot_stage_id'],
+            )
             dispatch = GmailDispatchService.create_dispatch(
                 user=request.user,
                 organization=self.active_organization,
@@ -349,9 +446,22 @@ class GmailDispatchCreateView(GmailOperatorRequiredMixin, View):
                 min_delay_seconds=form.cleaned_data['min_delay_seconds'],
                 max_delay_seconds=form.cleaned_data['max_delay_seconds'],
             )
-        except (GmailApiError, GmailConfigurationError, PermissionDenied, ValidationError) as exc:
-            messages.error(request, exc.messages[0] if hasattr(exc, 'messages') and exc.messages else str(exc))
-            return redirect('gmail_integration:dispatches')
+        except (GmailApiError, GmailConfigurationError, PermissionDenied, ValidationError, HubSpotApiError, HubSpotConfigurationError) as exc:
+            view = GmailDispatchesView()
+            view.request = request
+            view.args = args
+            view.kwargs = kwargs
+            view.installation = self.installation
+            view.active_organization = self.active_organization
+            view.active_membership = self.active_membership
+            return view.render_to_response(
+                view.get_context_data(
+                    dispatch_form=form,
+                    hubspot_preflight_modal_open=post_data.get('hubspot_preflight_modal_submit') in {'apply', 'skip'},
+                    hubspot_preflight_people=to_people,
+                    hubspot_preflight_modal_errors=[exc.messages[0] if hasattr(exc, 'messages') and exc.messages else str(exc)],
+                )
+            )
 
         messages.success(request, 'Disparo do Gmail criado. O processamento continuara na tela de status.')
         return redirect('gmail_integration:dispatch_detail', dispatch_public_id=dispatch.public_id)

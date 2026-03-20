@@ -6,8 +6,10 @@
     </div>
   </div>
   {% if can_manage_gmail %}
-    <form method="post" action="{{ gmail_dispatch_action_url }}" class="row g-3">
+    <form method="post" action="{{ gmail_dispatch_action_url }}" class="row g-3" id="gmailDispatchCreateForm">
       {% csrf_token %}
+      {{ gmail_dispatch_form.skip_hubspot_preflight }}
+      {{ gmail_dispatch_form.hubspot_preflight_action }}
       <div class="col-12">
         <label for="{{ gmail_dispatch_form.template_public_id.id_for_label }}" class="form-label">Template salvo</label>
         {{ gmail_dispatch_form.template_public_id }}

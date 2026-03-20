@@ -19,4 +19,5 @@
       {% include 'gmail_integration/_dispatch_history_card.html' with gmail_dispatches=dispatches %}
     </div>
   </section>
+  {% include 'partials/hubspot_preflight_modal.html' with modal_id='gmailHubSpotPreflightModal' modal_kicker='Gmail' modal_message='O HubSpot esta instalado nesta organizacao. Antes do disparo, voce pode sincronizar pessoas e empresas pendentes e, se quiser, criar um novo negocio.' hubspot_enabled=hubspot_enabled hubspot_preflight_modal_open=hubspot_preflight_modal_open hubspot_preflight_people=hubspot_preflight_people hubspot_preflight_modal_errors=hubspot_preflight_modal_errors hubspot_form=dispatch_form form_id='gmailDispatchCreateForm' apply_label='Sincronizar e disparar' %}
 {% endblock %}
