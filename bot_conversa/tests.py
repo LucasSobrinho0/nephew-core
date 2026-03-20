@@ -372,6 +372,49 @@ class BotConversaModuleTests(TestCase):
         self.assertEqual(existing_person.bot_conversa_id, 'subscriber-remote-002')
         self.assertEqual(Person.objects.filter(organization=self.organization, normalized_phone='5511988880000').count(), 1)
 
+    def test_save_remote_contact_reuses_existing_contact_link_for_same_person(self):
+        existing_person = PersonService.create_person(
+            user=self.owner,
+            organization=self.organization,
+            first_name='Carlos',
+            last_name='Souza',
+            phone='+55 11 98888-0000',
+        )
+        existing_contact_link = BotConversaContact.objects.create(
+            organization=self.organization,
+            installation=self.installation,
+            person=existing_person,
+            external_subscriber_id='subscriber-remote-old',
+            external_name=existing_person.full_name,
+            phone=existing_person.phone,
+            sync_status=BotConversaContact.SyncStatus.SYNCED,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+
+        saved_person = BotConversaRemoteContactService.save_contact_to_crm(
+            user=self.owner,
+            organization=self.organization,
+            external_subscriber_id='subscriber-remote-002',
+            first_name='Carlos',
+            last_name='Souza',
+            external_name='Carlos Souza',
+            phone='+55 11 98888-0000',
+        )
+
+        self.assertEqual(saved_person.id, existing_person.id)
+        existing_contact_link.refresh_from_db()
+        self.assertEqual(existing_contact_link.person_id, existing_person.id)
+        self.assertEqual(existing_contact_link.external_subscriber_id, 'subscriber-remote-002')
+        self.assertEqual(
+            BotConversaContact.objects.filter(
+                organization=self.organization,
+                installation=self.installation,
+                person=existing_person,
+            ).count(),
+            1,
+        )
+
     def test_save_contact_to_crm_raises_validation_error_when_contact_cannot_be_saved(self):
         with self.assertRaises(ValidationError):
             BotConversaRemoteContactService.save_contact_to_crm(

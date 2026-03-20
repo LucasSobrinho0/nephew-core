@@ -919,13 +919,25 @@ class BotConversaRemoteContactService:
     @staticmethod
     @transaction.atomic
     def save_contacts_to_crm(*, user, organization, remote_contacts):
+        def build_person_link_key(person):
+            if person is None:
+                return None
+            if person.id:
+                return f'db:{person.id}'
+            return f'mem:{id(person)}'
+
         installation = BotConversaInstallationService.get_installation(organization=organization)
         BotConversaAuthorizationService.ensure_operator_access(user=user, organization=organization)
         persons = list(PersonRepository.list_for_organization(organization))
         person_indexes = build_person_indexes(persons=persons)
-        existing_contact_links = {
+        existing_contact_links_by_subscriber_id = {
             contact_link.external_subscriber_id: contact_link
             for contact_link in BotConversaContactRepository.list_for_organization(organization)
+        }
+        existing_contact_links_by_person_key = {
+            build_person_link_key(contact_link.person): contact_link
+            for contact_link in existing_contact_links_by_subscriber_id.values()
+            if build_person_link_key(contact_link.person) is not None
         }
         synced_at = timezone.now()
 
@@ -975,7 +987,13 @@ class BotConversaRemoteContactService:
                     persons_to_update.append(matched_person)
 
             processed_persons.append(matched_person)
-            contact_link = existing_contact_links.get(normalized_subscriber_id)
+            person_link_key = build_person_link_key(matched_person)
+            contact_link = existing_contact_links_by_subscriber_id.get(normalized_subscriber_id)
+            existing_person_contact_link = existing_contact_links_by_person_key.get(person_link_key)
+
+            if existing_person_contact_link is not None:
+                contact_link = existing_person_contact_link
+
             if contact_link is None:
                 contact_link = BotConversaContact(
                     organization=organization,
@@ -992,10 +1010,14 @@ class BotConversaRemoteContactService:
                 )
                 BotConversaBulkPreparationService.prepare_contact_link(contact_link)
                 contact_links_to_create.append(contact_link)
-                existing_contact_links[normalized_subscriber_id] = contact_link
+                existing_contact_links_by_subscriber_id[normalized_subscriber_id] = contact_link
+                if person_link_key is not None:
+                    existing_contact_links_by_person_key[person_link_key] = contact_link
                 log_contact_link = None
             else:
+                previous_subscriber_id = (contact_link.external_subscriber_id or '').strip()
                 contact_link.person = matched_person
+                contact_link.external_subscriber_id = normalized_subscriber_id
                 contact_link.external_name = remote_contact.get('name') or matched_person.full_name
                 contact_link.phone = remote_contact['phone']
                 contact_link.sync_status = BotConversaContact.SyncStatus.SYNCED
@@ -1006,6 +1028,11 @@ class BotConversaRemoteContactService:
                 contact_link.updated_at = synced_at
                 BotConversaBulkPreparationService.prepare_contact_link(contact_link)
                 contact_links_to_update.append(contact_link)
+                if previous_subscriber_id and previous_subscriber_id != normalized_subscriber_id:
+                    existing_contact_links_by_subscriber_id.pop(previous_subscriber_id, None)
+                existing_contact_links_by_subscriber_id[normalized_subscriber_id] = contact_link
+                if person_link_key is not None:
+                    existing_contact_links_by_person_key[person_link_key] = contact_link
                 log_contact_link = contact_link
 
             sync_logs.append(
