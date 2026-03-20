@@ -97,6 +97,9 @@ class DispatchFlowView(DispatchFlowAccessMixin, TemplateView):
                 'bot_tag_preflight_modal_open': kwargs.get('bot_tag_preflight_modal_open', False),
                 'bot_tag_preflight_people': kwargs.get('bot_tag_preflight_people', []),
                 'bot_tag_preflight_modal_errors': kwargs.get('bot_tag_preflight_modal_errors', []),
+                'hubspot_preflight_modal_open': kwargs.get('hubspot_preflight_modal_open', False),
+                'hubspot_preflight_people': kwargs.get('hubspot_preflight_people', []),
+                'hubspot_preflight_modal_errors': kwargs.get('hubspot_preflight_modal_errors', []),
             }
         )
         return context
@@ -161,6 +164,53 @@ class DispatchFlowDetailView(DispatchFlowAccessMixin, TemplateView):
 
 
 class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
+    HUBSPOT_MODAL_FIELD_NAMES = {
+        'hubspot_create_deal_now',
+        'hubspot_deal_target_type',
+        'hubspot_target_company_public_id',
+        'hubspot_target_person_public_id',
+        'hubspot_deal_person_public_ids',
+        'hubspot_pipeline_public_id',
+        'hubspot_stage_id',
+    }
+
+    def render_workspace(
+        self,
+        *,
+        request,
+        filter_form,
+        dispatch_form,
+        audience_rows,
+        bot_tag_preflight_modal_open=False,
+        bot_tag_preflight_people=None,
+        bot_tag_preflight_modal_errors=None,
+        hubspot_preflight_modal_open=False,
+        hubspot_preflight_people=None,
+        hubspot_preflight_modal_errors=None,
+    ):
+        view = DispatchFlowView()
+        view.request = request
+        view.active_organization = self.active_organization
+        view.active_membership = self.active_membership
+        return view.render_to_response(
+            view.get_context_data(
+                filter_form=filter_form,
+                dispatch_form=dispatch_form,
+                audience_rows=audience_rows,
+                bot_tag_preflight_modal_open=bot_tag_preflight_modal_open,
+                bot_tag_preflight_people=bot_tag_preflight_people or [],
+                bot_tag_preflight_modal_errors=bot_tag_preflight_modal_errors or [],
+                hubspot_preflight_modal_open=hubspot_preflight_modal_open,
+                hubspot_preflight_people=hubspot_preflight_people or [],
+                hubspot_preflight_modal_errors=hubspot_preflight_modal_errors or [],
+            )
+        )
+
+    def should_open_hubspot_modal(self, *, dispatch_form, post_data):
+        if post_data.get('hubspot_preflight_modal_submit'):
+            return True
+        return any(field_name in dispatch_form.errors for field_name in self.HUBSPOT_MODAL_FIELD_NAMES)
+
     def post(self, request, *args, **kwargs):
         post_data = request.POST.copy()
         preflight_modal_submit = post_data.get('bot_conversa_tag_modal_submit')
@@ -169,6 +219,10 @@ class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
             post_data['bot_conversa_tag_preflight_action'] = (
                 'apply' if preflight_modal_submit == 'apply' else ''
             )
+        hubspot_modal_submit = post_data.get('hubspot_preflight_modal_submit')
+        if hubspot_modal_submit in {'skip', 'apply'}:
+            post_data['skip_hubspot_preflight'] = '1'
+            post_data['hubspot_preflight_action'] = hubspot_modal_submit
 
         logger.info(
             'dispatch_flow_create:start user_id=%s org_id=%s post_keys=%s',
@@ -200,16 +254,20 @@ class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
                 'dispatch_flow_create:invalid_form errors=%s',
                 dispatch_form.errors.get_json_data(),
             )
-            view = DispatchFlowView()
-            view.request = request
-            view.active_organization = self.active_organization
-            view.active_membership = self.active_membership
-            return view.render_to_response(
-                view.get_context_data(
-                    filter_form=filter_form,
+            selected_people = DispatchFlowActionService.resolve_people(
+                organization=self.active_organization,
+                person_public_ids=DispatchFlowWorkspaceService._get_values(post_data, 'person_public_ids'),
+            )
+            return self.render_workspace(
+                request=request,
+                filter_form=filter_form,
+                dispatch_form=dispatch_form,
+                audience_rows=audience_rows,
+                hubspot_preflight_modal_open=self.should_open_hubspot_modal(
                     dispatch_form=dispatch_form,
-                    audience_rows=audience_rows,
-                )
+                    post_data=post_data,
+                ),
+                hubspot_preflight_people=selected_people,
             )
 
         persons = DispatchFlowActionService.resolve_people(
@@ -238,18 +296,13 @@ class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
             )
             if preflight['should_prompt']:
                 logger.info('dispatch_flow_create:returning_preflight_modal')
-                view = DispatchFlowView()
-                view.request = request
-                view.active_organization = self.active_organization
-                view.active_membership = self.active_membership
-                return view.render_to_response(
-                    view.get_context_data(
-                        filter_form=filter_form,
-                        dispatch_form=dispatch_form,
-                        audience_rows=audience_rows,
-                        bot_tag_preflight_modal_open=True,
-                        bot_tag_preflight_people=preflight['untagged_people'],
-                )
+                return self.render_workspace(
+                    request=request,
+                    filter_form=filter_form,
+                    dispatch_form=dispatch_form,
+                    audience_rows=audience_rows,
+                    bot_tag_preflight_modal_open=True,
+                    bot_tag_preflight_people=preflight['untagged_people'],
                 )
 
         if (
@@ -259,21 +312,16 @@ class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
         ):
             logger.info('dispatch_flow_create:apply_requested_without_tags')
             dispatch_form.add_error('bot_conversa_tag_public_ids', 'Selecione pelo menos uma etiqueta para continuar.')
-            view = DispatchFlowView()
-            view.request = request
-            view.active_organization = self.active_organization
-            view.active_membership = self.active_membership
-            return view.render_to_response(
-                view.get_context_data(
-                    filter_form=filter_form,
-                    dispatch_form=dispatch_form,
-                    audience_rows=audience_rows,
-                    bot_tag_preflight_modal_open=True,
-                    bot_tag_preflight_people=DispatchFlowActionService.build_bot_conversa_tag_preflight(
-                        organization=self.active_organization,
-                        persons=persons,
-                    )['untagged_people'],
-                )
+            return self.render_workspace(
+                request=request,
+                filter_form=filter_form,
+                dispatch_form=dispatch_form,
+                audience_rows=audience_rows,
+                bot_tag_preflight_modal_open=True,
+                bot_tag_preflight_people=DispatchFlowActionService.build_bot_conversa_tag_preflight(
+                    organization=self.active_organization,
+                    persons=persons,
+                )['untagged_people'],
             )
 
         try:
@@ -285,6 +333,110 @@ class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
                 tag_public_ids=dispatch_form.cleaned_data['bot_conversa_tag_public_ids'],
                 preflight_action=dispatch_form.cleaned_data['bot_conversa_tag_preflight_action'],
             )
+        except DispatchFlowActionService.handled_exceptions() as exc:
+            logger.exception(
+                'dispatch_flow_create:handled_exception skip_preflight=%s preflight_action=%s selected_tags=%s',
+                dispatch_form.cleaned_data.get('skip_bot_conversa_tag_preflight'),
+                dispatch_form.cleaned_data.get('bot_conversa_tag_preflight_action'),
+                dispatch_form.cleaned_data.get('bot_conversa_tag_public_ids'),
+            )
+            error_messages = []
+            if hasattr(exc, 'messages') and exc.messages:
+                for message in exc.messages:
+                    error_messages.append(message)
+                    messages.error(request, message)
+            else:
+                fallback_message = str(exc)
+                error_messages.append(fallback_message)
+                messages.error(request, fallback_message)
+
+            return self.render_workspace(
+                request=request,
+                filter_form=filter_form,
+                dispatch_form=dispatch_form,
+                audience_rows=audience_rows,
+                bot_tag_preflight_modal_open=bool(dispatch_form.cleaned_data.get('send_bot_conversa')),
+                bot_tag_preflight_people=DispatchFlowActionService.build_bot_conversa_tag_preflight(
+                    organization=self.active_organization,
+                    persons=persons,
+                )['untagged_people'],
+                bot_tag_preflight_modal_errors=error_messages,
+            )
+
+        if (
+            DispatchFlowAccessService.is_app_installed(
+                organization=self.active_organization,
+                app_code=DispatchFlowAccessService.HUBSPOT_CODE,
+            )
+            and not dispatch_form.cleaned_data['skip_hubspot_preflight']
+        ):
+            hubspot_preflight = DispatchFlowActionService.build_hubspot_preflight(
+                organization=self.active_organization,
+                persons=persons,
+            )
+            if hubspot_preflight['should_prompt']:
+                logger.info('dispatch_flow_create:returning_hubspot_preflight_modal')
+                return self.render_workspace(
+                    request=request,
+                    filter_form=filter_form,
+                    dispatch_form=dispatch_form,
+                    audience_rows=audience_rows,
+                    hubspot_preflight_modal_open=True,
+                    hubspot_preflight_people=hubspot_preflight['selected_people'],
+                )
+
+        hubspot_result = {
+            'synced_companies': [],
+            'synced_people': [],
+            'hubspot_deal': None,
+        }
+        try:
+            logger.info('dispatch_flow_create:applying_hubspot_actions_if_requested')
+            hubspot_result = DispatchFlowActionService.apply_hubspot_actions_if_requested(
+                user=request.user,
+                organization=self.active_organization,
+                persons=persons,
+                preflight_action=dispatch_form.cleaned_data['hubspot_preflight_action'],
+                create_deal_now=dispatch_form.cleaned_data['hubspot_create_deal_now'],
+                target_type=dispatch_form.cleaned_data['hubspot_deal_target_type'],
+                target_company_public_id=dispatch_form.cleaned_data['hubspot_target_company_public_id'],
+                target_person_public_id=dispatch_form.cleaned_data['hubspot_target_person_public_id'],
+                deal_person_public_ids=dispatch_form.cleaned_data['hubspot_deal_person_public_ids'],
+                pipeline_public_id=dispatch_form.cleaned_data['hubspot_pipeline_public_id'],
+                stage_id=dispatch_form.cleaned_data['hubspot_stage_id'],
+            )
+        except DispatchFlowActionService.handled_exceptions() as exc:
+            logger.exception(
+                'dispatch_flow_create:hubspot_preflight_exception action=%s create_deal=%s',
+                dispatch_form.cleaned_data.get('hubspot_preflight_action'),
+                dispatch_form.cleaned_data.get('hubspot_create_deal_now'),
+            )
+            error_messages = []
+            if hasattr(exc, 'message_dict'):
+                for field_name, field_messages in exc.message_dict.items():
+                    for message in field_messages:
+                        dispatch_form.add_error(field_name if field_name in dispatch_form.fields else None, message)
+                        error_messages.append(message)
+            elif hasattr(exc, 'messages') and exc.messages:
+                for message in exc.messages:
+                    error_messages.append(message)
+                    messages.error(request, message)
+            else:
+                fallback_message = str(exc)
+                error_messages.append(fallback_message)
+                messages.error(request, fallback_message)
+
+            return self.render_workspace(
+                request=request,
+                filter_form=filter_form,
+                dispatch_form=dispatch_form,
+                audience_rows=audience_rows,
+                hubspot_preflight_modal_open=True,
+                hubspot_preflight_people=persons,
+                hubspot_preflight_modal_errors=error_messages,
+            )
+
+        try:
             logger.info('dispatch_flow_create:creating_multichannel_dispatch')
             result = DispatchFlowActionService.create_multichannel_dispatch(
                 user=request.user,
@@ -306,12 +458,7 @@ class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
                 getattr(result.get('gmail_dispatch'), 'public_id', None),
             )
         except DispatchFlowActionService.handled_exceptions() as exc:
-            logger.exception(
-                'dispatch_flow_create:handled_exception skip_preflight=%s preflight_action=%s selected_tags=%s',
-                dispatch_form.cleaned_data.get('skip_bot_conversa_tag_preflight'),
-                dispatch_form.cleaned_data.get('bot_conversa_tag_preflight_action'),
-                dispatch_form.cleaned_data.get('bot_conversa_tag_public_ids'),
-            )
+            logger.exception('dispatch_flow_create:dispatch_exception')
             error_messages = []
             if hasattr(exc, 'messages') and exc.messages:
                 for message in exc.messages:
@@ -322,24 +469,17 @@ class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
                 error_messages.append(fallback_message)
                 messages.error(request, fallback_message)
 
-            view = DispatchFlowView()
-            view.request = request
-            view.active_organization = self.active_organization
-            view.active_membership = self.active_membership
-            return view.render_to_response(
-                view.get_context_data(
-                    filter_form=filter_form,
-                    dispatch_form=dispatch_form,
-                    audience_rows=audience_rows,
-                    bot_tag_preflight_modal_open=bool(dispatch_form.cleaned_data.get('send_bot_conversa')),
-                    bot_tag_preflight_people=DispatchFlowActionService.build_bot_conversa_tag_preflight(
-                        organization=self.active_organization,
-                        persons=persons,
-                    )['untagged_people'],
-                    bot_tag_preflight_modal_errors=error_messages,
-                )
+            return self.render_workspace(
+                request=request,
+                filter_form=filter_form,
+                dispatch_form=dispatch_form,
+                audience_rows=audience_rows,
             )
 
+        if hubspot_result['hubspot_deal'] is not None:
+            messages.success(request, f"Negocio '{hubspot_result['hubspot_deal'].name}' criado no HubSpot antes do disparo.")
+        elif hubspot_result['synced_companies'] or hubspot_result['synced_people']:
+            messages.success(request, 'Dados selecionados foram sincronizados com o HubSpot antes do disparo.')
         if result['bot_dispatch'] and result['gmail_dispatch']:
             messages.success(request, 'Disparos de WhatsApp e Gmail foram criados com sucesso.')
         elif result['bot_dispatch']:

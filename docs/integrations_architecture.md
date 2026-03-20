@@ -102,7 +102,7 @@ integrations/
 - `hubspot_integration` now also keeps a local business layer for HubSpot deals, including pipeline-stage cache and local person associations per business.
 - The shared dependency is the tenant-scoped CRM core, especially `people.Person`, company relations, and the common matching helpers.
 - Apollo agora interage com o CRM por meio de `companies.Company` e `people.Person`.
-- `dispatch_flow` funciona como uma camada de orquestracao de tela com audiencia unica do CRM, selecao por canal, validacao de elegibilidade por pessoa, preservacao da mesma selecao em erros de contato e criacao multicanal de disparos quando um ou ambos os apps estiverem instalados.
+- `dispatch_flow` funciona como uma camada de orquestracao de tela com audiencia unica do CRM, selecao por canal, validacao de elegibilidade por pessoa, preservacao da mesma selecao em erros de contato, preflight opcional de etiquetas do Bot Conversa, preflight opcional de sincronizacao/criacao de negocio no HubSpot, e criacao multicanal de disparos quando um ou ambos os apps estiverem instalados.
 - A camada de HubSpot valida remotamente se empresas e contatos ja estao associados a negocios antes de abrir fluxos de sincronizacao com criacao de novo negocio, para que o espelho local reflita o estado real do HubSpot.
 - O CRM agora tambem suporta importacao XLSX em background para pessoas e empresas, com jobs por linha, progresso visual e download de modelos operados no servidor.
 - A busca de pessoas do Apollo salva resultados censurados no CRM por `apollo_person_id`, sem depender de enrichment nesta fase.
@@ -207,6 +207,23 @@ Templates:
 3. The operator can select one or more local companies and optionally request immediate business creation.
 4. When business creation is requested, the operator must choose a pipeline and a stage.
 5. If any selected company is already associated with one or more remote HubSpot deals, the backend prepares a confirmation step before continuing.
+
+### Dispatch-flow HubSpot preflight
+
+1. Owner or admin opens the unified dispatch-flow screen inside the active organization.
+2. The operator selects a CRM audience and chooses WhatsApp, Gmail, or both.
+3. If HubSpot is installed for the active organization, the dispatch flow opens a dedicated preflight modal before the dispatch is created.
+4. The modal offers a simple branch:
+   - continue without HubSpot,
+   - or sync pending CRM companies and contacts to HubSpot before the dispatch.
+5. If the operator also wants a new HubSpot business, the same preflight collects:
+   - whether the business will be centered on a company or on one selected person,
+   - the pipeline and stage,
+   - and the local contacts that should be attached to the business when the company-centered flow is chosen.
+6. The backend only syncs the companies and people that still do not have HubSpot identifiers, so the dispatch flow does not duplicate already-synced entities.
+7. When the business is company-centered, the UI preselects the most likely local company and suggests the local contacts already present in the audience; if no selected person is linked locally to that company, the modal warns the operator and still allows selecting local contacts explicitly.
+8. When the business is person-centered, the operator chooses one selected local person; that flow requires the chosen person to already be linked to a local company because the local HubSpot business model is company-anchored.
+9. After the optional HubSpot steps finish, the unified dispatch flow proceeds with Bot Conversa and/or Gmail dispatch creation and redirects to the consolidated dispatch status screen.
 6. After confirmation, the backend syncs the selected companies and then creates one new business per company in the chosen pipeline stage.
 
 ### HubSpot person attach-to-business flow

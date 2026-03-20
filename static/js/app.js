@@ -194,6 +194,7 @@
             initRemoteSelects();
             initAutoOpenModals();
             initConfirmationSubmitButtons();
+            initHubSpotPreflightModals();
           })
           .catch(function () {
             if (crmErrorModal) {
@@ -416,6 +417,44 @@
           form.submit();
         }, 30);
       });
+    });
+  }
+
+  function initHubSpotPreflightModals() {
+    document.querySelectorAll('[data-hubspot-preflight]').forEach(function (container) {
+      if (container.dataset.hubspotPreflightBound === 'true') {
+        return;
+      }
+
+      var createDealCheckbox = container.querySelector('input[name="hubspot_create_deal_now"]');
+      var targetTypeField = container.querySelector('[name="hubspot_deal_target_type"]');
+      var dealFields = container.querySelector('[data-hubspot-deal-fields]');
+      var companySection = container.querySelector('[data-hubspot-company-section]');
+      var personSection = container.querySelector('[data-hubspot-person-section]');
+
+      function applyState() {
+        var shouldShowDealFields = !!(createDealCheckbox && createDealCheckbox.checked);
+        var targetType = targetTypeField ? targetTypeField.value : 'company';
+
+        if (dealFields) {
+          dealFields.classList.toggle('d-none', !shouldShowDealFields);
+        }
+        if (companySection) {
+          companySection.classList.toggle('d-none', !shouldShowDealFields || targetType !== 'company');
+        }
+        if (personSection) {
+          personSection.classList.toggle('d-none', !shouldShowDealFields || targetType !== 'person');
+        }
+      }
+
+      container.dataset.hubspotPreflightBound = 'true';
+      if (createDealCheckbox) {
+        createDealCheckbox.addEventListener('change', applyState);
+      }
+      if (targetTypeField) {
+        targetTypeField.addEventListener('change', applyState);
+      }
+      applyState();
     });
   }
 
@@ -1311,5 +1350,6 @@
   initRemoteSelects();
   initAutoOpenModals();
   initConfirmationSubmitButtons();
+  initHubSpotPreflightModals();
   applyTheme(getTheme());
 }());

@@ -8,7 +8,7 @@
 - `organizations`: tenant domain, memberships, invite codes, onboarding, organization switching, and permission-sensitive services.
 - `dashboard`: authenticated application pages that depend on the active organization context.
 - `admin_panel`: global administrative surface restricted by Django auth groups, with access-audit visibility outside tenant scope.
-- `dispatch_flow`: unified dispatch workspace with one shared audience list, multichannel selection, delivery-eligibility feedback, and channel-specific dispatch configuration when Bot Conversa and/or Gmail are installed.
+- `dispatch_flow`: unified dispatch workspace with one shared audience list, multichannel selection, delivery-eligibility feedback, channel-specific dispatch configuration when Bot Conversa and/or Gmail are installed, optional Bot Conversa tag preflight, and optional HubSpot sync/business preflight before the dispatch is created.
 - `companies`: tenant-scoped CRM companies.
 - `people`: tenant-scoped CRM persons and contact identity.
 - `imports`: background XLSX import jobs, per-row progress tracking, template download, and import worker orchestration for CRM entities.
@@ -180,13 +180,13 @@ NephewCRM/
 - `dispatch_flow.services.DispatchFlowAccessService`
   Validates whether the active organization has at least one supported dispatch app installed and controls sidebar/page visibility for the unified dispatch screen.
 - `dispatch_flow.services.DispatchFlowWorkspaceService`
-  Assembles the unified audience, channel state, filters, and multichannel dispatch form for the dedicated dispatch-flow screen.
+  Assembles the unified audience, channel state, filters, multichannel dispatch form, and HubSpot preflight defaults for the dedicated dispatch-flow screen.
 - `dispatch_flow.services.DispatchFlowActionService`
-  Validates the selected audience against each chosen channel, keeps the same selected people on validation errors, and delegates Bot Conversa and Gmail dispatch creation to the existing channel-specific business services.
+  Validates the selected audience against each chosen channel, keeps the same selected people on validation errors, executes the optional Bot Conversa tag preflight, executes the optional HubSpot sync/business preflight, and delegates Bot Conversa and Gmail dispatch creation to the existing channel-specific business services.
 - `bot_conversa.services.*`
   Encapsulates Bot Conversa installation resolution, remote contact sync, tag cache refresh, tag assignment, flow cache refresh, dispatch processing, and background worker execution for pending dispatches.
 - `hubspot_integration.services.*`
-  Encapsulates HubSpot installation resolution, remote funnel validation for companies and contacts, company/contact sync, pipeline refresh, business creation, business-person association, and async business search results for Tom Select.
+  Encapsulates HubSpot installation resolution, company/contact sync, pipeline refresh, business creation, business-person association, remote funnel validation for explicit verification flows, and async business search results for Tom Select.
 - `apollo_integration.services.*`
   Encapsulates Apollo installation resolution, remote company search, remote person search, person enrichment, usage snapshots, bulk import into CRM, and optional sync handoff to HubSpot.
 - `gmail_integration.services.*`
@@ -268,6 +268,6 @@ NephewCRM/
 3. Integration platform
    App catalog, installations, encrypted credentials, secure reveal flow, and access audit.
 4. Operational modules
-   Apollo company search/import, Apollo person search/enrichment, Bot Conversa tag synchronization/assignment and flow dispatches with optional worker-based background execution, HubSpot sync/business workflows, and Gmail templates/dispatches with configurable pacing and async audience filters for people who have not yet received sends in each channel.
+   Apollo company search/import, Apollo person search/enrichment, Bot Conversa tag synchronization/assignment and flow dispatches with optional worker-based background execution, HubSpot sync/business workflows including dispatch-time preflight orchestration, and Gmail templates/dispatches with configurable pacing and async audience filters for people who have not yet received sends in each channel.
 5. Next evolution
    Stronger model-level tenant consistency guarantees, broader audit coverage, background processing options, and richer CRM workflows.

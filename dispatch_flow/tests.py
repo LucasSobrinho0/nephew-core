@@ -5,9 +5,11 @@ from accounts.models import User
 from bot_conversa.models import BotConversaFlowCache
 from common.constants import ACTIVE_ORGANIZATION_SESSION_KEY
 from gmail_integration.models import GmailTemplate
+from hubspot_integration.models import HubSpotPipelineCache
 from integrations.models import AppCatalog, OrganizationAppInstallation
 from organizations.models import Organization, OrganizationMembership
 from people.models import Person
+from companies.models import Company
 from unittest.mock import patch
 
 
@@ -33,6 +35,7 @@ class DispatchFlowModuleTests(TestCase):
         )
         self.bot_conversa_app = AppCatalog.objects.get(code='bot_conversa')
         self.gmail_app = AppCatalog.objects.get(code='gmail')
+        self.hubspot_app = AppCatalog.objects.get(code='hubspot')
 
     def activate_organization(self):
         session = self.client.session
@@ -88,6 +91,47 @@ class DispatchFlowModuleTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Central unificada de envio')
         self.assertContains(response, 'Enviar por WhatsApp')
+
+    def test_dispatch_flow_opens_hubspot_preflight_modal_when_hubspot_is_installed(self):
+        self.install_app(self.gmail_app)
+        self.install_app(self.hubspot_app)
+        template = GmailTemplate.objects.create(
+            organization=self.organization,
+            name='Primeiro contato',
+            subject='Ola',
+            body='Mensagem',
+            is_active=True,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        person = Person.objects.create(
+            organization=self.organization,
+            first_name='Ana',
+            last_name='Costa',
+            email='ana@example.com',
+            phone='+5511999999999',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.post(
+            reverse('dispatch_flow:create_dispatch'),
+            {
+                'audience_filter': 'all',
+                'person_public_ids': [str(person.public_id)],
+                'send_gmail': 'on',
+                'gmail_template_public_id': str(template.public_id),
+                'gmail_min_delay_seconds': '0',
+                'gmail_max_delay_seconds': '0',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Sincronizar dados com HubSpot?')
+        self.assertContains(response, 'hubspot_preflight_modal_submit')
 
     def test_dispatch_flow_preserves_selected_people_when_channel_contact_data_is_missing(self):
         self.install_app(self.gmail_app)
@@ -368,3 +412,263 @@ class DispatchFlowModuleTests(TestCase):
         self.assertContains(response, 'Gmail')
         self.assertContains(response, 'gmailDispatchPoller')
         self.assertNotContains(response, 'botConversaDispatchPoller')
+
+    @patch('dispatch_flow.services.GmailDispatchService.create_dispatch')
+    @patch('dispatch_flow.services.HubSpotDealService.create_deal')
+    @patch('dispatch_flow.services.HubSpotContactService.sync_people')
+    @patch('dispatch_flow.services.HubSpotCompanyService.sync_companies')
+    def test_dispatch_flow_applies_hubspot_sync_and_creates_deal_before_dispatch(
+        self,
+        sync_companies_mock,
+        sync_people_mock,
+        create_deal_mock,
+        gmail_create_dispatch_mock,
+    ):
+        self.install_app(self.gmail_app)
+        hubspot_installation = self.install_app(self.hubspot_app)
+        template = GmailTemplate.objects.create(
+            organization=self.organization,
+            name='Primeiro contato',
+            subject='Ola',
+            body='Mensagem',
+            is_active=True,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        company = Company.objects.create(
+            organization=self.organization,
+            name='ACME',
+            website='https://acme.test',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        person = Person.objects.create(
+            organization=self.organization,
+            first_name='Ana',
+            last_name='Costa',
+            email='ana@acme.test',
+            phone='+5511999999999',
+            company=company,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        pipeline = HubSpotPipelineCache.objects.create(
+            organization=self.organization,
+            installation=hubspot_installation,
+            hubspot_pipeline_id='pipeline-1',
+            name='Pipeline Comercial',
+            object_type='deals',
+            raw_payload={'id': 'pipeline-1', 'stages': [{'id': 'appointmentscheduled', 'label': 'Qualificacao'}]},
+            last_synced_at=self.organization.created_at,
+        )
+
+        sync_companies_mock.return_value = [company]
+        sync_people_mock.return_value = [person]
+        create_deal_mock.return_value = type('HubSpotDealStub', (), {'name': 'ACME'})()
+        gmail_create_dispatch_mock.return_value = type('GmailDispatchStub', (), {'public_id': '33333333-3333-3333-3333-333333333333'})()
+
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.post(
+            reverse('dispatch_flow:create_dispatch'),
+            {
+                'audience_filter': 'all',
+                'person_public_ids': [str(person.public_id)],
+                'send_gmail': 'on',
+                'gmail_template_public_id': str(template.public_id),
+                'gmail_min_delay_seconds': '0',
+                'gmail_max_delay_seconds': '0',
+                'hubspot_preflight_modal_submit': 'apply',
+                'hubspot_create_deal_now': 'on',
+                'hubspot_deal_target_type': 'company',
+                'hubspot_target_company_public_id': str(company.public_id),
+                'hubspot_deal_person_public_ids': [str(person.public_id)],
+                'hubspot_pipeline_public_id': str(pipeline.public_id),
+                'hubspot_stage_id': 'appointmentscheduled',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        sync_companies_mock.assert_called_once()
+        sync_people_mock.assert_called_once()
+        create_deal_mock.assert_called_once()
+        gmail_create_dispatch_mock.assert_called_once()
+
+    def test_dispatch_flow_rejects_company_deal_contacts_from_other_companies(self):
+        self.install_app(self.gmail_app)
+        hubspot_installation = self.install_app(self.hubspot_app)
+        template = GmailTemplate.objects.create(
+            organization=self.organization,
+            name='Primeiro contato',
+            subject='Ola',
+            body='Mensagem',
+            is_active=True,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        company = Company.objects.create(
+            organization=self.organization,
+            name='ACME',
+            website='https://acme.test',
+            hubspot_company_id='company-1',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        other_company = Company.objects.create(
+            organization=self.organization,
+            name='Beta',
+            website='https://beta.test',
+            hubspot_company_id='company-2',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        person = Person.objects.create(
+            organization=self.organization,
+            first_name='Ana',
+            last_name='Costa',
+            email='ana@acme.test',
+            phone='+5511999999999',
+            company=company,
+            hubspot_contact_id='contact-1',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        wrong_person = Person.objects.create(
+            organization=self.organization,
+            first_name='Bruno',
+            last_name='Souza',
+            email='bruno@beta.test',
+            phone='+5511988887777',
+            company=other_company,
+            hubspot_contact_id='contact-2',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        pipeline = HubSpotPipelineCache.objects.create(
+            organization=self.organization,
+            installation=hubspot_installation,
+            hubspot_pipeline_id='pipeline-1',
+            name='Pipeline Comercial',
+            object_type='deals',
+            raw_payload={'id': 'pipeline-1', 'stages': [{'id': 'appointmentscheduled', 'label': 'Qualificacao'}]},
+            last_synced_at=self.organization.created_at,
+        )
+
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.post(
+            reverse('dispatch_flow:create_dispatch'),
+            {
+                'audience_filter': 'all',
+                'person_public_ids': [str(person.public_id)],
+                'send_gmail': 'on',
+                'gmail_template_public_id': str(template.public_id),
+                'gmail_min_delay_seconds': '0',
+                'gmail_max_delay_seconds': '0',
+                'hubspot_preflight_modal_submit': 'apply',
+                'hubspot_create_deal_now': 'on',
+                'hubspot_deal_target_type': 'company',
+                'hubspot_target_company_public_id': str(company.public_id),
+                'hubspot_deal_person_public_ids': [str(person.public_id), str(wrong_person.public_id)],
+                'hubspot_pipeline_public_id': str(pipeline.public_id),
+                'hubspot_stage_id': 'appointmentscheduled',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'No modo empresa, os contatos do negocio sao definidos automaticamente')
+
+    @patch('dispatch_flow.services.GmailDispatchService.create_dispatch')
+    @patch('dispatch_flow.services.HubSpotDealService.create_deal')
+    def test_dispatch_flow_creates_company_deals_in_loop_for_selected_companies(
+        self,
+        create_deal_mock,
+        gmail_create_dispatch_mock,
+    ):
+        self.install_app(self.gmail_app)
+        hubspot_installation = self.install_app(self.hubspot_app)
+        template = GmailTemplate.objects.create(
+            organization=self.organization,
+            name='Primeiro contato',
+            subject='Ola',
+            body='Mensagem',
+            is_active=True,
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        company_a = Company.objects.create(
+            organization=self.organization,
+            name='ACME',
+            hubspot_company_id='company-a',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        company_b = Company.objects.create(
+            organization=self.organization,
+            name='Beta',
+            hubspot_company_id='company-b',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        person_a = Person.objects.create(
+            organization=self.organization,
+            first_name='Ana',
+            last_name='Costa',
+            email='ana@acme.test',
+            phone='+5511999999999',
+            company=company_a,
+            hubspot_contact_id='contact-a',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        person_b = Person.objects.create(
+            organization=self.organization,
+            first_name='Bruno',
+            last_name='Souza',
+            email='bruno@beta.test',
+            phone='+5511988887777',
+            company=company_b,
+            hubspot_contact_id='contact-b',
+            created_by=self.owner,
+            updated_by=self.owner,
+        )
+        pipeline = HubSpotPipelineCache.objects.create(
+            organization=self.organization,
+            installation=hubspot_installation,
+            hubspot_pipeline_id='pipeline-1',
+            name='Pipeline Comercial',
+            object_type='deals',
+            raw_payload={'id': 'pipeline-1', 'stages': [{'id': 'appointmentscheduled', 'label': 'Qualificacao'}]},
+            last_synced_at=self.organization.created_at,
+        )
+
+        create_deal_mock.side_effect = [
+            type('HubSpotDealStub', (), {'name': 'ACME'})(),
+            type('HubSpotDealStub', (), {'name': 'Beta'})(),
+        ]
+        gmail_create_dispatch_mock.return_value = type('GmailDispatchStub', (), {'public_id': '44444444-4444-4444-4444-444444444444'})()
+
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.post(
+            reverse('dispatch_flow:create_dispatch'),
+            {
+                'audience_filter': 'all',
+                'person_public_ids': [str(person_a.public_id), str(person_b.public_id)],
+                'send_gmail': 'on',
+                'gmail_template_public_id': str(template.public_id),
+                'gmail_min_delay_seconds': '0',
+                'gmail_max_delay_seconds': '0',
+                'hubspot_preflight_modal_submit': 'apply',
+                'hubspot_create_deal_now': 'on',
+                'hubspot_deal_target_type': 'company',
+                'hubspot_pipeline_public_id': str(pipeline.public_id),
+                'hubspot_stage_id': 'appointmentscheduled',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(create_deal_mock.call_count, 2)

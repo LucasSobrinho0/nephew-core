@@ -21,6 +21,11 @@ class DispatchFlowFilterForm(BootstrapFormMixin, forms.Form):
 
 
 class DispatchFlowCreateForm(BootstrapFormMixin, forms.Form):
+    HUBSPOT_DEAL_TARGET_CHOICES = (
+        ('company', 'Negocio da empresa'),
+        ('person', 'Negocio da pessoa'),
+    )
+
     person_public_ids = forms.MultipleChoiceField(
         required=False,
         widget=forms.MultipleHiddenInput(),
@@ -38,6 +43,8 @@ class DispatchFlowCreateForm(BootstrapFormMixin, forms.Form):
     )
     skip_bot_conversa_tag_preflight = forms.BooleanField(required=False, widget=forms.HiddenInput())
     bot_conversa_tag_preflight_action = forms.CharField(required=False, widget=forms.HiddenInput())
+    skip_hubspot_preflight = forms.BooleanField(required=False, widget=forms.HiddenInput())
+    hubspot_preflight_action = forms.CharField(required=False, widget=forms.HiddenInput())
     send_bot_conversa = forms.BooleanField(
         label='Enviar por WhatsApp',
         required=False,
@@ -70,6 +77,46 @@ class DispatchFlowCreateForm(BootstrapFormMixin, forms.Form):
     bot_max_delay_seconds = forms.IntegerField(label='Delay maximo WhatsApp', min_value=0, initial=0)
     gmail_min_delay_seconds = forms.IntegerField(label='Delay minimo e-mail', min_value=0, initial=0)
     gmail_max_delay_seconds = forms.IntegerField(label='Delay maximo e-mail', min_value=0, initial=0)
+    hubspot_create_deal_now = forms.BooleanField(
+        label='Criar novo negocio no HubSpot antes do disparo',
+        required=False,
+    )
+    hubspot_deal_target_type = forms.ChoiceField(
+        label='Tipo do negocio',
+        required=False,
+        choices=HUBSPOT_DEAL_TARGET_CHOICES,
+    )
+    hubspot_target_company_public_id = forms.ChoiceField(
+        label='Empresa do negocio',
+        required=False,
+        choices=(),
+    )
+    hubspot_target_person_public_id = forms.ChoiceField(
+        label='Pessoa do negocio',
+        required=False,
+        choices=(),
+    )
+    hubspot_deal_person_public_ids = forms.MultipleChoiceField(
+        label='Contatos do negocio',
+        required=False,
+        choices=(),
+        widget=forms.SelectMultiple(
+            attrs={
+                'data-enhanced-multiselect': 'true',
+                'data-placeholder': 'Selecionar contatos locais para o negocio',
+            }
+        ),
+    )
+    hubspot_pipeline_public_id = forms.ChoiceField(
+        label='Pipeline do negocio',
+        required=False,
+        choices=(),
+    )
+    hubspot_stage_id = forms.ChoiceField(
+        label='Coluna do negocio',
+        required=False,
+        choices=(),
+    )
 
     def __init__(
         self,
@@ -80,6 +127,18 @@ class DispatchFlowCreateForm(BootstrapFormMixin, forms.Form):
         gmail_template_choices=(),
         bot_enabled=False,
         gmail_enabled=False,
+        hubspot_enabled=False,
+        hubspot_company_choices=(),
+        hubspot_person_choices=(),
+        hubspot_deal_person_choices=(),
+        hubspot_pipeline_choices=(),
+        hubspot_stage_choices=(),
+        hubspot_default_target_type='',
+        hubspot_default_company_public_id='',
+        hubspot_default_person_public_id='',
+        hubspot_default_deal_person_public_ids=None,
+        hubspot_company_contact_warning='',
+        hubspot_allow_manual_company_contacts=False,
         form_id='',
         **kwargs,
     ):
@@ -88,10 +147,34 @@ class DispatchFlowCreateForm(BootstrapFormMixin, forms.Form):
         self.fields['bot_conversa_tag_public_ids'].choices = list(bot_tag_choices)
         self.fields['flow_public_id'].choices = [('', 'Selecione')] + list(bot_flow_choices)
         self.fields['gmail_template_public_id'].choices = [('', 'Selecione')] + list(gmail_template_choices)
+        self.fields['hubspot_target_company_public_id'].choices = [('', 'Selecione')] + list(hubspot_company_choices)
+        self.fields['hubspot_target_person_public_id'].choices = [('', 'Selecione')] + list(hubspot_person_choices)
+        self.fields['hubspot_deal_person_public_ids'].choices = list(hubspot_deal_person_choices)
+        self.fields['hubspot_pipeline_public_id'].choices = [('', 'Selecione')] + list(hubspot_pipeline_choices)
+        self.fields['hubspot_stage_id'].choices = [('', 'Selecione')] + list(hubspot_stage_choices)
         self.bot_enabled = bot_enabled
         self.gmail_enabled = gmail_enabled
+        self.hubspot_enabled = hubspot_enabled
+        self.hubspot_company_contact_warning = hubspot_company_contact_warning
+        self.hubspot_allow_manual_company_contacts = hubspot_allow_manual_company_contacts
         if form_id:
             self.fields['bot_conversa_tag_public_ids'].widget.attrs['form'] = form_id
+            self.fields['hubspot_create_deal_now'].widget.attrs['form'] = form_id
+            self.fields['hubspot_deal_target_type'].widget.attrs['form'] = form_id
+            self.fields['hubspot_target_company_public_id'].widget.attrs['form'] = form_id
+            self.fields['hubspot_target_person_public_id'].widget.attrs['form'] = form_id
+            self.fields['hubspot_deal_person_public_ids'].widget.attrs['form'] = form_id
+            self.fields['hubspot_pipeline_public_id'].widget.attrs['form'] = form_id
+            self.fields['hubspot_stage_id'].widget.attrs['form'] = form_id
+
+        if hubspot_default_target_type and 'hubspot_deal_target_type' not in self.data:
+            self.initial['hubspot_deal_target_type'] = hubspot_default_target_type
+        if hubspot_default_company_public_id and 'hubspot_target_company_public_id' not in self.data:
+            self.initial['hubspot_target_company_public_id'] = hubspot_default_company_public_id
+        if hubspot_default_person_public_id and 'hubspot_target_person_public_id' not in self.data:
+            self.initial['hubspot_target_person_public_id'] = hubspot_default_person_public_id
+        if hubspot_default_deal_person_public_ids and 'hubspot_deal_person_public_ids' not in self.data:
+            self.initial['hubspot_deal_person_public_ids'] = list(hubspot_default_deal_person_public_ids)
 
     def clean_person_public_ids(self):
         person_public_ids = self.cleaned_data.get('person_public_ids') or []
@@ -150,5 +233,18 @@ class DispatchFlowCreateForm(BootstrapFormMixin, forms.Form):
         gmail_max = cleaned_data.get('gmail_max_delay_seconds')
         if send_gmail and gmail_min is not None and gmail_max is not None and gmail_max < gmail_min:
             self.add_error('gmail_max_delay_seconds', 'O delay maximo do e-mail nao pode ser menor que o minimo.')
+
+        if (
+            cleaned_data.get('hubspot_preflight_action') == 'apply'
+            and cleaned_data.get('hubspot_create_deal_now')
+        ):
+            if not cleaned_data.get('hubspot_deal_target_type'):
+                self.add_error('hubspot_deal_target_type', 'Selecione como o negocio sera criado.')
+            if not cleaned_data.get('hubspot_pipeline_public_id'):
+                self.add_error('hubspot_pipeline_public_id', 'Selecione um pipeline para criar o negocio.')
+            if not cleaned_data.get('hubspot_stage_id'):
+                self.add_error('hubspot_stage_id', 'Selecione a coluna do negocio.')
+            if cleaned_data.get('hubspot_deal_target_type') == 'person' and not cleaned_data.get('hubspot_target_person_public_id'):
+                self.add_error('hubspot_target_person_public_id', 'Selecione a pessoa do negocio.')
 
         return cleaned_data
