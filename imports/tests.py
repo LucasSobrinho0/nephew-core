@@ -168,3 +168,37 @@ class ImportPeopleServiceTests(TestCase):
                     'cnpj_empresa': '98765432000188',
                 },
             )
+
+    def test_import_people_updates_existing_person_and_links_company_on_reimport(self):
+        company = CompanyService.create_company(
+            user=self.user,
+            organization=self.organization,
+            name='ACME LTDA',
+            cnpj='12345678000199',
+        )
+        existing_person = Person.objects.create(
+            organization=self.organization,
+            first_name='Diego',
+            last_name='Souza',
+            phone='+55 11 97777-1111',
+            email='diego@example.com',
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        result_label = ImportPeopleService.import_payload(
+            user=self.user,
+            organization=self.organization,
+            payload={
+                'nome': 'Diego',
+                'sobrenome': 'Souza',
+                'telefone': '+55 11 97777-1111',
+                'email': 'diego@example.com',
+                'razao_empresa': 'ACME LTDA',
+            },
+        )
+
+        existing_person.refresh_from_db()
+        self.assertEqual(existing_person.company_id, company.id)
+        self.assertEqual(Person.objects.filter(organization=self.organization).count(), 1)
+        self.assertEqual(result_label, 'Diego Souza atualizada')

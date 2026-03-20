@@ -11,7 +11,9 @@ from openpyxl import Workbook, load_workbook
 
 from companies.repositories import CompanyRepository
 from companies.services import CompanyService
+from common.encryption import build_email_lookup, normalize_email_address
 from common.documents import normalize_cnpj
+from common.phone import normalize_phone
 from imports.models import ImportJob, ImportJobItem
 from imports.repositories import ImportJobItemRepository, ImportJobRepository
 from people.repositories import PersonRepository
@@ -192,6 +194,111 @@ class ImportJobService:
 
 class ImportPeopleService:
     @staticmethod
+    def _resolve_existing_person(*, organization, email='', phone='', apollo_person_id='', hubspot_contact_id='', bot_conversa_id=''):
+        matches = []
+
+        if apollo_person_id:
+            person = PersonRepository.get_for_organization_and_apollo_person_id(organization, apollo_person_id)
+            if person is not None:
+                matches.append(person)
+
+        if hubspot_contact_id:
+            person = PersonRepository.get_for_organization_and_hubspot_contact_id(organization, hubspot_contact_id)
+            if person is not None:
+                matches.append(person)
+
+        normalized_bot_conversa_id = (bot_conversa_id or '').strip() or None
+        if normalized_bot_conversa_id:
+            person = PersonRepository.get_for_organization_and_bot_conversa_id(organization, normalized_bot_conversa_id)
+            if person is not None:
+                matches.append(person)
+
+        if phone:
+            normalized_phone = normalize_phone(phone)
+            person = PersonRepository.get_for_organization_and_normalized_phone(organization, normalized_phone)
+            if person is not None:
+                matches.append(person)
+
+        if email:
+            email_lookup = build_email_lookup(normalize_email_address(email))
+            person = PersonRepository.get_for_organization_and_email_lookup(organization, email_lookup)
+            if person is not None:
+                matches.append(person)
+
+        unique_matches = []
+        seen_ids = set()
+        for match in matches:
+            if match.id in seen_ids:
+                continue
+            seen_ids.add(match.id)
+            unique_matches.append(match)
+
+        if len(unique_matches) > 1:
+            raise ValidationError('Os identificadores da linha apontam para pessoas diferentes na organizacao ativa.')
+
+        return unique_matches[0] if unique_matches else None
+
+    @staticmethod
+    def _update_existing_person(
+        *,
+        user,
+        organization,
+        person,
+        first_name,
+        last_name,
+        email='',
+        phone='',
+        apollo_person_id='',
+        hubspot_contact_id='',
+        bot_conversa_id='',
+        company=None,
+    ):
+        updated_person = PersonService.update_person(
+            user=user,
+            organization=organization,
+            person=person,
+            first_name=first_name or person.first_name,
+            last_name=last_name or person.last_name,
+            phone=phone or person.phone,
+            email=email or person.email,
+            company=company if company is not None else person.company,
+        )
+
+        normalized_apollo_person_id = (apollo_person_id or '').strip()
+        normalized_hubspot_contact_id = (hubspot_contact_id or '').strip()
+        normalized_bot_conversa_id = (bot_conversa_id or '').strip() or None
+
+        if normalized_apollo_person_id and updated_person.apollo_person_id != normalized_apollo_person_id:
+            existing_person = PersonRepository.get_for_organization_and_apollo_person_id(organization, normalized_apollo_person_id)
+            if existing_person and existing_person.pk != updated_person.pk:
+                raise ValidationError('Ja existe uma pessoa com este ID do Apollo na organizacao ativa.')
+            updated_person.apollo_person_id = normalized_apollo_person_id
+
+        if normalized_hubspot_contact_id and updated_person.hubspot_contact_id != normalized_hubspot_contact_id:
+            existing_person = PersonRepository.get_for_organization_and_hubspot_contact_id(organization, normalized_hubspot_contact_id)
+            if existing_person and existing_person.pk != updated_person.pk:
+                raise ValidationError('Ja existe uma pessoa com este ID do HubSpot na organizacao ativa.')
+            updated_person.hubspot_contact_id = normalized_hubspot_contact_id
+
+        if normalized_bot_conversa_id and updated_person.bot_conversa_id != normalized_bot_conversa_id:
+            existing_person = PersonRepository.get_for_organization_and_bot_conversa_id(organization, normalized_bot_conversa_id)
+            if existing_person and existing_person.pk != updated_person.pk:
+                raise ValidationError('Ja existe uma pessoa com este ID do Bot Conversa na organizacao ativa.')
+            updated_person.bot_conversa_id = normalized_bot_conversa_id
+
+        updated_person.updated_by = user
+        updated_person.save(
+            update_fields=[
+                'apollo_person_id',
+                'hubspot_contact_id',
+                'bot_conversa_id',
+                'updated_by',
+                'updated_at',
+            ]
+        )
+        return updated_person
+
+    @staticmethod
     def import_payload(*, user, organization, payload):
         first_name = payload.get('nome', '')
         last_name = payload.get('sobrenome', '')
@@ -221,6 +328,30 @@ class ImportPeopleService:
             if company is not None and company.id != company_by_cnpj.id:
                 raise ValidationError('A razao da empresa e o CNPJ informado apontam para empresas diferentes.')
             company = company_by_cnpj
+
+        existing_person = ImportPeopleService._resolve_existing_person(
+            organization=organization,
+            email=email,
+            phone=phone,
+            apollo_person_id=apollo_person_id,
+            hubspot_contact_id=hubspot_contact_id,
+            bot_conversa_id=bot_conversa_id,
+        )
+        if existing_person is not None:
+            person = ImportPeopleService._update_existing_person(
+                user=user,
+                organization=organization,
+                person=existing_person,
+                first_name=first_name,
+                last_name=last_name,
+                phone=phone,
+                email=email,
+                bot_conversa_id=bot_conversa_id,
+                hubspot_contact_id=hubspot_contact_id,
+                apollo_person_id=apollo_person_id,
+                company=company,
+            )
+            return f'{person.full_name} atualizada'
 
         person = PersonService.create_person(
             user=user,
