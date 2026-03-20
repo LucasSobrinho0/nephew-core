@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block title %}Status do fluxo de disparo{% endblock %}
+
+{% block content %}
+  <section class="page-header mb-4">
+    <span class="section-kicker">Fluxo de disparo</span>
+    <h1>Acompanhamento do envio</h1>
+    <p class="text-body-secondary mb-0">Acompanhe em uma unica tela o processamento dos canais ativados neste disparo.</p>
+  </section>
+
+  {% if bot_dispatch_payload %}
+    <section class="mb-5">
+      <div class="mb-3">
+        <span class="section-kicker">WhatsApp</span>
+        <h2 class="h4 mb-0">{{ bot_dispatch_payload.dispatch.flow_name }}</h2>
+      </div>
+      {% include 'bot_conversa/_dispatch_status_panel.html' with bot_dispatch=bot_dispatch_payload.dispatch bot_items=bot_dispatch_payload.items bot_status_payload=bot_dispatch_payload.status_payload show_bot_controls=False bot_status_copy='O fluxo de disparo continuara consultando este envio de WhatsApp enquanto houver itens pendentes.' %}
+    </section>
+  {% endif %}
+
+  {% if gmail_dispatch_payload %}
+    <section{% if not bot_dispatch_payload %} class="mb-0"{% endif %}>
+      <div class="mb-3">
+        <span class="section-kicker">Gmail</span>
+        <h2 class="h4 mb-0">{{ gmail_dispatch_payload.dispatch.subject_snapshot }}</h2>
+      </div>
+      {% include 'gmail_integration/_dispatch_status_panel.html' with gmail_dispatch=gmail_dispatch_payload.dispatch gmail_recipients=gmail_dispatch_payload.recipients gmail_status_payload=gmail_dispatch_payload.status_payload gmail_status_copy='O fluxo de disparo continuara consultando este envio de Gmail enquanto houver destinatarios pendentes.' %}
+    </section>
+  {% endif %}
+{% endblock %}

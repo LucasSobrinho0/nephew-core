@@ -1,0 +1,80 @@
+<section class="row g-4{% if gmail_wrapper_class %} {{ gmail_wrapper_class }}{% endif %}">
+  <div class="col-lg-4">
+    <div class="glass-card content-card h-100">
+      <div class="content-card-header">
+        <div>
+          <span class="section-kicker">{{ gmail_section_kicker|default:'Resumo' }}</span>
+          <h2>{{ gmail_dispatch.subject_snapshot }}</h2>
+        </div>
+      </div>
+      <p class="mb-1"><strong>Status:</strong> <span id="gmailDispatchStatusLabel">{{ gmail_dispatch.get_status_display }}</span></p>
+      <p class="mb-1"><strong>Processado:</strong> <span id="gmailDispatchProcessedCount">{{ gmail_dispatch.processed_recipients }}</span> / <span id="gmailDispatchTotalCount">{{ gmail_dispatch.total_recipients }}</span></p>
+      <p class="mb-1"><strong>Sucesso:</strong> <span id="gmailDispatchSuccessCount">{{ gmail_dispatch.success_recipients }}</span></p>
+      <p class="mb-1"><strong>Falhas:</strong> <span id="gmailDispatchFailedCount">{{ gmail_dispatch.failed_recipients }}</span></p>
+      <p class="mb-1"><strong>Intervalo:</strong> {{ gmail_dispatch.min_delay_seconds }}s a {{ gmail_dispatch.max_delay_seconds }}s</p>
+      <p class="mb-0 text-body-secondary"><strong>Copias:</strong> {{ gmail_dispatch.cc_recipients_snapshot|length }}</p>
+    </div>
+  </div>
+  <div class="col-lg-8">
+    <div class="glass-card content-card h-100">
+      <div class="content-card-header">
+        <div>
+          <span class="section-kicker">{{ gmail_results_kicker|default:'Resultado por pessoa' }}</span>
+          <h2>{{ gmail_results_title|default:'Destinatarios' }}</h2>
+        </div>
+        <span class="status-badge status-used" id="gmailDispatchStatusBadge">{{ gmail_dispatch.get_status_display }}</span>
+      </div>
+      <p class="text-body-secondary mb-3" id="gmailDispatchStatusCopy">
+        {% if can_manage_gmail %}
+          {{ gmail_status_copy|default:'A interface continuara consultando enquanto existirem destinatarios pendentes.' }}
+        {% else %}
+          Voce esta visualizando o progresso mais recente armazenado para este disparo.
+        {% endif %}
+      </p>
+      {% if gmail_recipients %}
+        <div class="table-responsive">
+          <table class="table table-clean align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Pessoa</th>
+                <th>E-mail</th>
+                <th>Status</th>
+                <th>Message ID</th>
+                <th>Thread ID</th>
+              </tr>
+            </thead>
+            <tbody id="gmailDispatchRecipientsTableBody">
+              {% for recipient in gmail_recipients %}
+                <tr>
+                  <td>{{ recipient.first_name_snapshot }} {{ recipient.last_name_snapshot }}</td>
+                  <td>{{ recipient.email_snapshot }}</td>
+                  <td>
+                    {{ recipient.get_status_display }}
+                    {% if recipient.error_message %}
+                      <div class="text-danger small">{{ recipient.error_message }}</div>
+                    {% endif %}
+                  </td>
+                  <td class="small">{{ recipient.gmail_message_id|default:'-' }}</td>
+                  <td class="small">{{ recipient.gmail_thread_id|default:'-' }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="soft-empty text-start px-0 pb-0">
+          <p class="mb-0">Nenhum destinatario foi registrado para este disparo.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+{% if can_manage_gmail %}
+  <form id="gmailDispatchPoller" class="d-none">
+    {% csrf_token %}
+    <input type="hidden" name="poll_url" value="{% url 'gmail_integration:dispatch_process' gmail_dispatch.public_id %}">
+    <input type="hidden" name="is_finished" value="{% if gmail_status_payload.is_finished %}true{% else %}false{% endif %}">
+    <input type="hidden" name="next_poll_delay_ms" value="{{ gmail_status_payload.next_poll_delay_ms }}">
+  </form>
+{% endif %}

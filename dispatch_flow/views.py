@@ -1,8 +1,15 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.views import View
 from django.views.generic import TemplateView
+from urllib.parse import urlencode
+
+from bot_conversa.repositories import BotConversaFlowDispatchRepository
+from bot_conversa.services import BotConversaDispatchService
+from gmail_integration.repositories import GmailDispatchRepository
+from gmail_integration.services import GmailDispatchService
 
 from dispatch_flow.services import (
     DispatchFlowAccessService,
@@ -86,6 +93,64 @@ class DispatchFlowView(DispatchFlowAccessMixin, TemplateView):
                 'bot_tag_preflight_modal_open': kwargs.get('bot_tag_preflight_modal_open', False),
                 'bot_tag_preflight_people': kwargs.get('bot_tag_preflight_people', []),
                 'bot_tag_preflight_modal_errors': kwargs.get('bot_tag_preflight_modal_errors', []),
+            }
+        )
+        return context
+
+
+class DispatchFlowDetailView(DispatchFlowAccessMixin, TemplateView):
+    template_name = 'dispatch_flow/detail.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        redirect_response = self.prepare_request_context(request)
+        if redirect_response is not None:
+            return redirect_response
+
+        self.bot_dispatch = None
+        self.gmail_dispatch = None
+
+        bot_dispatch_public_id = request.GET.get('bot_dispatch')
+        gmail_dispatch_public_id = request.GET.get('gmail_dispatch')
+
+        if not bot_dispatch_public_id and not gmail_dispatch_public_id:
+            messages.error(request, 'Nenhum disparo foi informado para acompanhamento.')
+            return redirect('dispatch_flow:index')
+
+        if bot_dispatch_public_id:
+            self.bot_dispatch = BotConversaFlowDispatchRepository.get_for_organization_and_public_id(
+                self.active_organization,
+                bot_dispatch_public_id,
+            )
+            if self.bot_dispatch is None:
+                messages.error(request, 'O disparo de WhatsApp informado nao foi encontrado.')
+                return redirect('dispatch_flow:index')
+
+        if gmail_dispatch_public_id:
+            self.gmail_dispatch = GmailDispatchRepository.get_for_organization_and_public_id(
+                self.active_organization,
+                gmail_dispatch_public_id,
+            )
+            if self.gmail_dispatch is None:
+                messages.error(request, 'O disparo de Gmail informado nao foi encontrado.')
+                return redirect('dispatch_flow:index')
+
+        return super(DispatchFlowAccessMixin, self).dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(self.build_base_context())
+        context.update(
+            {
+                'bot_dispatch_payload': (
+                    BotConversaDispatchService.build_dispatch_payload(dispatch=self.bot_dispatch)
+                    if self.bot_dispatch is not None
+                    else None
+                ),
+                'gmail_dispatch_payload': (
+                    GmailDispatchService.build_dispatch_payload(dispatch=self.gmail_dispatch)
+                    if self.gmail_dispatch is not None
+                    else None
+                ),
             }
         )
         return context
@@ -231,4 +296,13 @@ class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
         elif result['gmail_dispatch']:
             messages.success(request, 'Disparo de Gmail criado com sucesso.')
 
-        return redirect('dispatch_flow:index')
+        query = {}
+        if result['bot_dispatch']:
+            query['bot_dispatch'] = str(result['bot_dispatch'].public_id)
+        if result['gmail_dispatch']:
+            query['gmail_dispatch'] = str(result['gmail_dispatch'].public_id)
+
+        detail_url = reverse('dispatch_flow:dispatch_detail')
+        if query:
+            detail_url = f'{detail_url}?{urlencode(query)}'
+        return redirect(detail_url)
