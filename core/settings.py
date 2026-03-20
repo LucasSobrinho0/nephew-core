@@ -153,6 +153,8 @@ STATIC_URL = '/static/'
 STATIC_ROOT = '/var/www/html/nephew-core/staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 APP_BASE_URL = env('APP_BASE_URL', '').strip().rstrip('/')
+LOG_DIR = BASE_DIR / 'logs'
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -172,3 +174,29 @@ LOGIN_REDIRECT_URL = 'organizations:onboarding'
 LOGOUT_REDIRECT_URL = 'accounts:login'
 SESSION_COOKIE_AGE = env_int('SESSION_COOKIE_AGE', 60 * 60 * 24 * 14)
 NON_REMEMBERED_SESSION_AGE = env_int('NON_REMEMBERED_SESSION_AGE', 60 * 60 * 2)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '%(asctime)s %(levelname)s %(name)s %(message)s',
+        },
+    },
+    'handlers': {
+        'dispatch_flow_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': str(LOG_DIR / 'dispatch_flow_debug.log'),
+            'formatter': 'verbose',
+            'encoding': 'utf-8',
+        },
+    },
+    'loggers': {
+        'dispatch_flow.debug': {
+            'handlers': ['dispatch_flow_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}

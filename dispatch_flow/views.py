@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import redirect
@@ -17,6 +19,8 @@ from dispatch_flow.services import (
     DispatchFlowAudienceService,
     DispatchFlowWorkspaceService,
 )
+
+logger = logging.getLogger('dispatch_flow.debug')
 
 
 class DispatchFlowAccessMixin(LoginRequiredMixin):
@@ -158,10 +162,24 @@ class DispatchFlowDetailView(DispatchFlowAccessMixin, TemplateView):
 
 class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
     def post(self, request, *args, **kwargs):
+        post_data = request.POST.copy()
+        preflight_modal_submit = post_data.get('bot_conversa_tag_modal_submit')
+        if preflight_modal_submit in {'skip', 'apply'}:
+            post_data['skip_bot_conversa_tag_preflight'] = '1'
+            post_data['bot_conversa_tag_preflight_action'] = (
+                'apply' if preflight_modal_submit == 'apply' else ''
+            )
+
+        logger.info(
+            'dispatch_flow_create:start user_id=%s org_id=%s post_keys=%s',
+            getattr(request.user, 'id', None),
+            getattr(self.active_organization, 'id', None),
+            sorted(post_data.keys()),
+        )
         filter_form = DispatchFlowWorkspaceService.build_filter_form(
             {
                 'load': '1',
-                'audience_filter': request.POST.get('audience_filter', 'all'),
+                'audience_filter': post_data.get('audience_filter', 'all'),
             }
         )
         audience_filter = 'all'
@@ -175,9 +193,13 @@ class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
         dispatch_form = DispatchFlowWorkspaceService.build_dispatch_form(
             organization=self.active_organization,
             audience_rows=audience_rows,
-            data=request.POST,
+            data=post_data,
         )
         if not dispatch_form.is_valid():
+            logger.info(
+                'dispatch_flow_create:invalid_form errors=%s',
+                dispatch_form.errors.get_json_data(),
+            )
             view = DispatchFlowView()
             view.request = request
             view.active_organization = self.active_organization
@@ -194,13 +216,28 @@ class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
             organization=self.active_organization,
             person_public_ids=dispatch_form.cleaned_data['person_public_ids'],
         )
+        logger.info(
+            'dispatch_flow_create:resolved_people count=%s send_bot=%s send_gmail=%s skip_preflight=%s preflight_action=%s selected_tags=%s',
+            len(persons),
+            dispatch_form.cleaned_data['send_bot_conversa'],
+            dispatch_form.cleaned_data['send_gmail'],
+            dispatch_form.cleaned_data['skip_bot_conversa_tag_preflight'],
+            dispatch_form.cleaned_data['bot_conversa_tag_preflight_action'],
+            dispatch_form.cleaned_data['bot_conversa_tag_public_ids'],
+        )
 
         if dispatch_form.cleaned_data['send_bot_conversa'] and not dispatch_form.cleaned_data['skip_bot_conversa_tag_preflight']:
             preflight = DispatchFlowActionService.build_bot_conversa_tag_preflight(
                 organization=self.active_organization,
                 persons=persons,
             )
+            logger.info(
+                'dispatch_flow_create:preflight should_prompt=%s untagged_count=%s',
+                preflight['should_prompt'],
+                len(preflight['untagged_people']),
+            )
             if preflight['should_prompt']:
+                logger.info('dispatch_flow_create:returning_preflight_modal')
                 view = DispatchFlowView()
                 view.request = request
                 view.active_organization = self.active_organization
@@ -220,6 +257,7 @@ class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
             and dispatch_form.cleaned_data['bot_conversa_tag_preflight_action'] == 'apply'
             and not dispatch_form.cleaned_data['bot_conversa_tag_public_ids']
         ):
+            logger.info('dispatch_flow_create:apply_requested_without_tags')
             dispatch_form.add_error('bot_conversa_tag_public_ids', 'Selecione pelo menos uma etiqueta para continuar.')
             view = DispatchFlowView()
             view.request = request
@@ -239,6 +277,7 @@ class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
             )
 
         try:
+            logger.info('dispatch_flow_create:applying_tags_if_requested')
             DispatchFlowActionService.apply_bot_conversa_tags_if_requested(
                 user=request.user,
                 organization=self.active_organization,
@@ -246,6 +285,7 @@ class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
                 tag_public_ids=dispatch_form.cleaned_data['bot_conversa_tag_public_ids'],
                 preflight_action=dispatch_form.cleaned_data['bot_conversa_tag_preflight_action'],
             )
+            logger.info('dispatch_flow_create:creating_multichannel_dispatch')
             result = DispatchFlowActionService.create_multichannel_dispatch(
                 user=request.user,
                 organization=self.active_organization,
@@ -260,7 +300,18 @@ class DispatchFlowCreateView(DispatchFlowAccessMixin, View):
                 gmail_min_delay_seconds=dispatch_form.cleaned_data['gmail_min_delay_seconds'],
                 gmail_max_delay_seconds=dispatch_form.cleaned_data['gmail_max_delay_seconds'],
             )
+            logger.info(
+                'dispatch_flow_create:success bot_dispatch=%s gmail_dispatch=%s',
+                getattr(result.get('bot_dispatch'), 'public_id', None),
+                getattr(result.get('gmail_dispatch'), 'public_id', None),
+            )
         except DispatchFlowActionService.handled_exceptions() as exc:
+            logger.exception(
+                'dispatch_flow_create:handled_exception skip_preflight=%s preflight_action=%s selected_tags=%s',
+                dispatch_form.cleaned_data.get('skip_bot_conversa_tag_preflight'),
+                dispatch_form.cleaned_data.get('bot_conversa_tag_preflight_action'),
+                dispatch_form.cleaned_data.get('bot_conversa_tag_public_ids'),
+            )
             error_messages = []
             if hasattr(exc, 'messages') and exc.messages:
                 for message in exc.messages:

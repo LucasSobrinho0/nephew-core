@@ -378,9 +378,14 @@
         var fieldValue = button.getAttribute('data-confirm-set-value') || '1';
         var secondaryFieldSelector = button.getAttribute('data-confirm-secondary-set-field');
         var secondaryFieldValue = button.getAttribute('data-confirm-secondary-set-value') || '';
+        var modalId = button.getAttribute('data-confirm-close-modal');
         var form = formSelector ? document.querySelector(formSelector) : null;
         var field = fieldSelector && form ? form.querySelector(fieldSelector) : null;
         var secondaryField = secondaryFieldSelector && form ? form.querySelector(secondaryFieldSelector) : null;
+        var modalElement = modalId ? document.getElementById(modalId) : null;
+        var modalInstance = (modalElement && typeof bootstrap !== 'undefined')
+          ? bootstrap.Modal.getInstance(modalElement)
+          : null;
 
         if (!form) {
           return;
@@ -393,9 +398,23 @@
           secondaryField.value = secondaryFieldValue;
         }
 
+        if (modalInstance) {
+          modalInstance.hide();
+        }
+
+        // `requestSubmit()` can fail silently in some modal/browser combinations.
+        // Fall back to the native form submission path after updating the hidden fields.
         window.setTimeout(function () {
-          form.requestSubmit();
-        }, 120);
+          if (typeof form.requestSubmit === 'function') {
+            try {
+              form.requestSubmit();
+              return;
+            } catch (_error) {
+              // Fall through to native submit below.
+            }
+          }
+          form.submit();
+        }, 30);
       });
     });
   }

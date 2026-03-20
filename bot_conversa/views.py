@@ -270,13 +270,19 @@ class BotConversaPersonSyncView(BotConversaOperatorRequiredMixin, View):
 
 class BotConversaBulkPersonSyncView(BotConversaOperatorRequiredMixin, View):
     def post(self, request, *args, **kwargs):
+        post_data = request.POST.copy()
+        modal_submit_action = post_data.get('tag_preflight_modal_submit')
+        if modal_submit_action in {'skip', 'apply'}:
+            post_data['skip_tag_preflight'] = '1'
+            post_data['tag_preflight_action'] = 'apply' if modal_submit_action == 'apply' else ''
+
         form = BotConversaBulkPersonSyncForm(
-            request.POST,
+            post_data,
             person_choices=self.build_person_choices(),
             tag_choices=self.build_tag_choices(),
             form_id='botBulkPersonSyncForm',
         )
-        next_url = request.POST.get('next') or 'bot_conversa:people'
+        next_url = post_data.get('next') or 'bot_conversa:people'
 
         if not form.is_valid():
             messages.error(request, form.errors.get('person_public_ids', ['Selecione pessoas válidas.'])[0])

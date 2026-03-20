@@ -130,7 +130,7 @@ class ApolloClient:
         if status_code == 403 and isinstance(parsed_error, dict) and parsed_error.get('error_code') == 1010:
             return (
                 'Apollo bloqueou a assinatura HTTP desta requisicao (Cloudflare 1010). '
-                'O Nephew CRM ja usa um User-Agent dedicado, mas se o bloqueio persistir '
+                'O Alow Smart Flow ja usa um User-Agent dedicado, mas se o bloqueio persistir '
                 'sera necessario liberar este client com o suporte do Apollo. '
                 f'body={raw_error[:1000]}'
             )

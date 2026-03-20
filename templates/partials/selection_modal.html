@@ -35,25 +35,35 @@
       </div>
       <div class="modal-footer border-0 pt-0">
         <button
-          type="button"
+          type="{% if modal_form_id %}submit{% else %}button{% endif %}"
           class="btn btn-outline-secondary"
-          data-confirm-submit-target="{{ modal_form_target }}"
-          data-confirm-set-field="{{ modal_skip_field_selector }}"
-          data-confirm-set-value="1"
-          {% if modal_action_field_selector %}data-confirm-secondary-set-field="{{ modal_action_field_selector }}"{% endif %}
-          data-bs-dismiss="modal"
+          {% if modal_form_id %}form="{{ modal_form_id }}"{% endif %}
+          {% if modal_submit_name %}name="{{ modal_submit_name }}"{% endif %}
+          {% if modal_form_id %}value="skip"{% endif %}
+          {% if not modal_form_id %}
+            data-confirm-submit-target="{{ modal_form_target }}"
+            data-confirm-set-field="{{ modal_skip_field_selector }}"
+            data-confirm-set-value="1"
+            {% if modal_action_field_selector %}data-confirm-secondary-set-field="{{ modal_action_field_selector }}"{% endif %}
+            data-confirm-close-modal="{{ modal_id }}"
+          {% endif %}
         >
           {{ modal_skip_label|default:'Continuar sem etiqueta' }}
         </button>
         <button
-          type="button"
+          type="{% if modal_form_id %}submit{% else %}button{% endif %}"
           class="btn btn-brand"
-          data-confirm-submit-target="{{ modal_form_target }}"
-          data-confirm-set-field="{{ modal_skip_field_selector }}"
-          data-confirm-set-value="1"
-          {% if modal_action_field_selector %}data-confirm-secondary-set-field="{{ modal_action_field_selector }}"{% endif %}
-          data-confirm-secondary-set-value="apply"
-          data-bs-dismiss="modal"
+          {% if modal_form_id %}form="{{ modal_form_id }}"{% endif %}
+          {% if modal_submit_name %}name="{{ modal_submit_name }}"{% endif %}
+          {% if modal_form_id %}value="apply"{% endif %}
+          {% if not modal_form_id %}
+            data-confirm-submit-target="{{ modal_form_target }}"
+            data-confirm-set-field="{{ modal_skip_field_selector }}"
+            data-confirm-set-value="1"
+            {% if modal_action_field_selector %}data-confirm-secondary-set-field="{{ modal_action_field_selector }}"{% endif %}
+            data-confirm-secondary-set-value="apply"
+            data-confirm-close-modal="{{ modal_id }}"
+          {% endif %}
         >
           {{ modal_apply_label|default:'Aplicar etiquetas e continuar' }}
         </button>
