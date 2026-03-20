@@ -190,6 +190,7 @@
             initListFilters();
             initLoadingForms();
             initAsyncListForms();
+            initStandardSelects();
             initEnhancedMultiSelects();
             initRemoteSelects();
             initAutoOpenModals();
@@ -262,6 +263,56 @@
         closeAfterSelect: false,
         maxOptions: null,
         placeholder: select.getAttribute('data-placeholder') || 'Pesquisar',
+        render: {
+          no_results: function (data, escape) {
+            return '<div class="no-results">Nenhum resultado para "' + escape(data.input) + '".</div>';
+          }
+        }
+      });
+    });
+  }
+
+  function initStandardSelects() {
+    if (typeof TomSelect === 'undefined') {
+      return;
+    }
+
+    document.querySelectorAll('select').forEach(function (select) {
+      var placeholder = '';
+
+      if (select.tomselect) {
+        return;
+      }
+      if (select.multiple) {
+        return;
+      }
+      if (select.hasAttribute('data-enhanced-multiselect')) {
+        return;
+      }
+      if (select.hasAttribute('data-remote-select')) {
+        return;
+      }
+      if (select.hasAttribute('data-no-enhance')) {
+        return;
+      }
+
+      placeholder = select.getAttribute('data-placeholder') || '';
+      if (!placeholder) {
+        Array.from(select.options).some(function (option) {
+          if (option.value === '') {
+            placeholder = option.textContent.trim();
+            return true;
+          }
+          return false;
+        });
+      }
+
+      new TomSelect(select, {
+        create: false,
+        maxItems: 1,
+        allowEmptyOption: true,
+        hidePlaceholder: false,
+        placeholder: placeholder || 'Selecione',
         render: {
           no_results: function (data, escape) {
             return '<div class="no-results">Nenhum resultado para "' + escape(data.input) + '".</div>';
@@ -1346,6 +1397,7 @@
   initListFilters();
   initAsyncListForms();
   initDispatchAudienceFilters();
+  initStandardSelects();
   initEnhancedMultiSelects();
   initRemoteSelects();
   initAutoOpenModals();
