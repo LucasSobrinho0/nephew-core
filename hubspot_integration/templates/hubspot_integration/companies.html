@@ -37,12 +37,20 @@
       <div class="glass-card content-card h-100 scroll-card" id="hubspotLocalCompaniesCard">
         <div class="content-card-header">
           <div><span class="section-kicker">CRM local</span><h2>Empresas cadastradas</h2></div>
-          {% if not has_loaded_local_companies %}
-            <form method="get" action="{% url 'hubspot_integration:companies' %}" data-async-list-form data-async-target="#hubspotLocalCompaniesCard" data-loading-text="Listando empresas...">
-              <input type="hidden" name="load_local" value="1">
-              <button type="submit" class="btn btn-outline-secondary">Listar empresas</button>
-            </form>
-          {% endif %}
+          <div class="d-flex gap-2">
+            {% if not has_loaded_local_companies %}
+              <form method="get" action="{% url 'hubspot_integration:companies' %}" data-async-list-form data-async-target="#hubspotLocalCompaniesCard" data-loading-text="Listando empresas...">
+                <input type="hidden" name="load_local" value="1">
+                <button type="submit" class="btn btn-outline-secondary">Listar empresas</button>
+              </form>
+            {% else %}
+              <form method="get" action="{% url 'hubspot_integration:companies' %}" data-async-list-form data-async-target="#hubspotLocalCompaniesCard" data-loading-text="Consultando HubSpot...">
+                <input type="hidden" name="load_local" value="1">
+                <input type="hidden" name="check_remote_status" value="1">
+                <button type="submit" class="btn btn-outline-secondary">Consultar HubSpot</button>
+              </form>
+            {% endif %}
+          </div>
         </div>
         {% if has_loaded_local_companies and company_rows %}
           <div class="mb-3">
@@ -74,13 +82,31 @@
                       <td>{{ row.company.website|default:'-' }}</td>
                       <td>{{ row.local_deal_count }}</td>
                       <td>
-                        {% if row.has_remote_deal %}
-                          {{ row.remote_deal_count }} negocio(s)
+                        {% if row.remote_status_checked %}
+                          {% if row.has_remote_deal %}
+                            {{ row.remote_deal_count }} negocio(s)
+                          {% elif row.is_remote_synced %}
+                            <span class="text-body-secondary">Nao</span>
+                          {% else %}
+                            <span class="text-body-secondary">Nao encontrado</span>
+                          {% endif %}
                         {% else %}
-                          <span class="text-body-secondary">Nao</span>
+                          <span class="text-body-secondary">Nao verificado</span>
                         {% endif %}
                       </td>
-                      <td>{% if row.is_synced %}Sincronizada{% else %}Pendente{% endif %}</td>
+                      <td>
+                        {% if row.remote_status_checked %}
+                          {% if row.is_remote_synced %}
+                            Sincronizada
+                          {% elif row.is_synced %}
+                            Nao encontrada
+                          {% else %}
+                            Pendente
+                          {% endif %}
+                        {% else %}
+                          {% if row.is_synced %}Sincronizada{% else %}Pendente{% endif %}
+                        {% endif %}
+                      </td>
                     </tr>
                   {% endfor %}
                 </tbody>

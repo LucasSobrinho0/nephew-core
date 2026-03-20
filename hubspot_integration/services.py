@@ -121,19 +121,23 @@ class HubSpotDashboardService:
 
 class HubSpotCompanyService:
     @staticmethod
-    def build_company_rows(*, organization):
+    def build_company_rows(*, organization, include_remote_status=False):
         companies = list(CompanyRepository.list_for_organization(organization))
-        remote_summary_by_company_id = HubSpotRemoteAssociationService.build_company_summaries(
-            organization=organization,
-            companies=companies,
-        )
+        remote_summary_by_company_id = {}
+        if include_remote_status and companies:
+            remote_summary_by_company_id = HubSpotRemoteAssociationService.build_company_summaries(
+                organization=organization,
+                companies=companies,
+            )
         return [
             {
                 'company': company,
                 'is_synced': bool(company.hubspot_company_id),
                 'has_local_deal': bool(company.hubspot_deals.exists()),
                 'local_deal_count': company.hubspot_deals.count(),
-                'has_remote_deal': remote_summary_by_company_id.get(company.id, {}).get('has_remote_deal', False),
+                'remote_status_checked': include_remote_status,
+                'is_remote_synced': remote_summary_by_company_id.get(company.id, {}).get('was_resolved') if include_remote_status else None,
+                'has_remote_deal': remote_summary_by_company_id.get(company.id, {}).get('has_remote_deal') if include_remote_status else None,
                 'remote_deal_count': remote_summary_by_company_id.get(company.id, {}).get('remote_deal_count', 0),
             }
             for company in companies
@@ -383,19 +387,23 @@ class HubSpotContactService:
         return f'+55 11 {local_number[:5]}-{local_number[5:]}'
 
     @staticmethod
-    def build_person_rows(*, organization):
+    def build_person_rows(*, organization, include_remote_status=False):
         persons = list(PersonRepository.list_for_organization(organization).prefetch_related('hubspot_deals'))
-        remote_summary_by_person_id = HubSpotRemoteAssociationService.build_person_summaries(
-            organization=organization,
-            persons=persons,
-        )
+        remote_summary_by_person_id = {}
+        if include_remote_status and persons:
+            remote_summary_by_person_id = HubSpotRemoteAssociationService.build_person_summaries(
+                organization=organization,
+                persons=persons,
+            )
         return [
             {
                 'person': person,
                 'is_synced': bool(person.hubspot_contact_id),
                 'has_local_deal': bool(person.hubspot_deals.exists()),
                 'local_deal_count': person.hubspot_deals.count(),
-                'has_remote_deal': remote_summary_by_person_id.get(person.id, {}).get('has_remote_deal', False),
+                'remote_status_checked': include_remote_status,
+                'is_remote_synced': remote_summary_by_person_id.get(person.id, {}).get('was_resolved') if include_remote_status else None,
+                'has_remote_deal': remote_summary_by_person_id.get(person.id, {}).get('has_remote_deal') if include_remote_status else None,
                 'remote_deal_count': remote_summary_by_person_id.get(person.id, {}).get('remote_deal_count', 0),
             }
             for person in persons
@@ -749,6 +757,7 @@ class HubSpotRemoteAssociationService:
             if not remote_company_id:
                 summaries[company.id] = {
                     'remote_company_id': '',
+                    'was_resolved': False,
                     'has_remote_deal': False,
                     'remote_deal_count': 0,
                     'remote_deal_ids': [],
@@ -758,6 +767,7 @@ class HubSpotRemoteAssociationService:
             deal_summary = client.get_company_deal_summary(company_id=remote_company_id)
             summaries[company.id] = {
                 'remote_company_id': remote_company_id,
+                'was_resolved': resolved['was_resolved'],
                 'has_remote_deal': bool(deal_summary['deal_count']),
                 'remote_deal_count': deal_summary['deal_count'],
                 'remote_deal_ids': deal_summary['deal_ids'],
@@ -774,6 +784,7 @@ class HubSpotRemoteAssociationService:
             if not remote_contact_id:
                 summaries[person.id] = {
                     'remote_contact_id': '',
+                    'was_resolved': False,
                     'has_remote_deal': False,
                     'remote_deal_count': 0,
                     'remote_deal_ids': [],
@@ -783,6 +794,7 @@ class HubSpotRemoteAssociationService:
             deal_summary = client.get_contact_deal_summary(contact_id=remote_contact_id)
             summaries[person.id] = {
                 'remote_contact_id': remote_contact_id,
+                'was_resolved': resolved['was_resolved'],
                 'has_remote_deal': bool(deal_summary['deal_count']),
                 'remote_deal_count': deal_summary['deal_count'],
                 'remote_deal_ids': deal_summary['deal_ids'],

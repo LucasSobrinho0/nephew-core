@@ -58,12 +58,20 @@
       <div class="glass-card content-card h-100 scroll-card" id="hubspotLocalPeopleCard">
         <div class="content-card-header">
           <div><span class="section-kicker">CRM local</span><h2>Pessoas cadastradas</h2></div>
-          {% if not has_loaded_local_people %}
-            <form method="get" action="{% url 'hubspot_integration:people' %}" data-async-list-form data-async-target="#hubspotLocalPeopleCard" data-loading-text="Listando pessoas...">
-              <input type="hidden" name="load_local" value="1">
-              <button type="submit" class="btn btn-outline-secondary">Listar pessoas</button>
-            </form>
-          {% endif %}
+          <div class="d-flex gap-2">
+            {% if not has_loaded_local_people %}
+              <form method="get" action="{% url 'hubspot_integration:people' %}" data-async-list-form data-async-target="#hubspotLocalPeopleCard" data-loading-text="Listando pessoas...">
+                <input type="hidden" name="load_local" value="1">
+                <button type="submit" class="btn btn-outline-secondary">Listar pessoas</button>
+              </form>
+            {% else %}
+              <form method="get" action="{% url 'hubspot_integration:people' %}" data-async-list-form data-async-target="#hubspotLocalPeopleCard" data-loading-text="Consultando HubSpot...">
+                <input type="hidden" name="load_local" value="1">
+                <input type="hidden" name="check_remote_status" value="1">
+                <button type="submit" class="btn btn-outline-secondary">Consultar HubSpot</button>
+              </form>
+            {% endif %}
+          </div>
         </div>
         {% if has_loaded_local_people and person_rows %}
           <div class="mb-3">
@@ -105,13 +113,31 @@
                         {% endwith %}
                       </td>
                       <td>
-                        {% if row.has_remote_deal %}
-                          {{ row.remote_deal_count }} negocio(s)
+                        {% if row.remote_status_checked %}
+                          {% if row.has_remote_deal %}
+                            {{ row.remote_deal_count }} negocio(s)
+                          {% elif row.is_remote_synced %}
+                            <span class="text-body-secondary">Nao</span>
+                          {% else %}
+                            <span class="text-body-secondary">Nao encontrado</span>
+                          {% endif %}
                         {% else %}
-                          <span class="text-body-secondary">Nao</span>
+                          <span class="text-body-secondary">Nao verificado</span>
                         {% endif %}
                       </td>
-                      <td>{% if row.is_synced %}Sincronizada{% else %}Pendente{% endif %}</td>
+                      <td>
+                        {% if row.remote_status_checked %}
+                          {% if row.is_remote_synced %}
+                            Sincronizada
+                          {% elif row.is_synced %}
+                            Nao encontrada
+                          {% else %}
+                            Pendente
+                          {% endif %}
+                        {% else %}
+                          {% if row.is_synced %}Sincronizada{% else %}Pendente{% endif %}
+                        {% endif %}
+                      </td>
                       <td>
                         {% if can_manage_hubspot %}
                           <a href="{% url 'hubspot_integration:people' %}?load_local=1&attach_person_public_id={{ row.person.public_id }}#hubspotAttachPersonCard" class="btn btn-outline-secondary btn-sm">Vincular a negocio</a>

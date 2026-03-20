@@ -133,10 +133,14 @@ class HubSpotCompaniesView(HubSpotAccessMixin):
         company_rows = kwargs.get('company_rows') or []
         has_loaded_local_companies = kwargs.get('has_loaded_local_companies', self.request.GET.get('load_local') == '1')
         has_loaded_remote_companies = kwargs.get('has_loaded_remote_companies', False)
+        has_checked_local_remote_status = kwargs.get('has_checked_local_remote_status', self.request.GET.get('check_remote_status') == '1')
 
         if has_loaded_local_companies and not company_rows:
             try:
-                company_rows = HubSpotCompanyService.build_company_rows(organization=self.active_organization)
+                company_rows = HubSpotCompanyService.build_company_rows(
+                    organization=self.active_organization,
+                    include_remote_status=has_checked_local_remote_status,
+                )
             except Exception as exc:
                 messages.error(self.request, str(exc))
                 company_rows = []
@@ -153,6 +157,7 @@ class HubSpotCompaniesView(HubSpotAccessMixin):
             {
                 'company_rows': company_rows,
                 'has_loaded_local_companies': has_loaded_local_companies,
+                'has_checked_local_remote_status': has_checked_local_remote_status,
                 'remote_companies': remote_companies,
                 'has_loaded_remote_companies': has_loaded_remote_companies,
                 'remote_list_form': load_form,
@@ -397,6 +402,7 @@ class HubSpotPeopleView(HubSpotAccessMixin):
         person_rows = kwargs.get('person_rows') or []
         has_loaded_local_people = kwargs.get('has_loaded_local_people', self.request.GET.get('load_local') == '1')
         has_loaded_remote_contacts = kwargs.get('has_loaded_remote_contacts', False)
+        has_checked_local_remote_status = kwargs.get('has_checked_local_remote_status', self.request.GET.get('check_remote_status') == '1')
         attach_person_public_id = kwargs.get('attach_person_public_id') or (self.request.GET.get('attach_person_public_id') or '').strip()
         attach_form_initial = kwargs.get('attach_form_initial') or {}
         if attach_person_public_id and not attach_form_initial.get('person_public_id'):
@@ -404,7 +410,10 @@ class HubSpotPeopleView(HubSpotAccessMixin):
 
         if has_loaded_local_people and not person_rows:
             try:
-                person_rows = HubSpotContactService.build_person_rows(organization=self.active_organization)
+                person_rows = HubSpotContactService.build_person_rows(
+                    organization=self.active_organization,
+                    include_remote_status=has_checked_local_remote_status,
+                )
             except Exception as exc:
                 messages.error(self.request, str(exc))
                 person_rows = []
@@ -421,6 +430,7 @@ class HubSpotPeopleView(HubSpotAccessMixin):
             {
                 'person_rows': person_rows,
                 'has_loaded_local_people': has_loaded_local_people,
+                'has_checked_local_remote_status': has_checked_local_remote_status,
                 'remote_contacts': remote_contacts,
                 'has_loaded_remote_contacts': has_loaded_remote_contacts,
                 'remote_list_form': load_form,

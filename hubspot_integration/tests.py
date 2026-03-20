@@ -199,3 +199,67 @@ class HubSpotModuleTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload['results'][0]['value'], str(deal.public_id))
+
+    @patch('hubspot_integration.services.HubSpotRemoteAssociationService.build_company_summaries')
+    def test_local_companies_list_does_not_query_hubspot_by_default(self, build_company_summaries_mock):
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.get(reverse('hubspot_integration:companies'), {'load_local': '1'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Nao verificado')
+        build_company_summaries_mock.assert_not_called()
+
+    @patch('hubspot_integration.services.HubSpotRemoteAssociationService.build_company_summaries')
+    def test_local_companies_list_queries_hubspot_when_requested(self, build_company_summaries_mock):
+        build_company_summaries_mock.return_value = {
+            self.company.id: {
+                'was_resolved': True,
+                'has_remote_deal': True,
+                'remote_deal_count': 2,
+            }
+        }
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.get(
+            reverse('hubspot_integration:companies'),
+            {'load_local': '1', 'check_remote_status': '1'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '2 negocio(s)')
+        build_company_summaries_mock.assert_called_once()
+
+    @patch('hubspot_integration.services.HubSpotRemoteAssociationService.build_person_summaries')
+    def test_local_people_list_does_not_query_hubspot_by_default(self, build_person_summaries_mock):
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.get(reverse('hubspot_integration:people'), {'load_local': '1'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Nao verificado')
+        build_person_summaries_mock.assert_not_called()
+
+    @patch('hubspot_integration.services.HubSpotRemoteAssociationService.build_person_summaries')
+    def test_local_people_list_queries_hubspot_when_requested(self, build_person_summaries_mock):
+        build_person_summaries_mock.return_value = {
+            self.person.id: {
+                'was_resolved': True,
+                'has_remote_deal': False,
+                'remote_deal_count': 0,
+            }
+        }
+        self.client.force_login(self.owner)
+        self.activate_organization()
+
+        response = self.client.get(
+            reverse('hubspot_integration:people'),
+            {'load_local': '1', 'check_remote_status': '1'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Sincronizada')
+        build_person_summaries_mock.assert_called_once()
