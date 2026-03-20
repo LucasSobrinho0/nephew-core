@@ -31,6 +31,7 @@ from common.matching import build_person_indexes, match_person
 from common.phone import format_phone_display, normalize_phone
 from integrations.repositories import AppCatalogRepository, AppCredentialRepository, AppInstallationRepository
 from organizations.repositories import MembershipRepository
+from people.models import Person
 from people.repositories import PersonRepository
 from people.services import PersonService
 
