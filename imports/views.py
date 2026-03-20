@@ -1,5 +1,7 @@
 from django.contrib import messages
+from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.views import View
@@ -9,7 +11,12 @@ from common.mixins import ActiveOrganizationRequiredMixin
 from imports.forms import ImportUploadForm
 from imports.models import ImportJob
 from imports.repositories import ImportJobRepository
-from imports.services import ImportJobPresentationService, ImportJobService, ImportTemplateService
+from imports.services import (
+    ImportJobPresentationService,
+    ImportJobService,
+    ImportJobWorkerService,
+    ImportTemplateService,
+)
 
 
 class ImportAccessMixin(ActiveOrganizationRequiredMixin):
@@ -48,6 +55,13 @@ class ImportJobCreateView(ImportAccessMixin, View):
         except ValidationError as exc:
             messages.error(request, exc.messages[0] if exc.messages else str(exc))
             return redirect(self.redirect_url_name)
+
+        if settings.AUTO_TRIGGER_IMPORT_JOBS:
+            transaction.on_commit(
+                lambda: ImportJobWorkerService.trigger_job_async(
+                    job_id=job.id,
+                )
+            )
 
         messages.success(request, 'Importacao iniciada com sucesso.')
         return redirect('imports:job_detail', job_public_id=job.public_id)

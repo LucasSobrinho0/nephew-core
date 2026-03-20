@@ -1,7 +1,9 @@
+import threading
 from pathlib import Path
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.db import close_old_connections
 from django.db import transaction
 from django.http import FileResponse
 from django.utils import timezone
@@ -304,6 +306,41 @@ class ImportJobWorkerService:
             ImportJobWorkerService.process_job(job=job, batch_size=batch_size)
             processed_count += 1
         return processed_count
+
+    @staticmethod
+    def process_job_until_finished(*, job_id, batch_size=None):
+        close_old_connections()
+        try:
+            effective_batch_size = batch_size or settings.IMPORT_JOB_BATCH_SIZE
+
+            while True:
+                job = ImportJob.objects.filter(pk=job_id).first()
+                if job is None:
+                    return
+                if job.status in {
+                    ImportJob.Status.COMPLETED,
+                    ImportJob.Status.COMPLETED_WITH_ERRORS,
+                    ImportJob.Status.FAILED,
+                }:
+                    return
+
+                ImportJobWorkerService.process_job(job=job, batch_size=effective_batch_size)
+        finally:
+            close_old_connections()
+
+    @staticmethod
+    def trigger_job_async(*, job_id, batch_size=None):
+        worker_thread = threading.Thread(
+            target=ImportJobWorkerService.process_job_until_finished,
+            kwargs={
+                'job_id': job_id,
+                'batch_size': batch_size,
+            },
+            daemon=True,
+            name=f'import-job-{job_id}',
+        )
+        worker_thread.start()
+        return worker_thread
 
 
 class ImportJobPresentationService:
