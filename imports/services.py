@@ -24,7 +24,17 @@ class ImportTemplateService:
     @staticmethod
     def build_headers(entity_type):
         if entity_type == ImportJob.EntityType.PEOPLE:
-            return ['nome', 'sobrenome', 'email', 'telefone', 'apollo_id', 'hubspot_id', 'botconversa_id', 'cnpj_empresa']
+            return [
+                'nome',
+                'sobrenome',
+                'email',
+                'telefone',
+                'apollo_id',
+                'hubspot_id',
+                'botconversa_id',
+                'razao_empresa',
+                'cnpj_empresa',
+            ]
         if entity_type == ImportJob.EntityType.COMPANIES:
             return ['razao', 'cnpj', 'website', 'email', 'telefone', 'segmento', 'quantidade_funcionarios', 'apollo_id', 'hubspot_id']
         raise ValidationError('Tipo de template invalido.')
@@ -190,6 +200,7 @@ class ImportPeopleService:
         apollo_person_id = payload.get('apollo_id', '')
         hubspot_contact_id = payload.get('hubspot_id', '')
         bot_conversa_id = payload.get('botconversa_id', '')
+        company_name = payload.get('razao_empresa', '')
         company_cnpj = normalize_cnpj(payload.get('cnpj_empresa', ''))
 
         if not first_name:
@@ -198,10 +209,18 @@ class ImportPeopleService:
             raise ValidationError('A coluna sobrenome e obrigatoria.')
 
         company = None
-        if company_cnpj:
-            company = CompanyRepository.get_for_organization_and_cnpj(organization, company_cnpj)
+        if company_name:
+            company = CompanyRepository.get_for_organization_and_name(organization, company_name)
             if company is None:
+                raise ValidationError(f'Nenhuma empresa local encontrada para a razao {company_name}.')
+
+        if company_cnpj:
+            company_by_cnpj = CompanyRepository.get_for_organization_and_cnpj(organization, company_cnpj)
+            if company_by_cnpj is None:
                 raise ValidationError(f'Nenhuma empresa local encontrada para o CNPJ {company_cnpj}.')
+            if company is not None and company.id != company_by_cnpj.id:
+                raise ValidationError('A razao da empresa e o CNPJ informado apontam para empresas diferentes.')
+            company = company_by_cnpj
 
         person = PersonService.create_person(
             user=user,

@@ -52,6 +52,20 @@ class CompanyRepository:
         )
 
     @staticmethod
+    def get_for_organization_and_name(organization, name):
+        normalized_name = (name or '').strip()
+        if not normalized_name:
+            return None
+
+        return (
+            Company.objects.active()
+            .for_organization(organization)
+            .with_related_objects()
+            .filter(name__iexact=normalized_name)
+            .first()
+        )
+
+    @staticmethod
     def list_for_organization_and_public_ids(organization, public_ids):
         return (
             Company.objects.active()
