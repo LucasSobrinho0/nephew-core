@@ -161,6 +161,7 @@ class BotConversaDispatchWorkspaceService:
             tag_choices=BotConversaDispatchWorkspaceService.build_tag_choices(
                 organization=organization,
             ),
+            form_id='botDispatchCreateForm',
             **kwargs,
         )
 

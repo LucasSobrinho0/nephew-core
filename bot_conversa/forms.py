@@ -31,18 +31,34 @@ class BotConversaDispatchCreateForm(BootstrapFormMixin, forms.Form):
         required=False,
         widget=forms.CheckboxSelectMultiple(),
     )
+    preflight_tag_public_ids = forms.MultipleChoiceField(
+        label='Etiquetas do Bot Conversa',
+        required=False,
+        choices=(),
+        widget=forms.SelectMultiple(
+            attrs={
+                'data-enhanced-multiselect': 'true',
+                'data-placeholder': 'Pesquisar etiquetas',
+            }
+        ),
+    )
+    skip_tag_preflight = forms.BooleanField(required=False, widget=forms.HiddenInput())
+    tag_preflight_action = forms.CharField(required=False, widget=forms.HiddenInput())
     min_delay_seconds = forms.IntegerField(label='Delay minimo (segundos)', min_value=0, initial=0)
     max_delay_seconds = forms.IntegerField(label='Delay maximo (segundos)', min_value=0, initial=0)
 
-    def __init__(self, *args, flow_choices=(), person_choices=(), tag_choices=(), **kwargs):
+    def __init__(self, *args, flow_choices=(), person_choices=(), tag_choices=(), form_id='', **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['flow_public_id'].choices = flow_choices
         self.fields['tag_public_ids'].choices = tag_choices
         self.fields['person_public_ids'].choices = person_choices
+        self.fields['preflight_tag_public_ids'].choices = tag_choices
         self.fields['tag_public_ids'].widget.attrs['class'] = 'bot-selection-checkbox'
         self.fields['tag_public_ids'].widget.attrs['data-checkbox-group'] = 'bot-tag-dispatch-selection'
         self.fields['person_public_ids'].widget.attrs['class'] = 'bot-selection-checkbox'
         self.fields['person_public_ids'].widget.attrs['data-checkbox-group'] = 'bot-dispatch-selection'
+        if form_id:
+            self.fields['preflight_tag_public_ids'].widget.attrs['form'] = form_id
 
     def clean_person_public_ids(self):
         return self.cleaned_data.get('person_public_ids') or []

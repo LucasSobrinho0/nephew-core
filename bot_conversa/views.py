@@ -521,6 +521,9 @@ class BotConversaDispatchesView(BotConversaAccessMixin, TemplateView):
                 'initial_bot_conversa_audience_count': len(
                     self.build_person_choices(tag_public_ids=selected_tag_public_ids)
                 ),
+                'dispatch_tag_preflight_modal_open': kwargs.get('dispatch_tag_preflight_modal_open', False),
+                'dispatch_tag_preflight_people': kwargs.get('dispatch_tag_preflight_people', []),
+                'dispatch_tag_preflight_modal_errors': kwargs.get('dispatch_tag_preflight_modal_errors', []),
             }
         )
         return context
@@ -631,7 +634,13 @@ class BotConversaTagAssignView(BotConversaOperatorRequiredMixin, View):
 
 class BotConversaDispatchCreateView(BotConversaOperatorRequiredMixin, View):
     def post(self, request, *args, **kwargs):
-        form = self.build_dispatch_form(request.POST)
+        post_data = request.POST.copy()
+        modal_submit_action = post_data.get('tag_preflight_modal_submit')
+        if modal_submit_action in {'skip', 'apply'}:
+            post_data['skip_tag_preflight'] = '1'
+            post_data['tag_preflight_action'] = 'apply' if modal_submit_action == 'apply' else ''
+
+        form = self.build_dispatch_form(post_data)
         if not form.is_valid():
             view = BotConversaDispatchesView()
             view.request = request
@@ -643,7 +652,7 @@ class BotConversaDispatchCreateView(BotConversaOperatorRequiredMixin, View):
             return view.render_to_response(
                 view.get_context_data(
                     dispatch_form=form,
-                    selected_tag_public_ids=request.POST.getlist('tag_public_ids'),
+                    selected_tag_public_ids=post_data.getlist('tag_public_ids'),
                 ),
             )
 
@@ -668,7 +677,58 @@ class BotConversaDispatchCreateView(BotConversaOperatorRequiredMixin, View):
             )
         )
 
+        if not form.cleaned_data['skip_tag_preflight']:
+            untagged_people = BotConversaTagPreflightService.list_untagged_people(
+                organization=self.active_organization,
+                persons=persons,
+            )
+            if untagged_people:
+                view = BotConversaDispatchesView()
+                view.request = request
+                view.args = args
+                view.kwargs = kwargs
+                view.installation = self.installation
+                view.active_organization = self.active_organization
+                view.active_membership = self.active_membership
+                return view.render_to_response(
+                    view.get_context_data(
+                        dispatch_form=form,
+                        selected_tag_public_ids=post_data.getlist('tag_public_ids'),
+                        dispatch_tag_preflight_modal_open=True,
+                        dispatch_tag_preflight_people=untagged_people,
+                    ),
+                )
+
         try:
+            if form.cleaned_data['tag_preflight_action'] == 'apply' and not form.cleaned_data['preflight_tag_public_ids']:
+                view = BotConversaDispatchesView()
+                view.request = request
+                view.args = args
+                view.kwargs = kwargs
+                view.installation = self.installation
+                view.active_organization = self.active_organization
+                view.active_membership = self.active_membership
+                form.add_error('preflight_tag_public_ids', 'Selecione pelo menos uma etiqueta para continuar.')
+                return view.render_to_response(
+                    view.get_context_data(
+                        dispatch_form=form,
+                        selected_tag_public_ids=post_data.getlist('tag_public_ids'),
+                        dispatch_tag_preflight_modal_open=True,
+                        dispatch_tag_preflight_people=BotConversaTagPreflightService.list_untagged_people(
+                            organization=self.active_organization,
+                            persons=persons,
+                        ),
+                    ),
+                )
+
+            if form.cleaned_data['tag_preflight_action'] == 'apply' and form.cleaned_data['preflight_tag_public_ids']:
+                BotConversaTagPreflightService.apply_tags_by_public_ids(
+                    user=request.user,
+                    organization=self.active_organization,
+                    persons=persons,
+                    tag_public_ids=form.cleaned_data['preflight_tag_public_ids'],
+                )
+
             dispatch = BotConversaDispatchService.create_dispatch(
                 user=request.user,
                 organization=self.active_organization,
@@ -679,8 +739,25 @@ class BotConversaDispatchCreateView(BotConversaOperatorRequiredMixin, View):
                 max_delay_seconds=form.cleaned_data['max_delay_seconds'],
             )
         except (PermissionDenied, ValidationError) as exc:
-            messages.error(request, str(exc))
-            return redirect('bot_conversa:dispatches')
+            view = BotConversaDispatchesView()
+            view.request = request
+            view.args = args
+            view.kwargs = kwargs
+            view.installation = self.installation
+            view.active_organization = self.active_organization
+            view.active_membership = self.active_membership
+            return view.render_to_response(
+                view.get_context_data(
+                    dispatch_form=form,
+                    selected_tag_public_ids=post_data.getlist('tag_public_ids'),
+                    dispatch_tag_preflight_modal_open=bool(form.cleaned_data.get('person_public_ids')),
+                    dispatch_tag_preflight_people=BotConversaTagPreflightService.list_untagged_people(
+                        organization=self.active_organization,
+                        persons=persons,
+                    ),
+                    dispatch_tag_preflight_modal_errors=[str(exc)],
+                ),
+            )
 
         messages.success(request, 'Disparo do fluxo criado. O processamento continuara na tela de status.')
         return redirect('bot_conversa:dispatch_detail', dispatch_public_id=dispatch.public_id)

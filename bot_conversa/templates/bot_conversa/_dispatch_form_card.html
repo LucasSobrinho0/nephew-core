@@ -6,8 +6,10 @@
     </div>
   </div>
   {% if can_manage_bot_conversa %}
-    <form method="post" action="{{ bot_dispatch_action_url }}" class="row g-3">
+    <form method="post" action="{{ bot_dispatch_action_url }}" class="row g-3" id="botDispatchCreateForm">
       {% csrf_token %}
+      {{ bot_dispatch_form.skip_tag_preflight }}
+      {{ bot_dispatch_form.tag_preflight_action }}
       <div class="col-12">
         <label for="{{ bot_dispatch_form.flow_public_id.id_for_label }}" class="form-label">Fluxo</label>
         {{ bot_dispatch_form.flow_public_id }}
