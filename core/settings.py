@@ -83,6 +83,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'common.middleware.SessionTimeoutMiddleware',
     'admin_panel.middleware.AdminAccessAuditMiddleware',
     'common.middleware.ActiveOrganizationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -167,3 +168,5 @@ BOT_CONVERSA_API_AUTH_HEADER = env('BOT_CONVERSA_API_AUTH_HEADER', 'API-KEY')
 LOGIN_URL = 'accounts:login'
 LOGIN_REDIRECT_URL = 'organizations:onboarding'
 LOGOUT_REDIRECT_URL = 'accounts:login'
+SESSION_COOKIE_AGE = env_int('SESSION_COOKIE_AGE', 60 * 60 * 24 * 14)
+NON_REMEMBERED_SESSION_AGE = env_int('NON_REMEMBERED_SESSION_AGE', 60 * 60 * 2)
