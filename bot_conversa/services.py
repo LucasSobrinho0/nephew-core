@@ -488,7 +488,7 @@ class BotConversaTagService:
                 person_tags_to_update.append(person_tag_link)
 
         if person_tags_to_create:
-            BotConversaPersonTagRepository.bulk_create(person_tags_to_create)
+            BotConversaPersonTagRepository.bulk_create(person_tags_to_create, ignore_conflicts=True)
         if person_tags_to_update:
             BotConversaPersonTagRepository.bulk_update(
                 person_tags_to_update,
